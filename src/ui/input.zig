@@ -5,10 +5,8 @@ const media = @import("../media/media.zig");
 const hitbox = @import("hitbox.zig");
 
 pub fn enableRawMode() !void {
-    state.global_hover_state_len = 4;
-    state.global_click_state_len = 4;
-    @memcpy(state.global_hover_state[0..4], "None");
-    @memcpy(state.global_click_state[0..4], "None");
+    state.global_hover_target = .none;
+    state.global_click_target = .none;
 
     state.original_termios = try std.posix.tcgetattr(0);
     var raw = state.original_termios;
@@ -26,8 +24,9 @@ pub fn enableRawMode() !void {
 }
 
 pub fn disableRawMode() void {
-    _ = std.posix.tcsetattr(0, .FLUSH, state.original_termios) catch {};
-    std.debug.print("\x1b_Ga=d,d=A\x1b\\\x1b[?1016l\x1b[?1003l\x1b[?1006l\x1b[?25h\n", .{});
+    _ = std.posix.tcsetattr(0, .NOW, state.original_termios) catch {};
+    const reset_seq = "\x1b_Ga=d,d=A\x1b\\\x1b[?1016l\x1b[?1003l\x1b[?1006l\x1b[?25h\n";
+    _ = std.c.write(1, reset_seq, reset_seq.len);
 }
 
 pub fn inputLoop() void {
@@ -39,7 +38,10 @@ pub fn inputLoop() void {
     var control_escape = false;
     while (true) {
         const received = std.posix.read(0, buf[pending..]) catch 0;
-        if (received == 0) break;
+        if (received == 0) {
+            disableRawMode();
+            std.process.exit(0);
+        }
         const n = pending + received;
 
         var i: usize = 0;
@@ -84,14 +86,13 @@ pub fn inputLoop() void {
                             state.global_is_dragging = false;
                             state.global_panel_dragging = false;
                             macos.widget_hide_snap_outline();
-                            state.global_hover_state_len = 4;
-                            @memcpy(state.global_hover_state[0..4], "None");
+                            state.global_hover_target = .none;
                             if (open_menu) macos.widget_context_menu(@intFromBool(state.global_rate > 0), @intFromBool(state.setting_glow), @intFromBool(state.setting_animations), @intFromBool(state.setting_dim), state.setting_frame, state.setting_intensity, state.setting_speed, state.setting_source, state.setting_mode);
                             state.requestFrame();
                             i = end + 1;
                             continue;
                         }
-                        var new_hover_str: []const u8 = "Grid Background";
+                        var new_hover_target: state.HitTarget = .grid_background;
 
                         const point = if (state.pixel_mouse)
                             hitbox.fromPixel(cx, cy, macos.widget_cell_width() * state.layout.cells_x, macos.widget_cell_height() * state.layout.cells_y, state.layout.width, state.layout.height)
@@ -100,7 +101,7 @@ pub fn inputLoop() void {
                         const px = point.x;
                         for (state.layout.buttons) |button| {
                             if (button.bounds().contains(point)) {
-                                new_hover_str = button.name;
+                                new_hover_target = state.HitTarget.fromActionId(button.id);
                                 break;
                             }
                         } else {
@@ -108,18 +109,17 @@ pub fn inputLoop() void {
                             const art_bounds = hitbox.Rect{ .x = state.layout.art_x, .y = state.layout.art_y, .w = state.layout.art_size, .h = state.layout.art_size, .radius = 14 };
                             const frame_bounds = hitbox.Rect{ .x = 0, .y = 0, .w = state.layout.width, .h = state.layout.height, .radius = 26 };
                             if (seek_bounds.contains(point)) {
-                                new_hover_str = "Geometry: Bar";
+                                new_hover_target = .bar;
                             } else if (art_bounds.contains(point)) {
-                                new_hover_str = "Geometry: Art";
+                                new_hover_target = .art;
                             } else if (frame_bounds.contains(point)) {
-                                new_hover_str = "Frame Bounds";
+                                new_hover_target = .frame_bounds;
                             }
                         }
 
                         var state_changed = false;
-                        if (!std.mem.eql(u8, new_hover_str, state.global_hover_state[0..state.global_hover_state_len])) {
-                            @memcpy(state.global_hover_state[0..new_hover_str.len], new_hover_str);
-                            state.global_hover_state_len = new_hover_str.len;
+                        if (state.global_hover_target != new_hover_target) {
+                            state.global_hover_target = new_hover_target;
                             state_changed = true;
                         }
 
@@ -128,13 +128,12 @@ pub fn inputLoop() void {
                             for (state.layout.buttons) |button| {
                                 if (button.bounds().contains(point)) pressed = button.id;
                             }
-                            if (!std.mem.eql(u8, new_hover_str, state.global_click_state[0..state.global_click_state_len])) {
-                                @memcpy(state.global_click_state[0..new_hover_str.len], new_hover_str);
-                                state.global_click_state_len = new_hover_str.len;
+                            if (state.global_click_target != new_hover_target) {
+                                state.global_click_target = new_hover_target;
                                 state_changed = true;
                             }
 
-                            if (state.global_duration > 0 and std.mem.eql(u8, new_hover_str, "Geometry: Bar")) {
+                            if (state.global_duration > 0 and new_hover_target == .bar) {
                                 state.global_is_dragging = true;
                                 state_changed = true;
                             }
@@ -142,18 +141,20 @@ pub fn inputLoop() void {
                             // card moves the real Kitty panel in widget-sized
                             // increments. Controls and the seek bar retain
                             // their exact hitboxes.
-                            if (state.desktop_mode and pressed == null and !state.global_is_dragging) {
+                            // The canvas contains a 35pt transparent top inset
+                            // and extra terminal surface below the card. Only
+                            // the rendered widget itself may initiate a drag.
+                            const card_width: f64 = if (state.mode_mix < 0.5) 164.0 else state.layout.width;
+                            const card_x: f64 = if (state.mode_mix < 0.5) 8.0 else 0.0;
+                            const card_bounds = hitbox.Rect{ .x = card_x, .y = 35, .w = card_width, .h = 164, .radius = 26 };
+                            if (state.desktop_mode and card_bounds.contains(point) and pressed == null and !state.global_is_dragging) {
                                 const mouse = macos.widget_mouse_location();
                                 state.global_panel_dragging = true;
                                 state.widget_drag_start_mouse_x = mouse.x;
                                 state.widget_drag_start_mouse_y = mouse.y;
                                 state.widget_drag_start_margin_left = state.widget_margin_left;
                                 state.widget_drag_start_margin_top = state.widget_margin_top;
-                                const scale = macos.widget_scale_factor();
-                                const panel_width = (macos.widget_cell_width() * state.layout.cells_x) / scale;
-                                const panel_height = (macos.widget_cell_height() * state.layout.cells_y) / scale;
-                                const s = panel_height / state.layout.height;
-                                const visual_width = if (state.mode_mix < 0.5) state.layout.art_size * s else panel_width;
+                                const visual_width: f64 = if (state.mode_mix < 0.5) 164.0 else 531.0;
                                 macos.widget_start_drag(state.widget_margin_left, state.widget_margin_top, visual_width);
                                 state_changed = true;
                             }
@@ -177,30 +178,31 @@ pub fn inputLoop() void {
                                     state.panel_position_dirty = true;
                                 }
                             }
-                            const scale = macos.widget_scale_factor();
-                            const panel_height = (macos.widget_cell_height() * state.layout.cells_y) / scale;
-                            
-                            const s = panel_height / state.layout.height;
-                            // The black card is drawn at exactly x=0, y=35 internally.
-                            const visual_left = 0.0;
-                            const visual_top = 35.0 * s;
-                            // Align the top-left visual edge exactly with the top-left visual edge of a native widget.
-                            // On macOS Sonoma Desktop, native widgets take up the ENTIRE 180x180 slot visually (0 padding).
-                            const slot_w: f64 = if (state.mode_mix < 0.5) 180.0 else 360.0;
-                            const slot_h: f64 = if (state.mode_mix < 0.5) 180.0 else 180.0;
-                            const native_padding = 0.0;
-                            const slot_left = visual_left - native_padding;
-                            const slot_top = visual_top - native_padding;
-
-                            const live_snap = macos.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, slot_left, slot_top, slot_w, slot_h);
-                            if (!is_release and live_snap.found) {
+                            // The Kitty panel margins and CGWindowList frames
+                            // are both desktop points. The card starts at the
+                            // surface origin horizontally and 35 points down.
+                            const visual_left: f64 = if (state.mode_mix < 0.5) 8.0 else 0.0;
+                            const visual_top = 35.0;
+                            // Match the card width actually painted after a
+                            // Kitty resize, rather than a stale fixed width.
+                            const visual_width: f64 = if (state.mode_mix < 0.5) 164.0 else 531.0;
+                            const visual_height: f64 = 164.0;
+                            macos.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, true);
+                            const live_snap = macos.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, visual_left, visual_top, visual_width, visual_height);
+                            // A guide is useful only while the card is still
+                            // approaching its destination. Once it reaches the
+                            // exact snap rect, the card itself would cover it.
+                            const preview_radius: f64 = if (state.mode_mix < 0.5) 180.0 else 240.0;
+                            const commit_radius: f64 = if (state.mode_mix < 0.5) 150.0 else 190.0;
+                            const show_snap_preview = live_snap.found and live_snap.distance_sq <= preview_radius * preview_radius;
+                            if (!is_release and show_snap_preview) {
                                 macos.widget_show_snap_outline(live_snap.outline_x, live_snap.outline_y, live_snap.outline_width, live_snap.outline_height);
                             } else if (!is_release) {
                                 macos.widget_hide_snap_outline();
                             }
                             if (is_release) {
                                 const snap = live_snap;
-                                if (snap.found) {
+                                if (snap.found and snap.distance_sq <= commit_radius * commit_radius) {
                                     state.panel_snap_active = true;
                                     state.panel_snap_elapsed = 0;
                                     state.panel_snap_start_left = state.widget_margin_left;
@@ -213,6 +215,7 @@ pub fn inputLoop() void {
                                 // free-positioned; the optional snap above is
                                 // only activated near a real neighboring card.
                                 state.global_panel_dragging = false;
+                                macos.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, false);
                                 macos.widget_hide_snap_outline();
                                 if (!state.panel_snap_active) state.saveWidgetSettings();
                             }
@@ -230,11 +233,11 @@ pub fn inputLoop() void {
                         }
 
                         if (is_release and !state.global_is_dragging) {
-                            if (pressed == .PlayPause and std.mem.eql(u8, new_hover_str, "Action: Play/Pause")) {
+                            if (pressed == .PlayPause and new_hover_target == .button_play_pause) {
                                 media.togglePlayback();
                             }
-                            if (pressed == .Prev and std.mem.eql(u8, new_hover_str, "Action: Previous")) media.triggerCommand(media.MRMediaRemoteCommandPreviousTrack);
-                            if (pressed == .Next and std.mem.eql(u8, new_hover_str, "Action: Next")) media.triggerCommand(media.MRMediaRemoteCommandNextTrack);
+                            if (pressed == .Prev and new_hover_target == .button_prev) media.triggerCommand(.previous_track);
+                            if (pressed == .Next and new_hover_target == .button_next) media.triggerCommand(.next_track);
                         }
 
                         if (state.global_is_dragging) {
@@ -275,8 +278,8 @@ pub fn inputLoop() void {
 
             switch (buf[i]) {
                 'p', ' ' => media.togglePlayback(),
-                'n' => media.triggerCommand(media.MRMediaRemoteCommandNextTrack),
-                'b' => media.triggerCommand(media.MRMediaRemoteCommandPreviousTrack),
+                'n' => media.triggerCommand(.next_track),
+                'b' => media.triggerCommand(.previous_track),
                 'q', 3 => {
                     disableRawMode();
                     std.process.exit(0);

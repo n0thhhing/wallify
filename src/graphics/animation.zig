@@ -5,30 +5,48 @@ const render = @import("render.zig");
 const media = @import("../media/media.zig");
 const icon_transition = @import("icon_transition.zig");
 
-extern "c" fn usleep(useconds: c_uint) c_int;
 extern "c" fn system(command: [*:0]const u8) c_int;
+
+fn sleep_us(us: u64) void {
+    const ts = std.posix.timespec{
+        .sec = @intCast(us / 1_000_000),
+        .nsec = @intCast((us % 1_000_000) * 1000),
+    };
+    _ = std.posix.system.nanosleep(&ts, null);
+}
 
 fn resizePanel(compact: bool) void {
     // `resize-os-window --action=os-panel` is Kitty's supported live panel
     // resize API. It preserves this terminal process and its animation state.
     const command = if (compact)
-        "/Applications/kitty.app/Contents/MacOS/kitten @ --to unix:/tmp/wallify-kitty.sock resize-os-window --action=os-panel --incremental columns=174px lines=232px"
+        "/Applications/kitty.app/Contents/MacOS/kitten @ --to unix:/tmp/wallify-kitty.sock resize-os-window --action=os-panel --incremental columns=180px lines=232px"
     else
-        "/Applications/kitty.app/Contents/MacOS/kitten @ --to unix:/tmp/wallify-kitty.sock resize-os-window --action=os-panel --incremental columns=708px lines=205px";
+        "/Applications/kitty.app/Contents/MacOS/kitten @ --to unix:/tmp/wallify-kitty.sock resize-os-window --action=os-panel --incremental columns=531px lines=205px";
     _ = system(command);
 }
 
 fn movePanelToWidgetGrid() void {
-    // Kitty documents live panel placement through resize-os-window with the
-    // os-panel action.  This moves the actual surface, so transparent pixels
-    // never become a second, invisible input window.
-    var command: [320]u8 = undefined;
-    const margin_left = state.widget_margin_left;
-    const margin_top = state.widget_margin_top;
-    const text = std.fmt.bufPrintZ(&command,
-        "/Applications/kitty.app/Contents/MacOS/kitten @ --to unix:/tmp/wallify-kitty.sock resize-os-window --no-response --action=os-panel --incremental margin-left={d}px margin-top={d}px",
-        .{ margin_left, margin_top }) catch return;
-    _ = system(text.ptr);
+    // Send Kitty's documented remote-control JSON directly to its local Unix
+    // socket. Spawning `kitten @` for every mouse event caused the dragging
+    // delay and left snap calculations one or more frames behind.
+    const fd = std.posix.system.socket(std.posix.AF.UNIX, std.posix.SOCK.STREAM, 0);
+    if (fd < 0) return;
+    defer _ = std.posix.system.close(fd);
+    var address: std.posix.sockaddr.un = undefined;
+    address.len = @sizeOf(std.posix.sockaddr.un);
+    address.family = std.posix.AF.UNIX;
+    @memset(&address.path, 0);
+    const path = "/tmp/wallify-kitty.sock";
+    @memcpy(address.path[0..path.len], path);
+    if (std.posix.system.connect(fd, @ptrCast(&address), @sizeOf(std.posix.sockaddr.un)) != 0) return;
+    var message: [512]u8 = undefined;
+    const payload = std.fmt.bufPrint(&message, "\x1bP@kitty-cmd{{\"cmd\":\"resize-os-window\",\"version\":[0,48,2],\"no_response\":true,\"payload\":{{\"action\":\"os-panel\",\"incremental\":true,\"os_panel\":[\"margin-left={d}px\",\"margin-top={d}px\"]}}}}\x1b\\", .{ state.widget_margin_left, state.widget_margin_top }) catch return;
+    var offset: usize = 0;
+    while (offset < payload.len) {
+        const wrote = std.posix.system.write(fd, payload.ptr + offset, payload.len - offset);
+        if (wrote <= 0) return;
+        offset += @intCast(wrote);
+    }
 }
 
 pub fn animationLoop() void {
@@ -42,33 +60,46 @@ pub fn animationLoop() void {
         if (state.animation_time < state.art_transition_until) needs_draw = true;
         const menu_action = macos.widget_context_menu_action();
         switch (menu_action) {
-            1 => media.togglePlayback(),
-            2 => media.triggerCommand(media.MRMediaRemoteCommandPreviousTrack),
-            3 => media.triggerCommand(media.MRMediaRemoteCommandNextTrack),
-            4 => macos.widget_open_spotify(),
-            5 => state.setting_glow = !state.setting_glow,
-            6 => state.setting_animations = !state.setting_animations,
-            7 => state.setting_dim = !state.setting_dim,
-            10...12 => state.setting_frame = @intCast(menu_action - 10),
-            20...22 => state.setting_intensity = @intCast(menu_action - 20),
-            30...32 => state.setting_speed = @intCast(menu_action - 30),
-            40 => {
-                state.setting_glow = true; state.setting_animations = true; state.setting_dim = true;
-                state.setting_frame = 1; state.setting_intensity = 1; state.setting_speed = 1;
-                state.setting_source = 0;
-                state.setting_mode = 1;
+            .play_pause => media.togglePlayback(),
+            .previous_track => media.triggerCommand(.previous_track),
+            .next_track => media.triggerCommand(.next_track),
+            .open_spotify => macos.widget_open_spotify(),
+            .toggle_glow => state.setting_glow = !state.setting_glow,
+            .toggle_animations => state.setting_animations = !state.setting_animations,
+            .toggle_dim => state.setting_dim = !state.setting_dim,
+            .frame_off => state.setting_frame = .off,
+            .frame_subtle => state.setting_frame = .subtle,
+            .frame_strong => state.setting_frame = .strong,
+            .intensity_low => state.setting_intensity = .low,
+            .intensity_normal => state.setting_intensity = .normal,
+            .intensity_high => state.setting_intensity = .high,
+            .speed_slow => state.setting_speed = .slow,
+            .speed_normal => state.setting_speed = .normal,
+            .speed_fast => state.setting_speed = .fast,
+            .restore_defaults => {
+                state.setting_glow = true;
+                state.setting_animations = true;
+                state.setting_dim = true;
+                state.setting_frame = .subtle;
+                state.setting_intensity = .normal;
+                state.setting_speed = .normal;
+                state.setting_source = .now_playing;
+                state.setting_mode = .expanded;
             },
-            50...51 => state.setting_source = @intCast(menu_action - 50),
-            60...61 => {
-                const selected: u8 = @intCast(menu_action - 60);
-                if (state.desktop_mode and selected == 1 and state.mode_mix < 0.5) resizePanel(false);
-                state.panel_resize_after_compact = state.desktop_mode and selected == 0 and state.mode_mix >= 0.5;
-                state.setting_mode = selected;
+            .source_now_playing => state.setting_source = .now_playing,
+            .source_spotify => state.setting_source = .spotify,
+            .mode_compact => {
+                state.panel_resize_after_compact = state.desktop_mode and state.mode_mix >= 0.5;
+                state.setting_mode = .compact;
+            },
+            .mode_expanded => {
+                if (state.desktop_mode and state.mode_mix < 0.5) resizePanel(false);
+                state.setting_mode = .expanded;
             },
             else => {},
         }
-        if (menu_action != 0) {
-            if (menu_action >= 5) state.saveWidgetSettings();
+        if (menu_action != .none) {
+            if (@intFromEnum(menu_action) >= 5) state.saveWidgetSettings();
             needs_draw = true;
         }
         if (!state.setting_animations) {
@@ -79,9 +110,9 @@ pub fn animationLoop() void {
             state.seek_velocity = 0;
         }
 
-        const dt = @min(0.1, @max(0, now - previous_time)) * ([_]f64{ 0.7, 1, 1.4 })[state.setting_speed];
+        const dt = @min(0.1, @max(0, now - previous_time)) * state.setting_speed.multiplier();
         state.animation_time += dt;
-        const target_mode: f64 = @floatFromInt(state.setting_mode);
+        const target_mode: f64 = @floatFromInt(@intFromEnum(state.setting_mode));
         if (@abs(state.mode_mix - target_mode) > 0.001) {
             // Smooth, critically damped-feeling mode morph without a visible jump.
             state.mode_mix += (target_mode - state.mode_mix) * @min(1, dt * 8);
@@ -149,7 +180,7 @@ pub fn animationLoop() void {
             needs_draw = true;
         }
         for (state.layout.buttons, 0..) |button, index| {
-            const target: f64 = if (std.mem.eql(u8, button.name, state.global_hover_state[0..state.global_hover_state_len])) 1 else 0;
+            const target: f64 = if (state.global_hover_target == state.HitTarget.fromActionId(button.id)) 1 else 0;
             if (@abs(state.hover_amount[index] - target) > 0.001) {
                 state.hover_amount[index] += (target - state.hover_amount[index]) * (if (state.setting_animations) @min(1, dt * 10) else 1);
                 needs_draw = true;
@@ -172,9 +203,9 @@ pub fn animationLoop() void {
         if (needs_draw) {
             render.drawUIFrame();
             const remaining = (1.0 / 60.0) - (macos.widget_monotonic_time() - now);
-            if (remaining > 0) _ = usleep(@intFromFloat(remaining * 1_000_000));
+            if (remaining > 0) sleep_us(@intFromFloat(remaining * 1_000_000));
         } else {
-            _ = usleep(20_000); 
+            sleep_us(20_000);
         }
     }
 }

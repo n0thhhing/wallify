@@ -11,18 +11,16 @@ fi
 # Keep runtime builds separate from a stale project cache left by interrupted
 # panel runs; Kitty can then relaunch the current binary reliably.
 zig build -Doptimize=ReleaseFast --cache-dir /tmp/wallify-runtime-cache --global-cache-dir /tmp/wallify-runtime-global-cache
-if [[ ! -f preview_frame || preview.swift -nt preview_frame ]]; then
-    swiftc -O preview.swift -o preview_frame
-fi
 export WALLIFY_DESKTOP=1
 panel_height="${WALLIFY_HEIGHT:-205}"
-panel_width="${WALLIFY_WIDTH:-708}"
+# Three 164pt widget tiles with two 16pt widget gaps.
+panel_width="${WALLIFY_WIDTH:-531}"
 grid_x=0
 grid_y=0
 if [[ -f widget-settings.conf ]] && grep -q '^widget_mode=0$' widget-settings.conf; then
     # The mini tile sits in the same visual row as the desktop widgets.
     panel_height="${WALLIFY_COMPACT_HEIGHT:-232}"
-    panel_width="${WALLIFY_COMPACT_WIDTH:-174}"
+    panel_width="${WALLIFY_COMPACT_WIDTH:-180}"
 fi
 if [[ -f widget-settings.conf ]]; then
     saved_x="$(sed -n 's/^widget_grid_x=\([0-9][0-9]*\)$/\1/p' widget-settings.conf | head -n 1)"
@@ -37,11 +35,16 @@ fi
 panel_margin_left="${panel_margin_left:-$((14 + grid_x * 180))}"
 panel_margin_top="${panel_margin_top:-$((12 + grid_y * 180))}"
 
-killall preview_frame 2>/dev/null || true
-killall spotify-player 2>/dev/null || true
+pkill -f spotify-player 2>/dev/null || killall spotify-player 2>/dev/null || true
+
+cleanup() {
+    pkill -TERM -f spotify-player 2>/dev/null || killall -TERM spotify-player 2>/dev/null || true
+    rm -f /tmp/wallify-kitty.sock
+}
+trap cleanup INT TERM EXIT
 
 rm -f /tmp/wallify-kitty.sock
-if "$panel_kitten" panel \
+"$panel_kitten" panel \
     --edge=none \
     --layer=bottom \
     --focus-policy=on-demand \
@@ -49,7 +52,10 @@ if "$panel_kitten" panel \
     --columns="${panel_width}px" --lines="${panel_height}px" \
     --margin-left="$panel_margin_left" --margin-top="$panel_margin_top" \
     --config="$PWD/widget-kitty.conf" \
-    ./zig-out/bin/spotify-player; then
+    ./zig-out/bin/spotify-player &
+panel_pid=$!
+
+if wait "$panel_pid"; then
     panel_status=0
 else
     panel_status=$?

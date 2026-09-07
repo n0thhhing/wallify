@@ -622,3 +622,52 @@ test "artwork downscaling averages details instead of aliasing" {
     try std.testing.expectEqual(@as(u8, 128), pixel[2]);
     try std.testing.expectEqual(@as(u8, 255), pixel[3]);
 }
+
+test "blendPixel alpha channel compositing" {
+    var engine = try PixelEngine.init(std.testing.allocator, 2, 2);
+    defer engine.deinit(std.testing.allocator);
+
+    // Initial state is all 0
+    try std.testing.expectEqual(@as(u32, 0), engine.pixels[0]);
+
+    // Opaque red (r=255, g=0, b=0, a=255)
+    engine.blendPixel(0, 0, 255, 0, 0, 255);
+    const p1 = std.mem.toBytes(engine.pixels[0]);
+    try std.testing.expectEqual(@as(u8, 255), p1[0]);
+    try std.testing.expectEqual(@as(u8, 0), p1[1]);
+    try std.testing.expectEqual(@as(u8, 0), p1[2]);
+    try std.testing.expectEqual(@as(u8, 255), p1[3]);
+
+    // Zero-alpha blend does not alter pixel
+    engine.blendPixel(0, 0, 0, 255, 0, 0);
+    try std.testing.expectEqual(p1, std.mem.toBytes(engine.pixels[0]));
+}
+
+test "blendPixel respects canvas bounds without overflow" {
+    var engine = try PixelEngine.init(std.testing.allocator, 4, 4);
+    defer engine.deinit(std.testing.allocator);
+
+    // Out of bounds writes must safely be ignored
+    engine.blendPixel(-1, 0, 255, 255, 255, 255);
+    engine.blendPixel(0, -1, 255, 255, 255, 255);
+    engine.blendPixel(4, 0, 255, 255, 255, 255);
+    engine.blendPixel(0, 4, 255, 255, 255, 255);
+
+    for (engine.pixels) |p| {
+        try std.testing.expectEqual(@as(u32, 0), p);
+    }
+}
+
+test "fillRoundedRect modifies canvas within bounds" {
+    var engine = try PixelEngine.init(std.testing.allocator, 10, 10);
+    defer engine.deinit(std.testing.allocator);
+
+    engine.fillRoundedRect(1, 1, 8, 8, 2, 255, 255, 255, 255);
+    // Center pixel (5, 5) must be painted
+    const center_pixel = std.mem.toBytes(engine.pixels[5 * 10 + 5]);
+    try std.testing.expectEqual(@as(u8, 255), center_pixel[3]);
+
+    // Outer corner (0, 0) must NOT be painted
+    const corner_pixel = std.mem.toBytes(engine.pixels[0]);
+    try std.testing.expectEqual(@as(u8, 0), corner_pixel[3]);
+}

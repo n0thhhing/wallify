@@ -3,32 +3,43 @@ const state = @import("../state.zig");
 const macos = @import("../macos.zig");
 const render = @import("../graphics/render.zig");
 
-extern "c" fn rename(old: [*c]const u8, new: [*c]const u8) c_int;
-extern "c" fn dlopen(path: [*c]const u8, mode: c_int) ?*anyopaque;
-extern "c" fn dlsym(handle: *anyopaque, symbol: [*c]const u8) ?*anyopaque;
-extern "c" fn popen(command: [*:0]const u8, mode: [*:0]const u8) ?*anyopaque;
+extern "c" fn popen(command: [*c]const u8, modes: [*c]const u8) ?*anyopaque;
 extern "c" fn pclose(stream: *anyopaque) c_int;
 extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
-extern "c" fn usleep(useconds: c_uint) c_int;
 
-pub const MRMediaRemoteCommandPlay = 0;
-pub const MRMediaRemoteCommandPause = 1;
-pub const MRMediaRemoteCommandTogglePlayPause = 2;
-pub const MRMediaRemoteCommandStop = 3;
-pub const MRMediaRemoteCommandNextTrack = 4;
-pub const MRMediaRemoteCommandPreviousTrack = 5;
+fn sleep_ms(ms: u64) void {
+    const ts = std.posix.timespec{
+        .sec = @intCast(ms / 1000),
+        .nsec = @intCast((ms % 1000) * 1_000_000),
+    };
+    _ = std.posix.system.nanosleep(&ts, null);
+}
+
+pub const MediaRemoteCommand = enum(u32) {
+    play = 0,
+    pause = 1,
+    toggle_play_pause = 2,
+    stop = 3,
+    next_track = 4,
+    previous_track = 5,
+};
+
+pub const MRMediaRemoteCommandPlay = MediaRemoteCommand.play;
+pub const MRMediaRemoteCommandPause = MediaRemoteCommand.pause;
+pub const MRMediaRemoteCommandTogglePlayPause = MediaRemoteCommand.toggle_play_pause;
+pub const MRMediaRemoteCommandStop = MediaRemoteCommand.stop;
+pub const MRMediaRemoteCommandNextTrack = MediaRemoteCommand.next_track;
+pub const MRMediaRemoteCommandPreviousTrack = MediaRemoteCommand.previous_track;
 
 pub fn triggerSeekInner(target: f64) void {
-    if (state.setting_source == 1) {
+    if (state.setting_source == .spotify) {
         macos.widget_spotify_seek(target);
         return;
     }
-    const handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", 1);
-    if (handle) |h| {
-        if (dlsym(h, "MRMediaRemoteSetElapsedTime")) |set_ptr| {
-            const MRSetElapsedTime = @as(*const fn (f64) callconv(.c) void, @ptrCast(@alignCast(set_ptr)));
-            MRSetElapsedTime(target);
-        }
+    var lib = std.DynLib.open("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote") catch return;
+    defer lib.close();
+    if (lib.lookup(*const fn (f64) callconv(.c) void, "MRMediaRemoteSetElapsedTime")) |set_func| {
+        set_func(target);
     }
 }
 
@@ -37,24 +48,26 @@ pub fn triggerSeek(target: f64) void {
     t.detach();
 }
 
-pub fn triggerCommandInner(cmd: u32) void {
-    if (state.setting_source == 1) {
-        if (cmd == MRMediaRemoteCommandPlay) macos.widget_spotify_control(0);
-        if (cmd == MRMediaRemoteCommandPause) macos.widget_spotify_control(1);
-        if (cmd == MRMediaRemoteCommandPreviousTrack) macos.widget_spotify_control(3);
-        if (cmd == MRMediaRemoteCommandNextTrack) macos.widget_spotify_control(4);
+pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
+    if (state.setting_source == .spotify) {
+        switch (cmd) {
+            .play => macos.widget_spotify_control(.play),
+            .pause => macos.widget_spotify_control(.pause),
+            .toggle_play_pause => macos.widget_spotify_control(.play_pause),
+            .previous_track => macos.widget_spotify_control(.previous_track),
+            .next_track => macos.widget_spotify_control(.next_track),
+            .stop => macos.widget_spotify_control(.pause),
+        }
         return;
     }
-    const handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", 1);
-    if (handle) |h| {
-        if (dlsym(h, "MRMediaRemoteSendCommand")) |cmd_ptr| {
-            const MRMediaRemoteSendCommandFunc = @as(*const fn (c_uint, ?*anyopaque) callconv(.c) void, @ptrCast(@alignCast(cmd_ptr)));
-            MRMediaRemoteSendCommandFunc(cmd, null);
-        }
+    var lib = std.DynLib.open("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote") catch return;
+    defer lib.close();
+    if (lib.lookup(*const fn (c_uint, ?*anyopaque) callconv(.c) void, "MRMediaRemoteSendCommand")) |send_func| {
+        send_func(@intFromEnum(cmd), null);
     }
 }
 
-pub fn triggerCommand(cmd: u32) void {
+pub fn triggerCommand(cmd: MediaRemoteCommand) void {
     const t = std.Thread.spawn(.{}, triggerCommandInner, .{cmd}) catch return;
     t.detach();
 }
@@ -67,18 +80,46 @@ pub fn togglePlayback() void {
     state.global_rate = target_rate;
     state.global_elapsed = position;
     state.playback_clock.sync(position, target_rate, now, state.global_duration, true);
-    triggerCommand(if (target_rate > 0) MRMediaRemoteCommandPlay else MRMediaRemoteCommandPause);
+    triggerCommand(if (target_rate > 0) .play else .pause);
     state.global_rate_lock = 1;
     state.global_rate_lock_until = now + 1.5;
     state.requestFrame();
 }
 
-fn utf8Prefix(text: []const u8, max_len: usize) []const u8 {
+pub fn utf8Prefix(text: []const u8, max_len: usize) []const u8 {
     var len = @min(text.len, max_len);
     if (len < text.len) {
         while (len > 0 and (text[len] & 0xc0) == 0x80) len -= 1;
     }
     return text[0..len];
+}
+
+pub const SpotifyPayload = struct {
+    title: []const u8,
+    artist: []const u8,
+    playing: bool,
+    elapsed: f64,
+    duration: f64,
+    artwork_url: []const u8,
+};
+
+pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
+    var spl = std.mem.splitSequence(u8, raw, "|||");
+    const title = spl.next() orelse return null;
+    const artist = spl.next() orelse return null;
+    const pstate = spl.next() orelse return null;
+    const pos_raw = spl.next() orelse "0.0";
+    const dur_raw = spl.next() orelse "0.0";
+    const art = spl.next() orelse "";
+
+    return .{
+        .title = title,
+        .artist = artist,
+        .playing = std.mem.eql(u8, pstate, "playing"),
+        .elapsed = std.fmt.parseFloat(f64, pos_raw) catch 0.0,
+        .duration = std.fmt.parseFloat(f64, dur_raw) catch 0.0,
+        .artwork_url = art,
+    };
 }
 
 pub fn metadataLoop(io: std.Io) void {
@@ -97,17 +138,17 @@ pub fn metadataLoop(io: std.Io) void {
 
     var last_art_url: [512]u8 = undefined;
     var last_art_url_len: usize = 0;
-    var last_source: u8 = 255; // Force initial mismatch
+    var last_source: ?state.MediaSource = null;
 
     while (true) {
-        if (state.setting_source != last_source) {
+        if (last_source == null or state.setting_source != last_source.?) {
             last_source = state.setting_source;
             last_art_url_len = 0; // Force Spotify art re-download
             state.artwork_refresh_pending = true; // Force Now Playing art reload
             state.global_title_len = 0; // Force title change to trigger updates
         }
 
-        if (state.setting_source == 1) {
+        if (state.setting_source == .spotify) {
             _ = arena.reset(.retain_capacity);
             var res_buf: [1024]u8 = undefined;
             const res_len = macos.widget_query_spotify(&res_buf, res_buf.len);
@@ -126,7 +167,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_has_artwork = false;
                     state.requestFrame();
                 }
-                _ = usleep(500_000);
+                sleep_ms(500);
                 continue;
             }
 
@@ -144,7 +185,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_has_artwork = false;
                     state.requestFrame();
                 }
-                _ = usleep(250_000);
+                sleep_ms(250);
                 continue;
             }
 
@@ -197,7 +238,7 @@ pub fn metadataLoop(io: std.Io) void {
 
                             _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "curl", "-s", "-f", art_raw, "-o", "/tmp/mrc_art_raw" } }) catch {};
                             _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "512", "512", "-s", "format", "bmp", "/tmp/mrc_art_raw", "--out", "/tmp/art-next.bmp" } }) catch {};
-                            if (rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
+                            if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.global_has_artwork = true;
                                 render.extractColor();
                             }
@@ -210,15 +251,15 @@ pub fn metadataLoop(io: std.Io) void {
                     state.requestFrame();
                 }
             }
-            _ = usleep(250_000);
+            sleep_ms(250);
         } else {
             const stream = popen(command, "r") orelse {
-                _ = usleep(250_000);
+                sleep_ms(250);
                 continue;
             };
             var line: [2048]u8 = undefined;
             while (fgets(&line, line.len, stream) != null) {
-                if (state.setting_source == 1) break;
+                if (state.setting_source == .spotify) break;
 
                 _ = arena.reset(.retain_capacity);
                 const line_len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;
@@ -270,7 +311,7 @@ pub fn metadataLoop(io: std.Io) void {
                         const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
                         if (artwork_available and state.artwork_refresh_pending) {
                             _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "512", "512", "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
-                            if (rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
+                            if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.artwork_refresh_pending = false;
                                 state.global_has_artwork = true;
                             }
@@ -283,7 +324,49 @@ pub fn metadataLoop(io: std.Io) void {
                 }
             }
             _ = pclose(stream);
-            _ = usleep(250_000); // Restart the helper if its stream closes.
+            sleep_ms(250); // Restart the helper if its stream closes.
         }
     }
+}
+
+test "utf8Prefix preserves short strings and chops safely on boundaries" {
+    const ascii = "Hello World";
+    try std.testing.expectEqualStrings("Hello World", utf8Prefix(ascii, 20));
+    try std.testing.expectEqualStrings("Hello", utf8Prefix(ascii, 5));
+
+    // Multi-byte characters: "café" (c a f \xc3 \xa9) -> 5 bytes
+    const cafe = "café";
+    try std.testing.expectEqualStrings("café", utf8Prefix(cafe, 5));
+    // Slicing at max_len=4 falls on the second byte of 'é'. utf8Prefix should back up to 3 ("caf")
+    try std.testing.expectEqualStrings("caf", utf8Prefix(cafe, 4));
+
+    // Emoji: "🎶" is 4 bytes (\xf0 \x9f \x8e \xb6)
+    const emoji = "🎶 Beats";
+    try std.testing.expectEqualStrings("🎶 Beats", utf8Prefix(emoji, 20));
+    try std.testing.expectEqualStrings("🎶", utf8Prefix(emoji, 4));
+    // Slicing at 1, 2, or 3 must not output malformed bytes
+    try std.testing.expectEqualStrings("", utf8Prefix(emoji, 1));
+    try std.testing.expectEqualStrings("", utf8Prefix(emoji, 2));
+    try std.testing.expectEqualStrings("", utf8Prefix(emoji, 3));
+}
+
+test "parseSpotifyPayload parses playback attributes" {
+    const raw = "Starboy|||The Weeknd|||playing|||45.5|||230.2|||https://example.com/art.jpg";
+    const parsed = parseSpotifyPayload(raw).?;
+    try std.testing.expectEqualStrings("Starboy", parsed.title);
+    try std.testing.expectEqualStrings("The Weeknd", parsed.artist);
+    try std.testing.expect(parsed.playing);
+    try std.testing.expectApproxEqAbs(@as(f64, 45.5), parsed.elapsed, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f64, 230.2), parsed.duration, 0.001);
+    try std.testing.expectEqualStrings("https://example.com/art.jpg", parsed.artwork_url);
+
+    const paused_raw = "Blinding Lights|||The Weeknd|||paused|||10.0|||200.0|||";
+    const paused = parseSpotifyPayload(paused_raw).?;
+    try std.testing.expect(!paused.playing);
+    try std.testing.expectEqualStrings("", paused.artwork_url);
+}
+
+test "parseSpotifyPayload returns null for truncated inputs" {
+    try std.testing.expect(parseSpotifyPayload("") == null);
+    try std.testing.expect(parseSpotifyPayload("Only Title") == null);
 }

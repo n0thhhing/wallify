@@ -30,7 +30,6 @@ pub fn build(b: *std.Build) void {
     mod.linkFramework("CoreText", .{});
     mod.linkFramework("AppKit", .{});
     mod.linkFramework("CoreGraphics", .{});
-    mod.addCSourceFile(.{ .file = b.path("src/snap.m"), .flags = &[_][]const u8{"-fobjc-arc"} });
 
     const exe = b.addExecutable(.{
         .name = "spotify-player",
@@ -41,4 +40,22 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the player");
     run_step.dependOn(b.getInstallStep());
     run_step.dependOn(&b.addRunArtifact(exe).step);
+
+    const test_step = b.step("test", "Run unit tests");
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/tests.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    test_mod.linkSystemLibrary("objc", .{});
+    test_mod.linkFramework("CoreFoundation", .{});
+    test_mod.linkFramework("CoreText", .{});
+    test_mod.linkFramework("AppKit", .{});
+    test_mod.linkFramework("CoreGraphics", .{});
+
+    const test_artifact = b.addTest(.{
+        .root_module = test_mod,
+    });
+    test_step.dependOn(&b.addRunArtifact(test_artifact).step);
 }

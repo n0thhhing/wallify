@@ -51,3 +51,19 @@ test "pixel mapping matches scaled display and exact circle boundaries" {
     try std.testing.expect(!circle.contains(fromPixel(937, 321, 1200, 400, 600, 200)));
     try std.testing.expect(!circle.contains(.{ .x = 433, .y = 143 }));
 }
+
+test "zero-radius rectangle behaves as half-open axis aligned box" {
+    const box = Rect{ .x = 10, .y = 20, .w = 30, .h = 40, .radius = 0 };
+    try std.testing.expect(box.contains(.{ .x = 10, .y = 20 }));
+    try std.testing.expect(box.contains(.{ .x = 39.9, .y = 59.9 }));
+    try std.testing.expect(!box.contains(.{ .x = 40, .y = 30 }));
+    try std.testing.expect(!box.contains(.{ .x = 20, .y = 60 }));
+    try std.testing.expect(!box.contains(.{ .x = 9.9, .y = 20 }));
+}
+
+test "fromPixel rejects zero and non-positive display dimensions" {
+    try std.testing.expectEqual(@as(f64, -1), fromPixel(0, 10, 100, 100, 50, 50).x);
+    try std.testing.expectEqual(@as(f64, -1), fromPixel(10, 0, 100, 100, 50, 50).y);
+    try std.testing.expectEqual(@as(f64, -1), fromPixel(10, 10, 0, 100, 50, 50).x);
+    try std.testing.expectEqual(@as(f64, -1), fromPixel(10, 10, 100, -10, 50, 50).y);
+}

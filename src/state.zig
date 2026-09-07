@@ -69,15 +69,111 @@ pub var spotify_event_until: f64 = 0;
 pub var hover_amount = [_]f64{ 0, 0, 0 };
 pub var global_duration: f64 = 0.0;
 pub var global_anim_art_t: f64 = 1.0;
+pub const FrameStrength = enum(u8) {
+    off = 0,
+    subtle = 1,
+    strong = 2,
+
+    pub fn multiplier(self: FrameStrength) f64 {
+        return switch (self) {
+            .off => 0.0,
+            .subtle => 1.0,
+            .strong => 1.5,
+        };
+    }
+};
+
+pub const GlowIntensity = enum(u8) {
+    low = 0,
+    normal = 1,
+    high = 2,
+
+    pub fn multiplier(self: GlowIntensity) f64 {
+        return switch (self) {
+            .low => 0.5,
+            .normal => 1.0,
+            .high => 1.5,
+        };
+    }
+};
+
+pub const AnimationSpeed = enum(u8) {
+    slow = 0,
+    normal = 1,
+    fast = 2,
+
+    pub fn multiplier(self: AnimationSpeed) f64 {
+        return switch (self) {
+            .slow => 0.7,
+            .normal => 1.0,
+            .fast => 1.4,
+        };
+    }
+};
+
+pub const MediaSource = enum(u8) {
+    now_playing = 0,
+    spotify = 1,
+};
+
+pub const WidgetMode = enum(u8) {
+    compact = 0,
+    expanded = 1,
+};
+
+pub const HitTarget = enum {
+    none,
+    grid_background,
+    frame_bounds,
+    art,
+    bar,
+    button_prev,
+    button_play_pause,
+    button_next,
+
+    pub fn fromActionId(id: ActionId) HitTarget {
+        return switch (id) {
+            .PlayPause => .button_play_pause,
+            .Prev => .button_prev,
+            .Next => .button_next,
+        };
+    }
+
+    pub fn toActionId(self: HitTarget) ?ActionId {
+        return switch (self) {
+            .button_play_pause => .PlayPause,
+            .button_prev => .Prev,
+            .button_next => .Next,
+            else => null,
+        };
+    }
+
+    pub fn label(self: HitTarget) []const u8 {
+        return switch (self) {
+            .none => "None",
+            .grid_background => "Grid Background",
+            .frame_bounds => "Frame Bounds",
+            .art => "Geometry: Art",
+            .bar => "Geometry: Bar",
+            .button_prev => "Action: Previous",
+            .button_play_pause => "Action: Play/Pause",
+            .button_next => "Action: Next",
+        };
+    }
+};
+
 pub var setting_glow = true;
 pub var setting_animations = true;
 pub var setting_dim = true;
-pub var setting_frame: u8 = 1;
-pub var setting_intensity: u8 = 1;
-pub var setting_speed: u8 = 1;
-pub var setting_source: u8 = 0; // 0 = Now Playing, 1 = Spotify
-// 0 = Compact, 1 = Expanded. Expanded preserves the original panel layout.
-pub var setting_mode: u8 = 1;
+// The native snap inspector stays visible unless explicitly disabled in
+// widget-settings.conf with widget_debug=false.
+pub var setting_debug = true;
+pub var setting_frame: FrameStrength = .subtle;
+pub var setting_intensity: GlowIntensity = .normal;
+pub var setting_speed: AnimationSpeed = .normal;
+pub var setting_source: MediaSource = .now_playing;
+// Compact or Expanded. Expanded preserves the original panel layout.
+pub var setting_mode: WidgetMode = .expanded;
 pub var animation_time: f64 = 0;
 pub var marquee_offset: f64 = 0;
 pub var marquee_direction: f64 = 1;
@@ -103,10 +199,8 @@ pub var panel_snap_target_left: i32 = 0;
 pub var panel_snap_target_top: i32 = 0;
 pub var panel_save_after_snap = false;
 
-pub var global_hover_state: [32]u8 = undefined;
-pub var global_hover_state_len: usize = 0;
-pub var global_click_state: [32]u8 = undefined;
-pub var global_click_state_len: usize = 0;
+pub var global_hover_target: HitTarget = .none;
+pub var global_click_target: HitTarget = .none;
 
 pub var frame_requested = std.atomic.Value(bool).init(true);
 
@@ -120,27 +214,25 @@ pub var cached_art: []u8 = &.{};
 pub var previous_art: []u8 = &.{};
 pub var art_transition_until: f64 = 0;
 
-extern "c" fn fopen(filename: [*c]const u8, mode: [*c]const u8) ?*anyopaque;
-extern "c" fn fwrite(ptr: *const anyopaque, size: usize, nmemb: usize, stream: *anyopaque) usize;
-extern "c" fn fclose(stream: *anyopaque) c_int;
-extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
-
 pub fn loadWidgetSettings() void {
-    const file = fopen("widget-settings.conf", "r") orelse return;
-    defer _ = fclose(file);
-    var line: [128]u8 = undefined;
+    const fd = std.posix.openatZ(std.posix.AT.FDCWD, "widget-settings.conf", .{ .ACCMODE = .RDONLY }, 0) catch return;
+    defer _ = std.posix.system.close(fd);
+    var buffer: [1024]u8 = undefined;
+    const n = std.posix.read(fd, &buffer) catch return;
+    if (n == 0) return;
+    var lines = std.mem.splitScalar(u8, buffer[0..n], '\n');
     var has_saved_margins = false;
-    while (fgets(&line, line.len, file) != null) {
-        const text = std.mem.trim(u8, std.mem.sliceTo(&line, 0), " \r\n");
+    while (lines.next()) |raw_line| {
+        const text = std.mem.trim(u8, raw_line, " \r\n");
         var pair = std.mem.splitScalar(u8, text, '=');
         const key = pair.next() orelse "";
         const value = pair.next() orelse "";
         const level = std.fmt.parseInt(u8, value, 10) catch 1;
-        if (std.mem.eql(u8, key, "frame_strength")) setting_frame = @min(2, level);
-        if (std.mem.eql(u8, key, "glow_intensity")) setting_intensity = @min(2, level);
-        if (std.mem.eql(u8, key, "animation_speed")) setting_speed = @min(2, level);
-        if (std.mem.eql(u8, key, "media_source")) setting_source = @min(1, level);
-        if (std.mem.eql(u8, key, "widget_mode")) setting_mode = @min(1, level);
+        if (std.mem.eql(u8, key, "frame_strength")) setting_frame = @enumFromInt(@min(2, level));
+        if (std.mem.eql(u8, key, "glow_intensity")) setting_intensity = @enumFromInt(@min(2, level));
+        if (std.mem.eql(u8, key, "animation_speed")) setting_speed = @enumFromInt(@min(2, level));
+        if (std.mem.eql(u8, key, "media_source")) setting_source = @enumFromInt(@min(1, level));
+        if (std.mem.eql(u8, key, "widget_mode")) setting_mode = @enumFromInt(@min(1, level));
         if (std.mem.eql(u8, key, "widget_grid_x")) widget_grid_x = @min(20, level);
         if (std.mem.eql(u8, key, "widget_grid_y")) widget_grid_y = @min(20, level);
         if (std.mem.eql(u8, key, "widget_margin_left")) { widget_margin_left = @max(0, std.fmt.parseInt(i32, value, 10) catch 14); has_saved_margins = true; }
@@ -148,6 +240,7 @@ pub fn loadWidgetSettings() void {
         if (std.mem.startsWith(u8, text, "artwork_glow=")) setting_glow = !std.mem.endsWith(u8, text, "false");
         if (std.mem.startsWith(u8, text, "animations=")) setting_animations = !std.mem.endsWith(u8, text, "false");
         if (std.mem.startsWith(u8, text, "dim_paused_artwork=")) setting_dim = !std.mem.endsWith(u8, text, "false");
+        if (std.mem.startsWith(u8, text, "widget_debug=")) setting_debug = !std.mem.endsWith(u8, text, "false");
     }
     if (!has_saved_margins) {
         widget_margin_left = 14 + @as(i32, widget_grid_x) * 180;
@@ -157,9 +250,63 @@ pub fn loadWidgetSettings() void {
 
 pub fn saveWidgetSettings() void {
     var buffer: [512]u8 = undefined;
-    const text = std.fmt.bufPrint(&buffer, "# Wallify widget preferences; also editable from the right-click menu.\nartwork_glow={s}\nanimations={s}\ndim_paused_artwork={s}\nframe_strength={d}\nglow_intensity={d}\nanimation_speed={d}\nmedia_source={d}\nwidget_mode={d}\nwidget_grid_x={d}\nwidget_grid_y={d}\nwidget_margin_left={d}\nwidget_margin_top={d}\n", .{ if (setting_glow) "true" else "false", if (setting_animations) "true" else "false", if (setting_dim) "true" else "false", setting_frame, setting_intensity, setting_speed, setting_source, setting_mode, widget_grid_x, widget_grid_y, widget_margin_left, widget_margin_top }) catch return;
-    const file = fopen("widget-settings.conf", "w") orelse return;
-    _ = fwrite(text.ptr, 1, text.len, file);
-    _ = fclose(file);
+    const text = std.fmt.bufPrint(&buffer, "# Wallify widget preferences; also editable from the right-click menu.\nartwork_glow={s}\nanimations={s}\ndim_paused_artwork={s}\nwidget_debug={s}\nframe_strength={d}\nglow_intensity={d}\nanimation_speed={d}\nmedia_source={d}\nwidget_mode={d}\nwidget_grid_x={d}\nwidget_grid_y={d}\nwidget_margin_left={d}\nwidget_margin_top={d}\n", .{ if (setting_glow) "true" else "false", if (setting_animations) "true" else "false", if (setting_dim) "true" else "false", if (setting_debug) "true" else "false", @intFromEnum(setting_frame), @intFromEnum(setting_intensity), @intFromEnum(setting_speed), @intFromEnum(setting_source), @intFromEnum(setting_mode), widget_grid_x, widget_grid_y, widget_margin_left, widget_margin_top }) catch return;
+    const fd = std.posix.openatZ(std.posix.AT.FDCWD, "widget-settings.conf", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
+    defer _ = std.posix.system.close(fd);
+    _ = std.posix.system.write(fd, text.ptr, text.len);
 }
 pub var current_image_id: u32 = 1;
+
+test "FrameStrength multiplier reflects visual intensity" {
+    try std.testing.expectEqual(@as(f64, 0.0), FrameStrength.off.multiplier());
+    try std.testing.expectEqual(@as(f64, 1.0), FrameStrength.subtle.multiplier());
+    try std.testing.expectEqual(@as(f64, 1.5), FrameStrength.strong.multiplier());
+}
+
+test "GlowIntensity multiplier scales correctly" {
+    try std.testing.expectEqual(@as(f64, 0.5), GlowIntensity.low.multiplier());
+    try std.testing.expectEqual(@as(f64, 1.0), GlowIntensity.normal.multiplier());
+    try std.testing.expectEqual(@as(f64, 1.5), GlowIntensity.high.multiplier());
+}
+
+test "AnimationSpeed multiplier paces framerate transitions" {
+    try std.testing.expectEqual(@as(f64, 0.7), AnimationSpeed.slow.multiplier());
+    try std.testing.expectEqual(@as(f64, 1.0), AnimationSpeed.normal.multiplier());
+    try std.testing.expectEqual(@as(f64, 1.4), AnimationSpeed.fast.multiplier());
+}
+
+test "HitTarget fromActionId and toActionId are consistent" {
+    const actions = [_]ActionId{ .PlayPause, .Prev, .Next };
+    for (actions) |action| {
+        const target = HitTarget.fromActionId(action);
+        try std.testing.expectEqual(action, target.toActionId().?);
+    }
+    try std.testing.expect(HitTarget.none.toActionId() == null);
+    try std.testing.expect(HitTarget.art.toActionId() == null);
+    try std.testing.expect(HitTarget.bar.toActionId() == null);
+}
+
+test "ButtonDef bounds calculates centering and radius" {
+    const play_btn = ButtonDef{ .id = .PlayPause, .name = "Action: Play/Pause", .x = 100, .y = 100, .size = 14 };
+    const play_b = play_btn.bounds();
+    try std.testing.expectEqual(@as(f64, 80), play_b.x);
+    try std.testing.expectEqual(@as(f64, 80), play_b.y);
+    try std.testing.expectEqual(@as(f64, 40), play_b.w);
+    try std.testing.expectEqual(@as(f64, 40), play_b.h);
+    try std.testing.expectEqual(@as(f64, 20), play_b.radius);
+
+    const prev_btn = ButtonDef{ .id = .Prev, .name = "Action: Previous", .x = 100, .y = 100, .size = 12 };
+    const prev_b = prev_btn.bounds();
+    try std.testing.expectEqual(@as(f64, 85), prev_b.x);
+    try std.testing.expectEqual(@as(f64, 85), prev_b.y);
+    try std.testing.expectEqual(@as(f64, 30), prev_b.w);
+    try std.testing.expectEqual(@as(f64, 30), prev_b.h);
+    try std.testing.expectEqual(@as(f64, 15), prev_b.radius);
+}
+
+test "HitTarget labels provide descriptive names" {
+    try std.testing.expectEqualStrings("None", HitTarget.none.label());
+    try std.testing.expectEqualStrings("Geometry: Art", HitTarget.art.label());
+    try std.testing.expectEqualStrings("Geometry: Bar", HitTarget.bar.label());
+    try std.testing.expectEqualStrings("Action: Play/Pause", HitTarget.button_play_pause.label());
+}

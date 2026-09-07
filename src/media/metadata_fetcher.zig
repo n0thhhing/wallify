@@ -8,8 +8,6 @@ pub const CFTypeID = c_ulong;
 pub const kCFStringEncodingUTF8: u32 = 0x08000100;
 pub const kCFNumberFloat64Type = 13;
 
-extern "c" fn dlopen(path: [*c]const u8, mode: c_int) ?*anyopaque;
-extern "c" fn dlsym(handle: *anyopaque, symbol: [*c]const u8) ?*anyopaque;
 extern "c" fn CFDictionaryGetValue(dict: CFDictionaryRef, key: CFStringRef) ?CFTypeRef;
 extern "c" fn CFGetTypeID(cf: CFTypeRef) CFTypeID;
 extern "c" fn CFStringGetTypeID() CFTypeID;
@@ -30,11 +28,13 @@ extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 extern "c" fn dispatch_time(when: u64, delta: i64) u64;
 extern "c" fn _dispatch_main_q() *anyopaque;
 extern "c" fn dispatch_get_global_queue(identifier: isize, flags: usize) *anyopaque;
-extern "c" fn write(fd: c_int, buf: [*c]const u8, count: usize) isize;
-extern "c" fn fopen(filename: [*c]const u8, mode: [*c]const u8) ?*anyopaque;
-extern "c" fn fwrite(ptr: *const anyopaque, size: usize, nmemb: usize, stream: *anyopaque) usize;
-extern "c" fn fclose(stream: *anyopaque) c_int;
-extern "c" fn usleep(useconds: c_uint) c_int;
+fn sleep_us(us: u64) void {
+    const ts = std.posix.timespec{
+        .sec = @intCast(us / 1_000_000),
+        .nsec = @intCast((us % 1_000_000) * 1_000),
+    };
+    _ = std.posix.system.nanosleep(&ts, null);
+}
 
 extern "c" var _NSConcreteGlobalBlock: anyopaque;
 
@@ -52,7 +52,16 @@ const BlockLiteral = extern struct {
 
 var MRGetNowPlayingInfo: ?*const fn (*anyopaque, *const BlockLiteral) callconv(.c) void = null;
 var MRMediaRemoteSendCommand: ?*const fn (c_uint, ?*anyopaque) callconv(.c) void = null;
+var MRMediaRemoteSetElapsedTime: ?*const fn (f64) callconv(.c) void = null;
+var mr_lib: ?std.DynLib = null;
 var sema: ?*anyopaque = null;
+
+fn getMRLib() ?*std.DynLib {
+    if (mr_lib == null) {
+        mr_lib = std.DynLib.open("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote") catch null;
+    }
+    return if (mr_lib != null) &mr_lib.? else null;
+}
 
 fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) void {
     _ = block;
@@ -65,29 +74,28 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
         const durationKey = CFStringCreateWithCString(null, "kMRMediaRemoteNowPlayingInfoDuration", kCFStringEncodingUTF8);
         const timestampKey = CFStringCreateWithCString(null, "kMRMediaRemoteNowPlayingInfoTimestamp", kCFStringEncodingUTF8);
 
-        var current_title: [256]u8 = undefined;
-        var current_artist: [256]u8 = undefined;
-        @memset(&current_title, 0);
-        @memset(&current_artist, 0);
-
-        var has_title = false;
-        var has_artist = false;
-        var has_artwork = false;
+        var current_title = std.mem.zeroes([256]u8);
+        var current_artist = std.mem.zeroes([256]u8);
         var rate: f64 = 0.0;
         var elapsed: f64 = 0.0;
         var duration: f64 = 0.0;
+        var has_artwork = false;
+        var has_title = false;
+        var has_artist = false;
 
         if (CFDictionaryGetValue(dict, titleKey)) |titleRef| {
             if (CFGetTypeID(titleRef) == CFStringGetTypeID()) {
-                _ = CFStringGetCString(@ptrCast(titleRef), &current_title, current_title.len, kCFStringEncodingUTF8);
-                has_title = true;
+                if (CFStringGetCString(@ptrCast(titleRef), &current_title, 256, kCFStringEncodingUTF8)) {
+                    has_title = true;
+                }
             }
         }
         
         if (CFDictionaryGetValue(dict, artistKey)) |artistRef| {
             if (CFGetTypeID(artistRef) == CFStringGetTypeID()) {
-                _ = CFStringGetCString(@ptrCast(artistRef), &current_artist, current_artist.len, kCFStringEncodingUTF8);
-                has_artist = true;
+                if (CFStringGetCString(@ptrCast(artistRef), &current_artist, 256, kCFStringEncodingUTF8)) {
+                    has_artist = true;
+                }
             }
         }
 
@@ -123,10 +131,10 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
                 const len = CFDataGetLength(artworkRef);
                 const ptr = CFDataGetBytePtr(artworkRef);
                 if (len > 0 and ptr != null) {
-                    const file = fopen("/tmp/mrc_artwork", "wb");
-                    if (file) |f| {
-                        _ = fwrite(ptr, 1, @intCast(len), f);
-                        _ = fclose(f);
+                    const art_fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/mrc_artwork", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch -1;
+                    if (art_fd >= 0) {
+                        defer _ = std.posix.system.close(art_fd);
+                        _ = std.posix.system.write(art_fd, ptr.?, @intCast(len));
                         has_artwork = true;
                     }
                 }
@@ -146,19 +154,18 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
             const artist_len = std.mem.indexOfScalar(u8, &current_artist, 0) orelse 256;
             
             var buf: [1024]u8 = undefined;
-            // Title|||Artist|||HasArtwork|||PlaybackRate|||ElapsedTime|||Duration
-            const msg = std.fmt.bufPrint(&buf, "{s}|||{s}|||{d}|||{d:.2}|||{d:.2}|||{d:.2}\n", .{
+            const msg = std.fmt.bufPrint(&buf, "{s}|||{s}|||{}|||{d:.2}|||{d:.2}|||{d:.2}\n", .{
                 current_title[0..title_len], 
                 current_artist[0..artist_len], 
-                if (has_artwork) @as(u8, 1) else @as(u8, 0),
+                @as(u8, if (has_artwork) 1 else 0),
                 rate, elapsed, duration
             }) catch "\n";
-            _ = write(1, msg.ptr, msg.len);
+            _ = std.posix.system.write(std.posix.STDOUT_FILENO, msg.ptr, msg.len);
         } else {
-            _ = write(1, "\n", 1);
+            _ = std.posix.system.write(std.posix.STDOUT_FILENO, "\n", 1);
         }
     } else {
-        _ = write(1, "\n", 1);
+        _ = std.posix.system.write(std.posix.STDOUT_FILENO, "\n", 1);
     }
     _ = dispatch_semaphore_signal(sema.?);
 }
@@ -174,12 +181,9 @@ const get_block = BlockLiteral{
 
 export fn mrc_printNowPlayingInfo() void {
     if (MRGetNowPlayingInfo == null) {
-    const handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", 1);
-    if (handle) |h| {
-        if (dlsym(h, "MRMediaRemoteGetNowPlayingInfo")) |get_ptr| {
-            MRGetNowPlayingInfo = @as(*const fn (*anyopaque, *const BlockLiteral) callconv(.c) void, @ptrCast(@alignCast(get_ptr)));
+        if (getMRLib()) |lib| {
+            MRGetNowPlayingInfo = lib.lookup(*const fn (*anyopaque, *const BlockLiteral) callconv(.c) void, "MRMediaRemoteGetNowPlayingInfo");
         }
-    }
     }
     if (MRGetNowPlayingInfo) |MRGet| {
         if (sema == null) sema = dispatch_semaphore_create(0);
@@ -188,31 +192,31 @@ export fn mrc_printNowPlayingInfo() void {
         // 250ms timeout using dispatch_time(DISPATCH_TIME_NOW, 250_000_000)
         const timeout = dispatch_time(0, 250_000_000);
         if (dispatch_semaphore_wait(sema.?, timeout) != 0) {
-            _ = write(1, "\n", 1);
+            _ = std.posix.system.write(std.posix.STDOUT_FILENO, "\n", 1);
         }
     }
 }
 
 export fn mrc_sendCommand(cmd: c_uint) void {
-    const handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", 1);
-    if (handle) |h| {
-        if (dlsym(h, "MRMediaRemoteSendCommand")) |cmd_ptr| {
-            MRMediaRemoteSendCommand = @as(*const fn (c_uint, ?*anyopaque) callconv(.c) void, @ptrCast(@alignCast(cmd_ptr)));
+    if (MRMediaRemoteSendCommand == null) {
+        if (getMRLib()) |lib| {
+            MRMediaRemoteSendCommand = lib.lookup(*const fn (c_uint, ?*anyopaque) callconv(.c) void, "MRMediaRemoteSendCommand");
         }
     }
     if (MRMediaRemoteSendCommand) |send_func| {
         send_func(cmd, null);
-        _ = usleep(100000); 
+        sleep_us(100000); 
     }
 }
 
 export fn mrc_seekTo(target: f64) void {
-    const handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", 1);
-    if (handle) |h| {
-        if (dlsym(h, "MRMediaRemoteSetElapsedTime")) |set_ptr| {
-            const MRSetElapsedTime = @as(*const fn (f64) callconv(.c) void, @ptrCast(@alignCast(set_ptr)));
-            MRSetElapsedTime(target);
-            _ = usleep(100000); 
+    if (MRMediaRemoteSetElapsedTime == null) {
+        if (getMRLib()) |lib| {
+            MRMediaRemoteSetElapsedTime = lib.lookup(*const fn (f64) callconv(.c) void, "MRMediaRemoteSetElapsedTime");
         }
+    }
+    if (MRMediaRemoteSetElapsedTime) |set_func| {
+        set_func(target);
+        sleep_us(100000); 
     }
 }
