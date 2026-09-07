@@ -11,6 +11,9 @@ fi
 # Keep runtime builds separate from a stale project cache left by interrupted
 # panel runs; Kitty can then relaunch the current binary reliably.
 zig build -Doptimize=ReleaseFast --cache-dir /tmp/wallify-runtime-cache --global-cache-dir /tmp/wallify-runtime-global-cache
+if [[ ! -f preview_frame || preview.swift -nt preview_frame ]]; then
+    swiftc -O preview.swift -o preview_frame
+fi
 export WALLIFY_DESKTOP=1
 panel_height="${WALLIFY_HEIGHT:-205}"
 panel_width="${WALLIFY_WIDTH:-708}"
