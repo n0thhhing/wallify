@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mcpls": {
+      "command": "mcpls",
+      "args": ["--lsp", "/opt/homebrew/bin/zls"]
+    },
+    "zig-docs": {
+      "command": "npx",
+      "args": ["-y", "zig-docs-mcp", "--version", "0.16.0"]
+    },
+    "kitty-docs": {
+      "command": "npx",
+      "args": ["-y", "kitty-docs-mcp"]
+    }
+  }
+}
