@@ -1,7 +1,9 @@
 const std = @import("std");
 const state = @import("../state.zig");
-const macos = @import("../macos.zig");
-const media = @import("../media/media.zig");
+const window = @import("window.zig");
+const menu = @import("menu.zig");
+const spotify = @import("../media/spotify.zig");
+const media = @import("../media/controller.zig");
 const hitbox = @import("hitbox.zig");
 
 pub fn enableRawMode() !void {
@@ -18,7 +20,7 @@ pub fn enableRawMode() !void {
     try std.posix.tcsetattr(0, .FLUSH, raw);
 
     std.debug.print("\x1b[?25l\x1b[?1003h\x1b[?1006h", .{});
-    state.pixel_mouse = std.c.getenv("TMUX") == null and macos.widget_cell_width() > 0 and macos.widget_cell_height() > 0;
+    state.pixel_mouse = std.c.getenv("TMUX") == null and window.widget_cell_width() > 0 and window.widget_cell_height() > 0;
     if (state.pixel_mouse) std.debug.print("\x1b[?1016h", .{});
     std.debug.print("\x1b[2J\x1b[H", .{});
 }
@@ -85,9 +87,9 @@ pub fn inputLoop() void {
                             pressed = null;
                             state.global_is_dragging = false;
                             state.global_panel_dragging = false;
-                            macos.widget_hide_snap_outline();
+                            window.widget_hide_snap_outline();
                             state.global_hover_target = .none;
-                            if (open_menu) macos.widget_context_menu(@intFromBool(state.global_rate > 0), @intFromBool(state.setting_glow), @intFromBool(state.setting_animations), @intFromBool(state.setting_dim), state.setting_frame, state.setting_intensity, state.setting_speed, state.setting_source, state.setting_mode);
+                            if (open_menu) menu.widget_context_menu(@intFromBool(state.global_rate > 0), @intFromBool(state.setting_glow), @intFromBool(state.setting_animations), @intFromBool(state.setting_dim), state.setting_frame, state.setting_intensity, state.setting_speed, state.setting_source, state.setting_mode);
                             state.requestFrame();
                             i = end + 1;
                             continue;
@@ -95,10 +97,11 @@ pub fn inputLoop() void {
                         var new_hover_target: state.HitTarget = .grid_background;
 
                         const point = if (state.pixel_mouse)
-                            hitbox.fromPixel(cx, cy, macos.widget_cell_width() * state.layout.cells_x, macos.widget_cell_height() * state.layout.cells_y, state.layout.width, state.layout.height)
+                            hitbox.fromPixel(cx, cy, window.widget_cell_width() * state.layout.cells_x, window.widget_cell_height() * state.layout.cells_y, state.layout.width, state.layout.height)
                         else
                             hitbox.fromCell(cx, cy, state.layout.width / state.layout.cells_x, state.layout.height / state.layout.cells_y);
                         const px = point.x;
+                        state.pointer_x = px;
                         for (state.layout.buttons) |button| {
                             if (button.bounds().contains(point)) {
                                 new_hover_target = state.HitTarget.fromActionId(button.id);
@@ -126,7 +129,7 @@ pub fn inputLoop() void {
                         if (is_click) {
                             pressed = null;
                             for (state.layout.buttons) |button| {
-                                if (button.bounds().contains(point)) pressed = button.id;
+                                if (!state.spotifyIdle() and button.bounds().contains(point)) pressed = button.id;
                             }
                             if (state.global_click_target != new_hover_target) {
                                 state.global_click_target = new_hover_target;
@@ -148,21 +151,21 @@ pub fn inputLoop() void {
                             const card_x: f64 = if (state.mode_mix < 0.5) 8.0 else 0.0;
                             const card_bounds = hitbox.Rect{ .x = card_x, .y = 35, .w = card_width, .h = 164, .radius = 26 };
                             if (state.desktop_mode and card_bounds.contains(point) and pressed == null and !state.global_is_dragging) {
-                                const mouse = macos.widget_mouse_location();
+                                const mouse = window.widget_mouse_location();
                                 state.global_panel_dragging = true;
                                 state.widget_drag_start_mouse_x = mouse.x;
                                 state.widget_drag_start_mouse_y = mouse.y;
                                 state.widget_drag_start_margin_left = state.widget_margin_left;
                                 state.widget_drag_start_margin_top = state.widget_margin_top;
                                 const visual_width: f64 = if (state.mode_mix < 0.5) 164.0 else 531.0;
-                                macos.widget_start_drag(state.widget_margin_left, state.widget_margin_top, visual_width);
+                                window.widget_start_drag(state.widget_margin_left, state.widget_margin_top, visual_width);
                                 state_changed = true;
                             }
                         }
 
                         if (state.global_panel_dragging) {
                             if (!is_click) {
-                                const mouse = macos.widget_mouse_location();
+                                const mouse = window.widget_mouse_location();
                                 const next_left: i32 = @max(0, state.widget_drag_start_margin_left + @as(i32, @intFromFloat(@round(mouse.x - state.widget_drag_start_mouse_x))));
                                 // A negative surface margin compensates for
                                 // the card's internal top inset, letting its
@@ -187,8 +190,8 @@ pub fn inputLoop() void {
                             // Kitty resize, rather than a stale fixed width.
                             const visual_width: f64 = if (state.mode_mix < 0.5) 164.0 else 531.0;
                             const visual_height: f64 = 164.0;
-                            macos.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, true);
-                            const live_snap = macos.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, visual_left, visual_top, visual_width, visual_height);
+                            window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, true);
+                            const live_snap = window.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, visual_left, visual_top, visual_width, visual_height);
                             // A guide is useful only while the card is still
                             // approaching its destination. Once it reaches the
                             // exact snap rect, the card itself would cover it.
@@ -196,13 +199,18 @@ pub fn inputLoop() void {
                             const commit_radius: f64 = if (state.mode_mix < 0.5) 150.0 else 190.0;
                             const show_snap_preview = live_snap.found and live_snap.distance_sq <= preview_radius * preview_radius;
                             if (!is_release and show_snap_preview) {
-                                macos.widget_show_snap_outline(live_snap.outline_x, live_snap.outline_y, live_snap.outline_width, live_snap.outline_height);
+                                window.widget_show_snap_outline(live_snap.outline_x, live_snap.outline_y, live_snap.outline_width, live_snap.outline_height);
                             } else if (!is_release) {
-                                macos.widget_hide_snap_outline();
+                                window.widget_hide_snap_outline();
                             }
                             if (is_release) {
+                                const mouse = window.widget_mouse_location();
+                                const idle_click = state.spotifyIdle() and @abs(mouse.x - state.widget_drag_start_mouse_x) < 5 and @abs(mouse.y - state.widget_drag_start_mouse_y) < 5;
+                                if (idle_click) {
+                                    if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + 2.5 else spotify.widget_open_spotify();
+                                }
                                 const snap = live_snap;
-                                if (snap.found and snap.distance_sq <= commit_radius * commit_radius) {
+                                if (!idle_click and snap.found and snap.distance_sq <= commit_radius * commit_radius) {
                                     state.panel_snap_active = true;
                                     state.panel_snap_elapsed = 0;
                                     state.panel_snap_start_left = state.widget_margin_left;
@@ -215,8 +223,8 @@ pub fn inputLoop() void {
                                 // free-positioned; the optional snap above is
                                 // only activated near a real neighboring card.
                                 state.global_panel_dragging = false;
-                                macos.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, false);
-                                macos.widget_hide_snap_outline();
+                                window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, false);
+                                window.widget_hide_snap_outline();
                                 if (!state.panel_snap_active) state.saveWidgetSettings();
                             }
                             pressed = null;
@@ -227,17 +235,28 @@ pub fn inputLoop() void {
 
                         // Compact mode has no playback controls, but still
                         // supports the drag interaction above and its menu.
+                        if (state.spotifyIdle()) {
+                            if (is_release) {
+                                if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + 2.5 else spotify.widget_open_spotify();
+                            }
+                            i = end + 1;
+                            continue;
+                        }
                         if (state.mode_mix < 0.5) {
                             i = end + 1;
                             continue;
                         }
 
                         if (is_release and !state.global_is_dragging) {
-                            if (pressed == .PlayPause and new_hover_target == .button_play_pause) {
-                                media.togglePlayback();
+                            if (pressed) |action| {
+                                if (new_hover_target.toActionId() == action) {
+                                    switch (action) {
+                                        .PlayPause => media.togglePlayback(),
+                                        .Prev => media.triggerCommand(.previous_track),
+                                        .Next => media.triggerCommand(.next_track),
+                                    }
+                                }
                             }
-                            if (pressed == .Prev and new_hover_target == .button_prev) media.triggerCommand(.previous_track);
-                            if (pressed == .Next and new_hover_target == .button_next) media.triggerCommand(.next_track);
                         }
 
                         if (state.global_is_dragging) {
@@ -250,10 +269,10 @@ pub fn inputLoop() void {
                                 state.global_is_dragging = false;
                                 state.global_elapsed = target;
                                 state_changed = true;
-                                state.playback_clock.sync(target, state.global_rate, macos.widget_monotonic_time(), state.global_duration, true);
+                                state.playback_clock.sync(target, state.global_rate, window.widget_monotonic_time(), state.global_duration, true);
                                 media.triggerSeek(target);
                                 state.global_rate_lock = 1;
-                                state.global_rate_lock_until = macos.widget_monotonic_time() + 0.5;
+                                state.global_rate_lock_until = window.widget_monotonic_time() + 0.5;
                             } else {
                                 state.global_elapsed = target;
                                 state.requestFrame();

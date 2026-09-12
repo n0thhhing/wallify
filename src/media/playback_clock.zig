@@ -15,8 +15,7 @@ pub const PlaybackClock = struct {
     pub fn sync(self: *PlaybackClock, elapsed: f64, rate: f64, now: f64, duration: f64, snap: bool) void {
         const previous = self.position(now, duration);
         const delta = previous - elapsed;
-        self.* = .{ .elapsed = elapsed, .sampled_at = now, .rate = rate,
-            .correction = if (!snap and @abs(delta) < 2) delta else 0 };
+        self.* = .{ .elapsed = elapsed, .sampled_at = now, .rate = rate, .correction = if (!snap and @abs(delta) < 2) delta else 0 };
     }
 };
 

@@ -51,7 +51,7 @@ rm -f /tmp/wallify-kitty.sock
     --listen-on=unix:/tmp/wallify-kitty.sock \
     --columns="${panel_width}px" --lines="${panel_height}px" \
     --margin-left="$panel_margin_left" --margin-top="$panel_margin_top" \
-    --config="$PWD/widget-kitty.conf" \
+    --config="$PWD/config/kitty.conf" \
     ./zig-out/bin/spotify-player &
 panel_pid=$!
 

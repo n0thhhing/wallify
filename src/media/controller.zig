@@ -1,7 +1,9 @@
 const std = @import("std");
 const state = @import("../state.zig");
-const macos = @import("../macos.zig");
 const render = @import("../graphics/render.zig");
+const spotify = @import("spotify.zig");
+const window = @import("../ui/window.zig");
+const media_remote = @import("../platform/media_remote.zig");
 
 extern "c" fn popen(command: [*c]const u8, modes: [*c]const u8) ?*anyopaque;
 extern "c" fn pclose(stream: *anyopaque) c_int;
@@ -15,14 +17,7 @@ fn sleep_ms(ms: u64) void {
     _ = std.posix.system.nanosleep(&ts, null);
 }
 
-pub const MediaRemoteCommand = enum(u32) {
-    play = 0,
-    pause = 1,
-    toggle_play_pause = 2,
-    stop = 3,
-    next_track = 4,
-    previous_track = 5,
-};
+pub const MediaRemoteCommand = media_remote.MediaRemoteCommand;
 
 pub const MRMediaRemoteCommandPlay = MediaRemoteCommand.play;
 pub const MRMediaRemoteCommandPause = MediaRemoteCommand.pause;
@@ -33,14 +28,10 @@ pub const MRMediaRemoteCommandPreviousTrack = MediaRemoteCommand.previous_track;
 
 pub fn triggerSeekInner(target: f64) void {
     if (state.setting_source == .spotify) {
-        macos.widget_spotify_seek(target);
+        spotify.widget_spotify_seek(target);
         return;
     }
-    var lib = std.DynLib.open("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote") catch return;
-    defer lib.close();
-    if (lib.lookup(*const fn (f64) callconv(.c) void, "MRMediaRemoteSetElapsedTime")) |set_func| {
-        set_func(target);
-    }
+    media_remote.setElapsedTime(target);
 }
 
 pub fn triggerSeek(target: f64) void {
@@ -51,20 +42,16 @@ pub fn triggerSeek(target: f64) void {
 pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
     if (state.setting_source == .spotify) {
         switch (cmd) {
-            .play => macos.widget_spotify_control(.play),
-            .pause => macos.widget_spotify_control(.pause),
-            .toggle_play_pause => macos.widget_spotify_control(.play_pause),
-            .previous_track => macos.widget_spotify_control(.previous_track),
-            .next_track => macos.widget_spotify_control(.next_track),
-            .stop => macos.widget_spotify_control(.pause),
+            .play => spotify.widget_spotify_control(.play),
+            .pause => spotify.widget_spotify_control(.pause),
+            .toggle_play_pause => spotify.widget_spotify_control(.play_pause),
+            .previous_track => spotify.widget_spotify_control(.previous_track),
+            .next_track => spotify.widget_spotify_control(.next_track),
+            .stop => spotify.widget_spotify_control(.pause),
         }
         return;
     }
-    var lib = std.DynLib.open("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote") catch return;
-    defer lib.close();
-    if (lib.lookup(*const fn (c_uint, ?*anyopaque) callconv(.c) void, "MRMediaRemoteSendCommand")) |send_func| {
-        send_func(@intFromEnum(cmd), null);
-    }
+    media_remote.sendCommand(cmd);
 }
 
 pub fn triggerCommand(cmd: MediaRemoteCommand) void {
@@ -73,7 +60,7 @@ pub fn triggerCommand(cmd: MediaRemoteCommand) void {
 }
 
 pub fn togglePlayback() void {
-    const now = macos.widget_monotonic_time();
+    const now = window.widget_monotonic_time();
     const target_rate: f64 = if (state.global_rate > 0) 0 else 1;
     const position = state.playback_clock.position(now, state.global_duration);
     state.playback_state.request(target_rate > 0, now);
@@ -143,6 +130,7 @@ pub fn metadataLoop(io: std.Io) void {
     while (true) {
         if (last_source == null or state.setting_source != last_source.?) {
             last_source = state.setting_source;
+            state.spotify_closed.store(false, .release);
             last_art_url_len = 0; // Force Spotify art re-download
             state.artwork_refresh_pending = true; // Force Now Playing art reload
             state.global_title_len = 0; // Force title change to trigger updates
@@ -151,9 +139,19 @@ pub fn metadataLoop(io: std.Io) void {
         if (state.setting_source == .spotify) {
             _ = arena.reset(.retain_capacity);
             var res_buf: [1024]u8 = undefined;
-            const res_len = macos.widget_query_spotify(&res_buf, res_buf.len);
+            const res_len = spotify.widget_query_spotify(&res_buf, res_buf.len);
 
-            if (res_len == 0 or std.mem.eql(u8, res_buf[0..res_len], "CLOSED")) {
+            // Query failures do not mean the application closed.
+            if (res_len == 0) {
+                sleep_ms(500);
+                continue;
+            }
+            const closed = std.mem.eql(u8, res_buf[0..res_len], "CLOSED");
+            if (state.spotify_closed.swap(closed, .acq_rel) != closed) {
+                last_art_url_len = 0;
+                state.requestFrame();
+            }
+            if (closed) {
                 const title_span = "Spotify is Closed";
                 const artist_span = "Click to Launch";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
@@ -208,7 +206,7 @@ pub fn metadataLoop(io: std.Io) void {
             if (title_span.len > 0) {
                 const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
                 const artist_changed = artist_span.len != state.global_artist_len or !std.mem.eql(u8, artist_span, state.global_artist[0..state.global_artist_len]);
-                const now = macos.widget_monotonic_time();
+                const now = window.widget_monotonic_time();
 
                 if (now >= state.global_rate_lock_until or title_changed) {
                     state.global_rate_lock = 0;
@@ -225,7 +223,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_artist_len = artist_span.len;
 
                     if (!state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
-                        state.playback_clock.sync(elapsed, rate, macos.widget_monotonic_time(), duration, title_changed);
+                        state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
                         state.global_rate = rate;
                         state.global_elapsed = elapsed;
                     }
@@ -284,7 +282,7 @@ pub fn metadataLoop(io: std.Io) void {
                     if (title_span.len == 0) continue;
                     const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
                     const artist_changed = artist_span.len != state.global_artist_len or !std.mem.eql(u8, artist_span, state.global_artist[0..state.global_artist_len]);
-                    const now = macos.widget_monotonic_time();
+                    const now = window.widget_monotonic_time();
                     const accept_state = state.playback_state.accept(rate > 0, state.global_rate > 0, now, title_changed);
                     if (now >= state.global_rate_lock_until or title_changed) {
                         state.global_rate_lock = 0;
@@ -301,7 +299,7 @@ pub fn metadataLoop(io: std.Io) void {
                         state.global_artist_len = artist_span.len;
 
                         if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
-                            state.playback_clock.sync(elapsed, rate, macos.widget_monotonic_time(), duration, title_changed);
+                            state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
                             state.global_rate = rate;
                             state.global_elapsed = elapsed;
                         }

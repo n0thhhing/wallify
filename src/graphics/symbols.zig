@@ -1,5 +1,5 @@
 const std = @import("std");
-const macos = @import("../macos.zig");
+const macos = @import("../platform/macos.zig");
 
 pub const IconKind = enum(c_int) {
     play = 0,
@@ -115,4 +115,44 @@ pub export fn widget_icon(pixels: [*]u32, width: usize, height: usize, x: f64, y
             rounded_triangle(c, 2, 0, 9, 12);
         },
     }
+}
+
+var spotify_app_icon: macos.Ref = null;
+
+pub fn getSpotifyAppIcon() macos.Ref {
+    if (spotify_app_icon != null) return spotify_app_icon;
+
+    const paths = [_][]const u8{
+        "/Applications/Spotify.app/Contents/Resources/AppIcon.icns",
+        "assets/spotify_icon.png",
+    };
+    for (paths) |path| {
+        const url = macos.CFURLCreateFromFileSystemRepresentation(null, path.ptr, @as(isize, @intCast(path.len)), 0);
+        if (url != null) {
+            defer macos.CFRelease(url);
+            const src = macos.CGImageSourceCreateWithURL(url, null);
+            if (src != null) {
+                defer macos.CFRelease(src);
+                spotify_app_icon = macos.CGImageSourceCreateImageAtIndex(src, 0, null);
+                if (spotify_app_icon != null) return spotify_app_icon;
+            }
+        }
+    }
+    return null;
+}
+
+pub export fn widget_spotify_icon(pixels: [*]u32, width: usize, height: usize, x: f64, y: f64, size: f64) callconv(.c) c_int {
+    const icon = getSpotifyAppIcon();
+    if (icon == null) return 0;
+
+    const space = macos.CGColorSpaceCreateDeviceRGB();
+    const ctx = macos.CGBitmapContextCreate(pixels, width, height, 8, width * 4, space, macos.kCGImageAlphaPremultipliedLast | macos.kCGBitmapByteOrder32Big);
+    macos.CGColorSpaceRelease(space);
+    if (ctx == null) return 0;
+    defer macos.CGContextRelease(ctx);
+
+    const fh: f64 = @floatFromInt(height);
+    const dest_rect = macos.rect(x, fh - y - size, size, size);
+    macos.CGContextDrawImage(ctx, dest_rect, icon);
+    return 1;
 }

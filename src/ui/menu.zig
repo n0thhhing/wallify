@@ -1,6 +1,6 @@
 const std = @import("std");
 const state = @import("../state.zig");
-const macos = @import("../macos.zig");
+const macos = @import("../platform/macos.zig");
 
 pub const ContextMenuAction = enum(c_int) {
     none = 0,
@@ -25,6 +25,9 @@ pub const ContextMenuAction = enum(c_int) {
     source_spotify = 51,
     mode_compact = 60,
     mode_expanded = 61,
+    idle_spotify = 80,
+    idle_pixel = 81,
+    idle_banana = 82,
     _,
 };
 
@@ -153,6 +156,24 @@ pub const ContextMenuCtx = struct {
         }
         macos.send1(void, mode_item, "setSubmenu:", macos.Ref, mode_submenu);
         macos.send1(void, menu, "addItem:", macos.Ref, mode_item);
+
+        const idle_title = macos.string("Idle Style");
+        defer macos.CFRelease(idle_title);
+        const idle_item = macos.send3(macos.Ref, macos.send0(macos.Ref, item_cls, "alloc"), "initWithTitle:action:keyEquivalent:", macos.Ref, idle_title, macos.Ref, null, macos.Ref, empty_str);
+        const idle_submenu = macos.send1(macos.Ref, macos.send0(macos.Ref, menu_cls, "alloc"), "initWithTitle:", macos.Ref, idle_title);
+        macos.send1(void, idle_submenu, "setAutoenablesItems:", bool, false);
+        const idles = [_][]const u8{ "Open Spotify", "Cat", "Banana Cat" };
+        for (idles, 0..) |idle_name, i| {
+            const idle_str = macos.string(idle_name);
+            defer macos.CFRelease(idle_str);
+            const item = macos.send3(macos.Ref, macos.send0(macos.Ref, item_cls, "alloc"), "initWithTitle:action:keyEquivalent:", macos.Ref, idle_str, macos.Ref, choose_sel, macos.Ref, empty_str);
+            macos.send1(void, item, "setTarget:", macos.Ref, target);
+            macos.send1(void, item, "setTag:", isize, @intCast(80 + i));
+            macos.send1(void, item, "setState:", isize, if (state.setting_idle_style == @as(state.IdleStyle, @enumFromInt(i))) 1 else 0);
+            macos.send1(void, idle_submenu, "addItem:", macos.Ref, item);
+        }
+        macos.send1(void, idle_item, "setSubmenu:", macos.Ref, idle_submenu);
+        macos.send1(void, menu, "addItem:", macos.Ref, idle_item);
 
         macos.send1(void, menu, "addItem:", macos.Ref, macos.send0(macos.Ref, item_cls, "separatorItem"));
 

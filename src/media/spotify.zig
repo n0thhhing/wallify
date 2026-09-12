@@ -1,5 +1,5 @@
 const std = @import("std");
-const macos = @import("../macos.zig");
+const macos = @import("../platform/macos.zig");
 
 pub const SpotifyControl = enum(c_int) {
     play = 0,

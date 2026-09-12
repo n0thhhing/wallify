@@ -4,7 +4,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // 1. Build the metadata_fetcher.dylib for Perl
+    // Decode source PNGs once per asset change; outputs live only in Zig's cache.
+    const cat_pixels = decodeCat(b, "assets/cat/cat.png", "cat.rgba", "1426", "138");
+    const banana_pixels = decodeCat(b, "assets/cat/banana-cat.png", "banana.rgba", "98", "5130");
+
+    // MediaRemote bridge loaded by the Perl metadata helper.
     const dylib = b.addLibrary(.{
         .name = "metadata_fetcher",
         .linkage = .dynamic,
@@ -18,18 +22,16 @@ pub fn build(b: *std.Build) void {
     dylib.root_module.linkFramework("CoreFoundation", .{});
     b.installArtifact(dylib);
 
-    // 2. Build the main spotify-player (Pure Zig)
+    // Desktop player.
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    mod.linkSystemLibrary("objc", .{});
-    mod.linkFramework("CoreFoundation", .{});
-    mod.linkFramework("CoreText", .{});
-    mod.linkFramework("AppKit", .{});
-    mod.linkFramework("CoreGraphics", .{});
+    linkMacos(mod);
+    mod.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
+    mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 
     const exe = b.addExecutable(.{
         .name = "spotify-player",
@@ -42,20 +44,37 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&b.addRunArtifact(exe).step);
 
     const test_step = b.step("test", "Run unit tests");
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/tests.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    test_mod.linkSystemLibrary("objc", .{});
-    test_mod.linkFramework("CoreFoundation", .{});
-    test_mod.linkFramework("CoreText", .{});
-    test_mod.linkFramework("AppKit", .{});
-    test_mod.linkFramework("CoreGraphics", .{});
-
     const test_artifact = b.addTest(.{
-        .root_module = test_mod,
+        .root_module = mod,
     });
     test_step.dependOn(&b.addRunArtifact(test_artifact).step);
+    const preview = b.addExecutable(.{
+        .name = "preview-cat",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/preview_cat.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    preview.root_module.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
+    const preview_step = b.step("preview-cat", "Render cat samples to /tmp/wallify-poses.ppm");
+    preview_step.dependOn(&b.addRunArtifact(preview).step);
+}
+
+fn linkMacos(module: *std.Build.Module) void {
+    module.linkSystemLibrary("objc", .{});
+    module.linkFramework("CoreFoundation", .{});
+    module.linkFramework("CoreText", .{});
+    module.linkFramework("AppKit", .{});
+    module.linkFramework("CoreGraphics", .{});
+}
+
+fn decodeCat(b: *std.Build, source: []const u8, output: []const u8, width: []const u8, height: []const u8) std.Build.LazyPath {
+    const decode = b.addSystemCommand(&.{ "swift", "-module-cache-path", "/tmp/wallify-swift-module-cache" });
+    decode.addFileArg(b.path("tools/decode-cat.swift"));
+    decode.addFileArg(b.path(source));
+    const pixels = decode.addOutputFileArg(output);
+    decode.addArgs(&.{ width, height });
+    return pixels;
 }

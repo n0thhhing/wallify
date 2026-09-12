@@ -90,7 +90,7 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
                 }
             }
         }
-        
+
         if (CFDictionaryGetValue(dict, artistKey)) |artistRef| {
             if (CFGetTypeID(artistRef) == CFStringGetTypeID()) {
                 if (CFStringGetCString(@ptrCast(artistRef), &current_artist, 256, kCFStringEncodingUTF8)) {
@@ -110,7 +110,7 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
                 _ = CFNumberGetValue(@ptrCast(valRef), kCFNumberFloat64Type, &elapsed);
             }
         }
-        
+
         if (CFDictionaryGetValue(dict, timestampKey)) |tsRef| {
             if (CFGetTypeID(tsRef) == CFDateGetTypeID()) {
                 const ts = CFDateGetAbsoluteTime(tsRef);
@@ -118,7 +118,6 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
                 elapsed += (now - ts) * rate;
             }
         }
-
 
         if (CFDictionaryGetValue(dict, durationKey)) |valRef| {
             if (CFGetTypeID(valRef) == CFNumberGetTypeID()) {
@@ -152,14 +151,9 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
         if (has_title or has_artist) {
             const title_len = std.mem.indexOfScalar(u8, &current_title, 0) orelse 256;
             const artist_len = std.mem.indexOfScalar(u8, &current_artist, 0) orelse 256;
-            
+
             var buf: [1024]u8 = undefined;
-            const msg = std.fmt.bufPrint(&buf, "{s}|||{s}|||{}|||{d:.2}|||{d:.2}|||{d:.2}\n", .{
-                current_title[0..title_len], 
-                current_artist[0..artist_len], 
-                @as(u8, if (has_artwork) 1 else 0),
-                rate, elapsed, duration
-            }) catch "\n";
+            const msg = std.fmt.bufPrint(&buf, "{s}|||{s}|||{}|||{d:.2}|||{d:.2}|||{d:.2}\n", .{ current_title[0..title_len], current_artist[0..artist_len], @as(u8, if (has_artwork) 1 else 0), rate, elapsed, duration }) catch "\n";
             _ = std.posix.system.write(std.posix.STDOUT_FILENO, msg.ptr, msg.len);
         } else {
             _ = std.posix.system.write(std.posix.STDOUT_FILENO, "\n", 1);
@@ -188,7 +182,7 @@ export fn mrc_printNowPlayingInfo() void {
     if (MRGetNowPlayingInfo) |MRGet| {
         if (sema == null) sema = dispatch_semaphore_create(0);
         MRGet(dispatch_get_global_queue(0, 0), &get_block);
-        
+
         // 250ms timeout using dispatch_time(DISPATCH_TIME_NOW, 250_000_000)
         const timeout = dispatch_time(0, 250_000_000);
         if (dispatch_semaphore_wait(sema.?, timeout) != 0) {
@@ -205,7 +199,7 @@ export fn mrc_sendCommand(cmd: c_uint) void {
     }
     if (MRMediaRemoteSendCommand) |send_func| {
         send_func(cmd, null);
-        sleep_us(100000); 
+        sleep_us(100000);
     }
 }
 
@@ -217,6 +211,6 @@ export fn mrc_seekTo(target: f64) void {
     }
     if (MRMediaRemoteSetElapsedTime) |set_func| {
         set_func(target);
-        sleep_us(100000); 
+        sleep_us(100000);
     }
 }

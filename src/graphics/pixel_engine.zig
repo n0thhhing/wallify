@@ -406,7 +406,7 @@ pub const PixelEngine = struct {
         const tri_w = s_f * 1.5;
         const tri_h = s_f * 1.8;
         const vis_offset = tri_w * 0.15;
-        
+
         for (0..(limit * 2)) |y_u| {
             const y = @as(isize, @intCast(y_u));
             const dy = @as(f64, @floatFromInt(y)) - @as(f64, @floatFromInt(limit));
@@ -419,10 +419,10 @@ pub const PixelEngine = struct {
                         const s_dx = dx + (@as(f64, @floatFromInt(sx)) / 4.0);
                         const s_dy = dy + (@as(f64, @floatFromInt(sy)) / 4.0);
                         const px = s_dx - vis_offset;
-                        
-                        if (px >= -tri_w/2.0 and px <= tri_w/2.0) {
-                            const progress = (px + tri_w/2.0) / tri_w;
-                            const max_y = (tri_h/2.0) * (1.0 - progress);
+
+                        if (px >= -tri_w / 2.0 and px <= tri_w / 2.0) {
+                            const progress = (px + tri_w / 2.0) / tri_w;
+                            const max_y = (tri_h / 2.0) * (1.0 - progress);
                             if (@abs(s_dy) <= max_y) {
                                 hits += 1;
                             }
@@ -569,7 +569,7 @@ pub const PixelEngine = struct {
 
     pub fn drawDropShadow(self: *PixelEngine, x: isize, y: isize, w: isize, h: isize, blur_radius: isize, r: u8, g: u8, b: u8, a: u8) void {
         const rad = @as(f64, @floatFromInt(blur_radius));
-        
+
         const outer_x = x - blur_radius;
         const outer_y = y - blur_radius;
         const outer_w = w + blur_radius * 2;
@@ -583,9 +583,9 @@ pub const PixelEngine = struct {
             for (0..@as(usize, @intCast(outer_w))) |dx_u| {
                 const dx = @as(isize, @intCast(dx_u));
                 const px = outer_x + dx;
-                
+
                 const x_dist = if (px < x) @as(f64, @floatFromInt(x - px)) else if (px > x + w) @as(f64, @floatFromInt(px - (x + w))) else 0.0;
-                
+
                 const dist = @sqrt(x_dist * x_dist + y_dist * y_dist);
                 if (dist <= rad) {
                     // Exponential falloff for softer shadow
@@ -599,10 +599,7 @@ pub const PixelEngine = struct {
             }
         }
     }
-
-}
-;
-
+};
 
 test "artwork downscaling averages details instead of aliasing" {
     var bmp = [_]u8{0} ** 70;

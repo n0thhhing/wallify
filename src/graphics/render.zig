@@ -1,13 +1,61 @@
 const std = @import("std");
 const state = @import("../state.zig");
-const macos = @import("../macos.zig");
 pub const PixelEngine = @import("pixel_engine.zig").PixelEngine;
 const icon_transition = @import("icon_transition.zig");
+const text_renderer = @import("text.zig");
+const symbols = @import("symbols.zig");
+const glow = @import("glow.zig");
+const window = @import("../ui/window.zig");
 
 var render_canvas_buffer: [2560 * 1600]u32 = undefined;
 var shared_frame_id: u64 = 0;
 
+var idle_underlay: [2560 * 1600]u32 = undefined;
 fn publishFrame(engine: *PixelEngine, wide: bool) void {
+    if (state.idle_mix > 0) {
+        const mix = state.idle_mix;
+        if (mix < 1) @memcpy(idle_underlay[0..engine.pixels.len], engine.pixels);
+        @memset(engine.pixels, 0);
+        const x: isize = @intFromFloat(8 * (1 - state.mode_mix));
+        const w: isize = @intFromFloat(164 + (state.layout.width - 164) * state.mode_mix);
+        engine.fillRoundedRect(x, 35, w, 164, 26, 30, 29, 32, 255);
+        switch (state.setting_idle_style) {
+            .pixel_cat => @import("pets/idle_cat.zig").draw(engine, x, 35, w, state.cat_time, false, 0, false),
+            .banana_cat => @import("pets/banana_cat.zig").draw(engine, x, 35, 164, state.cat_time),
+            .spotify => {
+                const sc = @as(f64, @floatFromInt(engine.scale));
+                if (state.mode_mix < 0.5) {
+                    // Entire compact widget tile IS the Spotify app icon
+                    const full_sz: f64 = 164.0 * (128.0 / 104.0);
+                    const offset: f64 = (full_sz - 164.0) / 2.0;
+                    const draw_x = @as(f64, @floatFromInt(x)) - offset;
+                    const draw_y = 35.0 - offset;
+                    _ = symbols.widget_spotify_icon(engine.pixels.ptr, engine.width, engine.height, draw_x * sc, draw_y * sc, full_sz * sc);
+                } else {
+                    const icon_sz: f64 = 136.0 * (128.0 / 104.0);
+                    const offset: f64 = (icon_sz - 136.0) / 2.0;
+                    const draw_x: f64 = 24.0 - offset;
+                    const draw_y: f64 = 49.0 - offset;
+                    _ = symbols.widget_spotify_icon(engine.pixels.ptr, engine.width, engine.height, draw_x * sc, draw_y * sc, icon_sz * sc);
+                    drawText(engine, "Open Spotify", 210, 85, state.layout.bar_w, 17, true, false, .{ 240, 235, 225 });
+                    drawText(engine, "Click to launch", 210, 112, state.layout.bar_w, 13, false, false, .{ 159, 153, 145 });
+                }
+            },
+        }
+        engine.widgetFrame(x, 35, w, 164, 26, state.setting_frame.multiplier());
+        engine.clipOutsideRoundedRect(x, 35, w, 164, 26);
+        if (mix < 1) {
+            const weight: u32 = @intFromFloat(mix * 256);
+            for (engine.pixels, idle_underlay[0..engine.pixels.len]) |*pixel, old| {
+                var blended: u32 = 0;
+                inline for (0..4) |channel| {
+                    const shift = channel * 8;
+                    blended |= ((((old >> shift) & 255) * (256 - weight) + ((pixel.* >> shift) & 255) * weight) >> 8) << shift;
+                }
+                pixel.* = blended;
+            }
+        }
+    }
     // `t=f` asks the sandboxed Kitty app to open a path in our temporary
     // directory, which macOS can reject. Kitty's graphics protocol explicitly
     // supports `t=s`: a POSIX shared-memory object that it opens and consumes.
@@ -51,12 +99,12 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
 }
 
 pub fn drawText(engine: *PixelEngine, text: []const u8, x: f64, y: f64, width: f64, size: f64, bold: bool, right: bool, color: [3]u8) void {
-    macos.widget_text(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, x * state.render_scale, y * state.render_scale, width * state.render_scale, size * state.render_scale, @intFromBool(bold), @intFromBool(right), color[0], color[1], color[2]);
+    text_renderer.widget_text(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, x * state.render_scale, y * state.render_scale, width * state.render_scale, size * state.render_scale, @intFromBool(bold), @intFromBool(right), color[0], color[1], color[2]);
 }
 
 fn drawMarqueeText(engine: *PixelEngine, text: []const u8, x: f64, y: f64, viewport_width: f64, offset: f64, color: [3]u8) void {
     const scale: f64 = @floatFromInt(state.render_scale);
-    macos.widget_text_clipped(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, (x - offset) * scale, y * scale, x * scale, viewport_width * scale, 15 * state.render_scale, 1, color[0], color[1], color[2]);
+    text_renderer.widget_text_clipped(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, (x - offset) * scale, y * scale, x * scale, viewport_width * scale, 15 * state.render_scale, 1, color[0], color[1], color[2]);
 }
 
 fn lerp(a: f64, b: f64, amount: f64) f64 {
@@ -100,15 +148,15 @@ fn drawTextOverlays(engine: *PixelEngine, debug_x: isize, debug_y: isize, displa
 }
 
 pub fn drawUIFrame() void {
-    macos.widget_render_lock();
-    defer macos.widget_render_unlock();
-    const columns = macos.widget_terminal_columns();
+    window.widget_render_lock();
+    defer window.widget_render_unlock();
+    const columns = window.widget_terminal_columns();
     const wide = !state.desktop_mode and (columns == 0 or columns >= 112);
     if (state.desktop_mode) {
         state.layout.cells_x = @floatFromInt(@max(1, columns));
-        state.layout.cells_y = @floatFromInt(@max(1, macos.widget_terminal_rows()));
-        const display_w = macos.widget_cell_width() * state.layout.cells_x;
-        const display_h = macos.widget_cell_height() * state.layout.cells_y;
+        state.layout.cells_y = @floatFromInt(@max(1, window.widget_terminal_rows()));
+        const display_w = window.widget_cell_width() * state.layout.cells_x;
+        const display_h = window.widget_cell_height() * state.layout.cells_y;
         // During a mode morph, use the dimensions of the *current* Kitty
         // surface. Switching to compact no longer changes scale before the
         // panel itself has narrowed, which removes the size pop at the end.
@@ -159,7 +207,9 @@ pub fn drawUIFrame() void {
     };
     @memset(engine.pixels, 0);
 
-    const displayed_elapsed = if (state.global_is_dragging) state.global_elapsed else state.playback_clock.position(macos.widget_monotonic_time(), state.global_duration);
+    if (state.idle_mix >= 1) return publishFrame(&engine, wide);
+
+    const displayed_elapsed = if (state.global_is_dragging) state.global_elapsed else state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
     const t = state.global_anim_art_t;
     const inv = 1.0 - t;
     const ease = 1.0 - (inv * inv * inv);
@@ -184,8 +234,9 @@ pub fn drawUIFrame() void {
     const card_x: isize = @intFromFloat(lerp(8, 0, state.mode_mix));
     engine.fillRoundedRect(card_x, card_y, wi, hi, 26, 0, 0, 0, 255);
     if (state.setting_glow) {
-        macos.widget_artwork_glow(engine.pixels.ptr, engine.width, engine.height, state.layout.width, state.layout.height, state.render_scale, ease * state.setting_intensity.multiplier(), state.animation_time, @intFromBool(state.setting_animations));
+        glow.widget_artwork_glow(engine.pixels.ptr, engine.width, engine.height, state.layout.width, state.layout.height, state.render_scale, ease * state.setting_intensity.multiplier(), state.animation_time, @intFromBool(state.setting_animations));
     }
+    const art_corner_radius: isize = @intFromFloat(lerp(26.0, 14.0, state.mode_mix));
     if (state.global_has_artwork) {
         const fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/art.bmp", .{ .ACCMODE = .RDONLY }, 0) catch -1;
         if (fd >= 0) {
@@ -205,10 +256,10 @@ pub fn drawUIFrame() void {
                     state.art_transition_until = if (state.setting_animations and state.previous_art.len > 0) now_art + 0.5 else 0;
                 }
                 if (now_art < state.art_transition_until and state.previous_art.len > 0) {
-                    engine.blitBMP(state.previous_art, art_offset_x, art_offset_y, art_size_draw, if (state.mode_mix < 0.5) 26 else 14);
+                    engine.blitBMP(state.previous_art, art_offset_x, art_offset_y, art_size_draw, art_corner_radius);
                     const old_pixels = std.heap.page_allocator.dupe(u32, engine.pixels) catch return;
                     defer std.heap.page_allocator.free(old_pixels);
-                    engine.blitBMP(state.cached_art, art_offset_x, art_offset_y, art_size_draw, if (state.mode_mix < 0.5) 26 else 14);
+                    engine.blitBMP(state.cached_art, art_offset_x, art_offset_y, art_size_draw, art_corner_radius);
                     const progress = @min(1, @max(0, 1 - (state.art_transition_until - now_art) / 0.5));
                     const weight: u32 = @intFromFloat(progress * progress * progress * (10 + progress * (-15 + 6 * progress)) * 256);
                     for (engine.pixels, old_pixels) |*pixel, old| {
@@ -222,19 +273,20 @@ pub fn drawUIFrame() void {
                         pixel.* = mixed;
                     }
                 } else {
-                    engine.blitBMP(state.cached_art, art_offset_x, art_offset_y, art_size_draw, if (state.mode_mix < 0.5) 26 else 14);
+                    engine.blitBMP(state.cached_art, art_offset_x, art_offset_y, art_size_draw, art_corner_radius);
                 }
                 // Compact has one stable outer widget rim. Do not add a
                 // second rim around the shrinking paused artwork.
-                if (state.mode_mix >= 0.5) engine.strokeRoundedRect(art_offset_x, art_offset_y, art_size_draw, art_size_draw, 14, 0.5, 255, 255, 255, 28);
+                if (state.mode_mix >= 0.5) engine.strokeRoundedRect(art_offset_x, art_offset_y, art_size_draw, art_size_draw, art_corner_radius, 0.5, 255, 255, 255, 28);
                 const dim_alpha: u8 = @intFromFloat(if (state.setting_dim) 102.0 * (1.0 - ease) else 0);
                 if (dim_alpha > 0) {
-                    engine.fillRoundedRect(art_offset_x, art_offset_y, art_size_draw, art_size_draw, 14, 0, 0, 0, dim_alpha);
+                    engine.fillRoundedRect(art_offset_x, art_offset_y, art_size_draw, art_size_draw, art_corner_radius, 0, 0, 0, dim_alpha);
                 }
             }
         }
     } else {
-        engine.fillRoundedRect(art_offset_x, art_offset_y, art_size_draw, art_size_draw, if (state.mode_mix < 0.5) 26 else 14, 40, 40, 45, 255);
+        // Empty art placeholder
+        engine.fillRoundedRect(art_offset_x, art_offset_y, art_size_draw, art_size_draw, art_corner_radius, 40, 40, 45, 255);
     }
 
     // Keep one macOS widget rim above the artwork for the entire morph.
@@ -278,7 +330,7 @@ pub fn drawUIFrame() void {
             const bounds = button.bounds();
             engine.fillRoundedRect(@intFromFloat(bounds.x), @intFromFloat(bounds.y), @intFromFloat(bounds.w), @intFromFloat(bounds.h), @intFromFloat(bounds.radius), 255, 255, 255, @intFromFloat(hover * 31));
         }
-        var icon_kind: macos.IconKind = switch (button.id) {
+        var icon_kind: symbols.IconKind = switch (button.id) {
             .PlayPause => if (state.global_rate > 0) .pause else .play,
             .Prev => .prev,
             .Next => .next,
@@ -288,7 +340,7 @@ pub fn drawUIFrame() void {
             icon_kind = if (state.play_pause_mix < 0.5) .play else .pause;
             icon_scale = icon_transition.scale(state.play_pause_mix, state.global_rate > 0);
         }
-        if (icon_scale > 0.001) macos.widget_icon(engine.pixels.ptr, engine.width, engine.height, button.x * state.render_scale, button.y * state.render_scale, icon_kind, hover, 1, icon_scale * state.render_scale);
+        if (icon_scale > 0.001) symbols.widget_icon(engine.pixels.ptr, engine.width, engine.height, button.x * state.render_scale, button.y * state.render_scale, icon_kind, hover, 1, icon_scale * state.render_scale);
     }
 
     drawTextOverlays(&engine, if (wide) 650 else 24, if (wide) 20 else 220, displayed_elapsed);

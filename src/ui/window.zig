@@ -1,5 +1,5 @@
 const std = @import("std");
-const macos = @import("../macos.zig");
+const macos = @import("../platform/macos.zig");
 
 const Ref = macos.Ref;
 const Point = macos.Point;
@@ -195,6 +195,11 @@ fn setLabelText(label: Ref, value: []const u8) void {
 }
 
 fn updateSnapDebug() void {
+    // Drag and snap refreshes must never reopen a disabled inspector.
+    if (!@import("../state.zig").setting_debug) {
+        if (snap_debug_panel) |panel| send1(void, panel, "orderOut:", Ref, null);
+        return;
+    }
     if (snap_debug_panel == null) {
         const panel_cls = objc_getClass("NSPanel");
         const panel = send4(Ref, send0(Ref, panel_cls, "alloc"), "initWithContentRect:styleMask:backing:defer:", Rect, rect(24, 80, 440, 198), usize, 0, usize, 2, bool, false);

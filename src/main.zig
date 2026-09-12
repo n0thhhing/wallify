@@ -1,10 +1,11 @@
 const std = @import("std");
 const state = @import("state.zig");
-const macos = @import("macos.zig");
 const input = @import("ui/input.zig");
 const animation = @import("graphics/animation.zig");
-const media = @import("media/media.zig");
+const media = @import("media/controller.zig");
 const render = @import("graphics/render.zig");
+const window = @import("ui/window.zig");
+const spotify = @import("media/spotify.zig");
 
 fn handleSignal(sig: std.posix.SIG) callconv(.c) void {
     _ = sig;
@@ -27,11 +28,11 @@ pub fn main() !void {
     // Gives the panel a stable identity in CGWindowList, used when finding
     // desktop-widget neighbors while it is being dragged.
     std.debug.print("\x1b]2;spotify-player\x07", .{});
-    macos.widget_application_init();
+    window.widget_application_init();
     state.loadWidgetSettings();
-    if (state.setting_debug) macos.widget_debug_window_show();
+    if (state.setting_debug) window.widget_debug_window_show();
     state.mode_mix = @floatFromInt(@intFromEnum(state.setting_mode));
-    macos.widget_spotify_observe();
+    spotify.widget_spotify_observe();
     try input.enableRawMode();
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
@@ -49,5 +50,19 @@ pub fn main() !void {
     const metadata = try std.Thread.spawn(.{}, media.metadataLoop, .{io});
     metadata.detach();
 
-    macos.widget_application_run();
+    window.widget_application_run();
+}
+
+test {
+    _ = @import("state.zig");
+    _ = @import("graphics/pets/idle_cat.zig");
+    _ = @import("ui/context_menu.zig");
+    _ = @import("ui/hitbox.zig");
+    _ = @import("ui/window.zig");
+    _ = @import("media/playback_state.zig");
+    _ = @import("media/playback_clock.zig");
+    _ = @import("media/controller.zig");
+    _ = @import("media/spotify.zig");
+    _ = @import("graphics/icon_transition.zig");
+    _ = @import("graphics/pixel_engine.zig");
 }

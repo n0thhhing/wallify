@@ -1,5 +1,5 @@
 const std = @import("std");
-const macos = @import("../macos.zig");
+const macos = @import("../platform/macos.zig");
 
 pub export fn widget_text_width(utf8: [*]const u8, length: usize, font_size: f64, bold: c_int) callconv(.c) f64 {
     if (length == 0) return 0;

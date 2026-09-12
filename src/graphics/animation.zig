@@ -1,9 +1,12 @@
 const std = @import("std");
 const state = @import("../state.zig");
-const macos = @import("../macos.zig");
 const render = @import("render.zig");
-const media = @import("../media/media.zig");
+const media = @import("../media/controller.zig");
 const icon_transition = @import("icon_transition.zig");
+const window = @import("../ui/window.zig");
+const menu = @import("../ui/menu.zig");
+const spotify = @import("../media/spotify.zig");
+const text_renderer = @import("text.zig");
 
 extern "c" fn system(command: [*:0]const u8) c_int;
 
@@ -50,23 +53,26 @@ fn movePanelToWidgetGrid() void {
 }
 
 pub fn animationLoop() void {
-    var previous_columns = macos.widget_terminal_columns();
-    var previous_time = macos.widget_monotonic_time();
+    var previous_columns = window.widget_terminal_columns();
+    var previous_time = window.widget_monotonic_time();
     while (true) {
-        const columns = macos.widget_terminal_columns();
+        const columns = window.widget_terminal_columns();
         var needs_draw = state.frame_requested.swap(false, .acq_rel) or columns != previous_columns;
         previous_columns = columns;
-        const now = macos.widget_monotonic_time();
+        const now = window.widget_monotonic_time();
         if (state.animation_time < state.art_transition_until) needs_draw = true;
-        const menu_action = macos.widget_context_menu_action();
+        const menu_action = menu.widget_context_menu_action();
         switch (menu_action) {
             .play_pause => media.togglePlayback(),
             .previous_track => media.triggerCommand(.previous_track),
             .next_track => media.triggerCommand(.next_track),
-            .open_spotify => macos.widget_open_spotify(),
+            .open_spotify => spotify.widget_open_spotify(),
             .toggle_glow => state.setting_glow = !state.setting_glow,
             .toggle_animations => state.setting_animations = !state.setting_animations,
             .toggle_dim => state.setting_dim = !state.setting_dim,
+            .idle_spotify => state.setting_idle_style = .spotify,
+            .idle_pixel => state.setting_idle_style = .pixel_cat,
+            .idle_banana => state.setting_idle_style = .banana_cat,
             .frame_off => state.setting_frame = .off,
             .frame_subtle => state.setting_frame = .subtle,
             .frame_strong => state.setting_frame = .strong,
@@ -77,6 +83,7 @@ pub fn animationLoop() void {
             .speed_normal => state.setting_speed = .normal,
             .speed_fast => state.setting_speed = .fast,
             .restore_defaults => {
+                state.setting_idle_style = .spotify;
                 state.setting_glow = true;
                 state.setting_animations = true;
                 state.setting_dim = true;
@@ -110,8 +117,26 @@ pub fn animationLoop() void {
             state.seek_velocity = 0;
         }
 
+        if (state.desktop_mode and state.idle_mix > 0 and state.setting_idle_style == .pixel_cat) {
+            const mouse = window.widget_mouse_location();
+            state.pointer_x = mouse.x - @as(f64, @floatFromInt(state.widget_margin_left));
+        }
         const dt = @min(0.1, @max(0, now - previous_time)) * state.setting_speed.multiplier();
         state.animation_time += dt;
+        const idle_target: f64 = if (state.spotifyIdle()) 1 else 0;
+        const old_idle_mix = state.idle_mix;
+        state.idle_mix = if (!state.setting_animations) idle_target else state.idle_mix + std.math.clamp(idle_target - state.idle_mix, -dt * 2.5, dt * 2.5);
+        if (old_idle_mix != state.idle_mix) needs_draw = true;
+        if (state.idle_mix > 0 and state.cat_pet_until > 0 and state.animation_time < state.cat_pet_until + 0.1) needs_draw = true;
+        if (state.idle_mix > 0 and state.setting_idle_style != .spotify and state.setting_animations) {
+            const fps: f64 = switch (state.setting_idle_style) {
+                .banana_cat => 24,
+                else => 30,
+            };
+            const previous_tick = @floor(state.cat_time * fps);
+            state.cat_time += dt;
+            if (@floor(state.cat_time * fps) != previous_tick) needs_draw = true;
+        }
         const target_mode: f64 = @floatFromInt(@intFromEnum(state.setting_mode));
         if (@abs(state.mode_mix - target_mode) > 0.001) {
             // Smooth, critically damped-feeling mode morph without a visible jump.
@@ -143,9 +168,9 @@ pub fn animationLoop() void {
                 }
             }
         }
-        if (state.mode_mix < 0.99 and state.global_title_len > 0) {
+        if (!state.spotifyIdle() and state.mode_mix < 0.99 and state.global_title_len > 0) {
             const scale: f64 = @floatFromInt(state.render_scale);
-            const title_width = macos.widget_text_width(state.global_title[0..].ptr, state.global_title_len, 15 * state.render_scale, 1) / scale;
+            const title_width = text_renderer.widget_text_width(state.global_title[0..].ptr, state.global_title_len, 15 * state.render_scale, 1) / scale;
             if (title_width > 126) {
                 const travel = title_width - 126;
                 state.marquee_offset += dt * 28 * state.marquee_direction;
@@ -202,7 +227,7 @@ pub fn animationLoop() void {
 
         if (needs_draw) {
             render.drawUIFrame();
-            const remaining = (1.0 / 60.0) - (macos.widget_monotonic_time() - now);
+            const remaining = (1.0 / 60.0) - (window.widget_monotonic_time() - now);
             if (remaining > 0) sleep_us(@intFromFloat(remaining * 1_000_000));
         } else {
             sleep_us(20_000);

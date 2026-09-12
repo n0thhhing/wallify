@@ -121,6 +121,12 @@ pub const WidgetMode = enum(u8) {
     expanded = 1,
 };
 
+pub const IdleStyle = enum(u8) {
+    spotify = 0,
+    pixel_cat = 1,
+    banana_cat = 2,
+};
+
 pub const HitTarget = enum {
     none,
     grid_background,
@@ -162,12 +168,20 @@ pub const HitTarget = enum {
     }
 };
 
+pub var setting_idle_style: IdleStyle = .spotify;
+pub var spotify_closed = std.atomic.Value(bool).init(false);
+pub var idle_mix: f64 = 0;
+pub var cat_time: f64 = 0;
+pub var cat_pet_until: f64 = 0;
+pub var pointer_x: f64 = 90;
+pub fn spotifyIdle() bool {
+    return setting_source == .spotify and spotify_closed.load(.acquire);
+}
 pub var setting_glow = true;
 pub var setting_animations = true;
 pub var setting_dim = true;
-// The native snap inspector stays visible unless explicitly disabled in
-// widget-settings.conf with widget_debug=false.
-pub var setting_debug = true;
+// Diagnostics are opt-in, including when preferences are missing.
+pub var setting_debug = false;
 pub var setting_frame: FrameStrength = .subtle;
 pub var setting_intensity: GlowIntensity = .normal;
 pub var setting_speed: AnimationSpeed = .normal;
@@ -235,11 +249,18 @@ pub fn loadWidgetSettings() void {
         if (std.mem.eql(u8, key, "widget_mode")) setting_mode = @enumFromInt(@min(1, level));
         if (std.mem.eql(u8, key, "widget_grid_x")) widget_grid_x = @min(20, level);
         if (std.mem.eql(u8, key, "widget_grid_y")) widget_grid_y = @min(20, level);
-        if (std.mem.eql(u8, key, "widget_margin_left")) { widget_margin_left = @max(0, std.fmt.parseInt(i32, value, 10) catch 14); has_saved_margins = true; }
-        if (std.mem.eql(u8, key, "widget_margin_top")) { widget_margin_top = @max(-180, std.fmt.parseInt(i32, value, 10) catch 12); has_saved_margins = true; }
+        if (std.mem.eql(u8, key, "widget_margin_left")) {
+            widget_margin_left = @max(0, std.fmt.parseInt(i32, value, 10) catch 14);
+            has_saved_margins = true;
+        }
+        if (std.mem.eql(u8, key, "widget_margin_top")) {
+            widget_margin_top = @max(-180, std.fmt.parseInt(i32, value, 10) catch 12);
+            has_saved_margins = true;
+        }
         if (std.mem.startsWith(u8, text, "artwork_glow=")) setting_glow = !std.mem.endsWith(u8, text, "false");
         if (std.mem.startsWith(u8, text, "animations=")) setting_animations = !std.mem.endsWith(u8, text, "false");
         if (std.mem.startsWith(u8, text, "dim_paused_artwork=")) setting_dim = !std.mem.endsWith(u8, text, "false");
+        if (std.mem.eql(u8, key, "idle_style")) setting_idle_style = @enumFromInt(@min(2, level));
         if (std.mem.startsWith(u8, text, "widget_debug=")) setting_debug = !std.mem.endsWith(u8, text, "false");
     }
     if (!has_saved_margins) {
@@ -250,7 +271,7 @@ pub fn loadWidgetSettings() void {
 
 pub fn saveWidgetSettings() void {
     var buffer: [512]u8 = undefined;
-    const text = std.fmt.bufPrint(&buffer, "# Wallify widget preferences; also editable from the right-click menu.\nartwork_glow={s}\nanimations={s}\ndim_paused_artwork={s}\nwidget_debug={s}\nframe_strength={d}\nglow_intensity={d}\nanimation_speed={d}\nmedia_source={d}\nwidget_mode={d}\nwidget_grid_x={d}\nwidget_grid_y={d}\nwidget_margin_left={d}\nwidget_margin_top={d}\n", .{ if (setting_glow) "true" else "false", if (setting_animations) "true" else "false", if (setting_dim) "true" else "false", if (setting_debug) "true" else "false", @intFromEnum(setting_frame), @intFromEnum(setting_intensity), @intFromEnum(setting_speed), @intFromEnum(setting_source), @intFromEnum(setting_mode), widget_grid_x, widget_grid_y, widget_margin_left, widget_margin_top }) catch return;
+    const text = std.fmt.bufPrint(&buffer, "# Wallify widget preferences; also editable from the right-click menu.\nartwork_glow={s}\nanimations={s}\ndim_paused_artwork={s}\nwidget_debug={s}\nidle_style={d}\nframe_strength={d}\nglow_intensity={d}\nanimation_speed={d}\nmedia_source={d}\nwidget_mode={d}\nwidget_grid_x={d}\nwidget_grid_y={d}\nwidget_margin_left={d}\nwidget_margin_top={d}\n", .{ if (setting_glow) "true" else "false", if (setting_animations) "true" else "false", if (setting_dim) "true" else "false", if (setting_debug) "true" else "false", @intFromEnum(setting_idle_style), @intFromEnum(setting_frame), @intFromEnum(setting_intensity), @intFromEnum(setting_speed), @intFromEnum(setting_source), @intFromEnum(setting_mode), widget_grid_x, widget_grid_y, widget_margin_left, widget_margin_top }) catch return;
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, "widget-settings.conf", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
     defer _ = std.posix.system.close(fd);
     _ = std.posix.system.write(fd, text.ptr, text.len);
@@ -309,4 +330,26 @@ test "HitTarget labels provide descriptive names" {
     try std.testing.expectEqualStrings("Geometry: Art", HitTarget.art.label());
     try std.testing.expectEqualStrings("Geometry: Bar", HitTarget.bar.label());
     try std.testing.expectEqualStrings("Action: Play/Pause", HitTarget.button_play_pause.label());
+}
+
+test "idle tile requires Spotify-only source and a closed application" {
+    const old_source = setting_source;
+    const old_closed = spotify_closed.load(.acquire);
+    defer {
+        setting_source = old_source;
+        spotify_closed.store(old_closed, .release);
+    }
+    setting_source = .now_playing;
+    spotify_closed.store(true, .release);
+    try std.testing.expect(!spotifyIdle());
+    setting_source = .spotify;
+    try std.testing.expect(spotifyIdle());
+    spotify_closed.store(false, .release);
+    try std.testing.expect(!spotifyIdle());
+}
+
+test "IdleStyle enum values match serialization integers" {
+    try std.testing.expectEqual(@as(u8, 0), @intFromEnum(IdleStyle.spotify));
+    try std.testing.expectEqual(@as(u8, 1), @intFromEnum(IdleStyle.pixel_cat));
+    try std.testing.expectEqual(@as(u8, 2), @intFromEnum(IdleStyle.banana_cat));
 }

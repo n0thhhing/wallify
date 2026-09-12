@@ -1,5 +1,5 @@
 const std = @import("std");
-const macos = @import("../macos.zig");
+const macos = @import("../platform/macos.zig");
 
 // 4. Artwork Glow
 const W: usize = 320;
@@ -31,61 +31,57 @@ fn makeGlow() macos.Ref {
     if (bitmap == null) return null;
     defer macos.CGContextRelease(bitmap);
 
-    const bounds = macos.rect(0, 0, @floatFromInt(W), @floatFromInt(H));
-    macos.CGContextDrawImage(bitmap, bounds, art);
+    macos.CGContextScaleCTM(bitmap, 0.5, 0.5);
+    macos.CGContextTranslateCTM(bitmap, 220, 220);
+    macos.CGContextRotateCTM(bitmap, -92.0 * std.math.pi / 180.0);
+    macos.CGContextScaleCTM(bitmap, 1.3, 1.4);
+    macos.CGContextSaveGState(bitmap);
+    const art_clip = macos.CGPathCreateWithRoundedRect(macos.rect(-76, -76, 152, 152), 14, 14, null);
+    macos.CGContextAddPath(bitmap, art_clip);
+    macos.CGContextClip(bitmap);
+    macos.CGPathRelease(art_clip);
+    macos.CGContextDrawImage(bitmap, macos.rect(-76, -76, 152, 152), art);
+    macos.CGContextRestoreGState(bitmap);
 
-    const raw = macos.CGBitmapContextGetData(bitmap) orelse return null;
-    const data: [*]u8 = @ptrCast(raw);
+    const data: [*]u8 = @ptrCast(macos.CGBitmapContextGetData(bitmap) orelse return null);
+
+    const KSIZE: usize = 121;
+    const KHALF: isize = 60;
+    var kernel: [KSIZE]f32 = undefined;
+    var sum: f32 = 0;
+    for (0..KSIZE) |i| {
+        const k = @as(f32, @floatFromInt(i)) - 60.0;
+        kernel[i] = @exp(-(k * k) / (2.0 * 20.0 * 20.0));
+        sum += kernel[i];
+    }
+    for (0..KSIZE) |i| kernel[i] /= sum;
 
     for (0..H) |y| {
         for (0..W) |x| {
             for (0..4) |c| {
-                float_buf[(y * W + x) * 4 + c] = @floatFromInt(data[(y * W + x) * 4 + c]);
+                var value: f32 = 0;
+                for (0..KSIZE) |i| {
+                    const xx: isize = @as(isize, @intCast(x)) + @as(isize, @intCast(i)) - KHALF;
+                    if (xx >= 0 and xx < W) {
+                        const u_xx: usize = @intCast(xx);
+                        value += @as(f32, @floatFromInt(data[(y * W + u_xx) * 4 + c])) * kernel[i];
+                    }
+                }
+                float_buf[(y * W + x) * 4 + c] = value;
             }
         }
     }
 
-    const radius: isize = 14;
-    var temp: [320 * 220 * 4]f32 = undefined;
-
     for (0..H) |y| {
         for (0..W) |x| {
             for (0..4) |c| {
-                var sum: f32 = 0;
-                var total: f32 = 0;
-                var dy: isize = -radius;
-                while (dy <= radius) : (dy += 1) {
-                    const ny = @as(isize, @intCast(y)) + dy;
-                    if (ny >= 0 and ny < @as(isize, @intCast(H))) {
-                        const dist = @as(f32, @floatFromInt(dy * dy));
-                        const weight = @exp(-dist / (2 * 6 * 6));
-                        sum += float_buf[(@as(usize, @intCast(ny)) * W + x) * 4 + c] * weight;
-                        total += weight;
+                var value: f32 = 0;
+                for (0..KSIZE) |i| {
+                    const yy: isize = @as(isize, @intCast(y)) + @as(isize, @intCast(i)) - KHALF;
+                    if (yy >= 0 and yy < H) {
+                        const u_yy: usize = @intCast(yy);
+                        value += float_buf[(u_yy * W + x) * 4 + c] * kernel[i];
                     }
-                }
-                temp[(y * W + x) * 4 + c] = if (total > 0) sum / total else 0;
-            }
-        }
-    }
-
-    for (0..H) |y| {
-        for (0..W) |x| {
-            for (0..4) |c| {
-                var sum: f32 = 0;
-                var total: f32 = 0;
-                var dx: isize = -radius;
-                while (dx <= radius) : (dx += 1) {
-                    const nx = @as(isize, @intCast(x)) + dx;
-                    if (nx >= 0 and nx < @as(isize, @intCast(W))) {
-                        const dist = @as(f32, @floatFromInt(dx * dx));
-                        const weight = @exp(-dist / (2 * 6 * 6));
-                        sum += temp[(y * W + @as(usize, @intCast(nx))) * 4 + c] * weight;
-                        total += weight;
-                    }
-                }
-                var value = if (total > 0) sum / total else 0;
-                if (c == 3) {
-                    value = @min(255.0, value * 1.8);
                 }
                 data[(y * W + x) * 4 + c] = @intFromFloat(@round(value));
             }
