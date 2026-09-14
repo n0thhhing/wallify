@@ -95,38 +95,42 @@ pub export fn widget_spotify_seek(position: f64) callconv(.c) void {
     }
 }
 
+var cached_query_script: ?macos.Ref = null;
+
 pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usize {
     const pool = macos.send0(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc"), "init");
     defer macos.send0(void, pool, "release");
 
-    const script_text =
-        \\if application "Spotify" is running then
-        \\  tell application "Spotify"
-        \\      try
-        \\          set tName to name of current track
-        \\          set tArtist to artist of current track
-        \\          set tState to player state as string
-        \\          set tPos to player position as string
-        \\          set tDur to ((duration of current track) / 1000.0) as string
-        \\          set tArt to artwork url of current track
-        \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
-        \\      on error
-        \\          return "NO_TRACK"
-        \\      end try
-        \\  end tell
-        \\else
-        \\  return "CLOSED"
-        \\end if
-    ;
+    if (cached_query_script == null) {
+        const script_text =
+            \\if application "Spotify" is running then
+            \\  tell application "Spotify"
+            \\      try
+            \\          set tName to name of current track
+            \\          set tArtist to artist of current track
+            \\          set tState to player state as string
+            \\          set tPos to player position as string
+            \\          set tDur to ((duration of current track) / 1000.0) as string
+            \\          set tArt to artwork url of current track
+            \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
+            \\      on error
+            \\          return "NO_TRACK"
+            \\      end try
+            \\  end tell
+            \\else
+            \\  return "CLOSED"
+            \\end if
+        ;
 
-    const str = macos.string(script_text);
-    if (str == null) return 0;
-    defer macos.CFRelease(str);
+        const str = macos.string(script_text);
+        if (str != null) {
+            const script_cls = macos.objc_getClass("NSAppleScript");
+            cached_query_script = macos.send1(macos.Ref, macos.send0(macos.Ref, script_cls, "alloc"), "initWithSource:", macos.Ref, str);
+            macos.CFRelease(str);
+        }
+    }
 
-    const script_cls = macos.objc_getClass("NSAppleScript");
-    const script = macos.send1(macos.Ref, macos.send0(macos.Ref, script_cls, "alloc"), "initWithSource:", macos.Ref, str);
-    if (script == null) return 0;
-    defer macos.send0(void, script, "release");
+    const script = cached_query_script orelse return 0;
 
     const desc = macos.send1(macos.Ref, script, "executeAndReturnError:", ?*macos.Ref, null);
     if (desc == null) return 0;

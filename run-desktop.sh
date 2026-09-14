@@ -10,7 +10,8 @@ fi
 
 # Keep runtime builds separate from a stale project cache left by interrupted
 # panel runs; Kitty can then relaunch the current binary reliably.
-zig build -Doptimize=ReleaseFast --cache-dir /tmp/wallify-runtime-cache --global-cache-dir /tmp/wallify-runtime-global-cache
+# Use project-local caches instead of /tmp so the cache survives Mac restarts.
+zig build -Doptimize=ReleaseFast --cache-dir .zig-cache/runtime-cache --global-cache-dir .zig-cache/runtime-global-cache
 export WALLIFY_DESKTOP=1
 panel_height="${WALLIFY_HEIGHT:-205}"
 # Three 164pt widget tiles with two 16pt widget gaps.
@@ -52,7 +53,7 @@ rm -f /tmp/wallify-kitty.sock
     --columns="${panel_width}px" --lines="${panel_height}px" \
     --margin-left="$panel_margin_left" --margin-top="$panel_margin_top" \
     --config="$PWD/config/kitty.conf" \
-    ./zig-out/bin/spotify-player &
+    ./zig-out/bin/wallify &
 panel_pid=$!
 
 if wait "$panel_pid"; then

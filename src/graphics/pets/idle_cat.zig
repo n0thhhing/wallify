@@ -1,43 +1,80 @@
 const std = @import("std");
 const PixelEngine = @import("../pixel_engine.zig").PixelEngine;
 
-const pixels = @embedFile("cat_pixels");
-const image_width = 1426;
+const raw_pixels = @embedFile("cat_pixels");
+const image_width = @as(usize, @intFromFloat(1426.0 * 0.38));
+const image_height = @as(usize, @intFromFloat(138.0 * 0.38));
+
+var pixels: [image_width * image_height * 4]u8 = undefined;
+var initialized = false;
+
+fn initPixels() void {
+    if (initialized) return;
+    var byte_idx: usize = 0;
+    var pixel_idx: usize = 0;
+    while (byte_idx < raw_pixels.len and pixel_idx < image_width * image_height) {
+        const header = raw_pixels[byte_idx];
+        byte_idx += 1;
+        const count = header & 0x7F;
+        if ((header & 0x80) != 0) {
+            const r = raw_pixels[byte_idx];
+            const g = raw_pixels[byte_idx + 1];
+            const b = raw_pixels[byte_idx + 2];
+            const a = raw_pixels[byte_idx + 3];
+            byte_idx += 4;
+            for (0..count) |_| {
+                pixels[pixel_idx * 4] = r;
+                pixels[pixel_idx * 4 + 1] = g;
+                pixels[pixel_idx * 4 + 2] = b;
+                pixels[pixel_idx * 4 + 3] = a;
+                pixel_idx += 1;
+            }
+        } else {
+            for (0..count) |_| {
+                pixels[pixel_idx * 4] = raw_pixels[byte_idx];
+                pixels[pixel_idx * 4 + 1] = raw_pixels[byte_idx + 1];
+                pixels[pixel_idx * 4 + 2] = raw_pixels[byte_idx + 2];
+                pixels[pixel_idx * 4 + 3] = raw_pixels[byte_idx + 3];
+                byte_idx += 4;
+                pixel_idx += 1;
+            }
+        }
+    }
+    initialized = true;
+}
 
 const Sprite = struct { x: usize, y: usize, w: usize, h: usize };
 
 const sprites = [_]Sprite{
-    .{ .x = 0, .y = 0, .w = 291, .h = 138 },
-    .{ .x = 291, .y = 0, .w = 285, .h = 138 },
-    .{ .x = 576, .y = 0, .w = 283, .h = 132 },
-    .{ .x = 859, .y = 0, .w = 284, .h = 132 },
-    .{ .x = 1143, .y = 0, .w = 283, .h = 135 },
+    .{ .x = @intFromFloat(0.0 * 0.38), .y = 0, .w = @intFromFloat(291.0 * 0.38), .h = @intFromFloat(138.0 * 0.38) },
+    .{ .x = @intFromFloat(291.0 * 0.38), .y = 0, .w = @intFromFloat(285.0 * 0.38), .h = @intFromFloat(138.0 * 0.38) },
+    .{ .x = @intFromFloat(576.0 * 0.38), .y = 0, .w = @intFromFloat(283.0 * 0.38), .h = @intFromFloat(132.0 * 0.38) },
+    .{ .x = @intFromFloat(859.0 * 0.38), .y = 0, .w = @intFromFloat(284.0 * 0.38), .h = @intFromFloat(132.0 * 0.38) },
+    .{ .x = @intFromFloat(1143.0 * 0.38), .y = 0, .w = @intFromFloat(283.0 * 0.38), .h = @intFromFloat(135.0 * 0.38) },
 };
 
 pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, pet: bool, pointer: f64, leaving: bool) void {
     _ = pet;
     _ = pointer;
     _ = leaving;
+    
+    if (!initialized) initPixels();
 
-    // Cycle through every sleeping frame at three frames per second.
     const fidx = @as(usize, @intFromFloat(time * 3)) % sprites.len;
-
     const sprite = sprites[fidx];
-    const scale = 0.38;
-    const dw: isize = @intFromFloat(@as(f64, @floatFromInt(sprite.w)) * scale);
-    const dh: isize = @intFromFloat(@as(f64, @floatFromInt(sprite.h)) * scale);
+    
+    const dw: isize = @intCast(sprite.w);
+    const dh: isize = @intCast(sprite.h);
 
     const dx: isize = @intFromFloat(@round((@as(f64, @floatFromInt(left)) + @as(f64, @floatFromInt(width - dw)) / 2.0) * @as(f64, @floatFromInt(e.scale))));
-    // Anchor to bottom (164 logical px tall tile)
     const dy = (top + 164 - dh - 5) * e.scale;
 
     var sy: isize = 0;
     while (sy < dh) : (sy += 1) {
-        const src_y: usize = @intCast(@as(isize, @intCast(sprite.y)) + @as(isize, @intFromFloat(@as(f64, @floatFromInt(sy)) / scale)));
+        const src_y: usize = sprite.y + @as(usize, @intCast(sy));
         var sx: isize = 0;
         while (sx < dw) : (sx += 1) {
-            const src_x_logical = sx;
-            const src_x: usize = @intCast(@as(isize, @intCast(sprite.x)) + @as(isize, @intFromFloat(@as(f64, @floatFromInt(src_x_logical)) / scale)));
+            const src_x: usize = sprite.x + @as(usize, @intCast(sx));
             const i = (src_y * image_width + src_x) * 4;
             const a = pixels[i + 3];
             if (a < 64) continue;
@@ -54,7 +91,6 @@ pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, p
 }
 
 fn drawSleepMarks(e: *PixelEngine, head_x: isize, head_y: isize, time: f64) void {
-    // Stagger three pixel-letter Zs, gently rising and fading above the head.
     for (0..3) |index| {
         const phase = @mod(time / 3.6 + @as(f64, @floatFromInt(index)) / 3.0, 1.0);
         const opacity = @min(1.0, @min(phase * 6.0, (1.0 - phase) * 4.0));

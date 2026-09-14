@@ -5,8 +5,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Decode source PNGs once per asset change; outputs live only in Zig's cache.
-    const cat_pixels = decodeCat(b, "assets/cat/cat.png", "cat.rgba", "1426", "138");
-    const banana_pixels = decodeCat(b, "assets/cat/banana-cat.png", "banana.rgba", "98", "5130");
+    const cat_pixels = decodeCat(b, "assets/cat/cat.png", "cat.rgba", "1426", "138", "0.38");
+    const banana_pixels = decodeCat(b, "assets/cat/banana-cat.png", "banana.rgba", "98", "5130", "1.0");
 
     // MediaRemote bridge loaded by the Perl metadata helper.
     const dylib = b.addLibrary(.{
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 
     const exe = b.addExecutable(.{
-        .name = "spotify-player",
+        .name = "wallify",
         .root_module = mod,
     });
     b.installArtifact(exe);
@@ -70,11 +70,11 @@ fn linkMacos(module: *std.Build.Module) void {
     module.linkFramework("CoreGraphics", .{});
 }
 
-fn decodeCat(b: *std.Build, source: []const u8, output: []const u8, width: []const u8, height: []const u8) std.Build.LazyPath {
+fn decodeCat(b: *std.Build, source: []const u8, output: []const u8, width: []const u8, height: []const u8, scale: []const u8) std.Build.LazyPath {
     const decode = b.addSystemCommand(&.{ "swift", "-module-cache-path", "/tmp/wallify-swift-module-cache" });
     decode.addFileArg(b.path("tools/decode-cat.swift"));
     decode.addFileArg(b.path(source));
     const pixels = decode.addOutputFileArg(output);
-    decode.addArgs(&.{ width, height });
+    decode.addArgs(&.{ width, height, scale });
     return pixels;
 }

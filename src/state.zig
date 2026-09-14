@@ -43,7 +43,7 @@ pub const Layout = struct {
 pub var layout = Layout{};
 pub var desktop_mode = false;
 pub var pixel_mouse = false;
-pub const render_scale = 3;
+pub const render_scale = 2;
 
 pub var original_termios: std.posix.termios = undefined;
 

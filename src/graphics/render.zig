@@ -7,10 +7,10 @@ const symbols = @import("symbols.zig");
 const glow = @import("glow.zig");
 const window = @import("../ui/window.zig");
 
-var render_canvas_buffer: [2560 * 1600]u32 = undefined;
+var render_canvas_buffer: []u32 = &.{};
 var shared_frame_id: u64 = 0;
 
-var idle_underlay: [2560 * 1600]u32 = undefined;
+var idle_underlay: []u32 = &.{};
 fn publishFrame(engine: *PixelEngine, wide: bool) void {
     if (state.idle_mix > 0) {
         const mix = state.idle_mix;
@@ -60,9 +60,9 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
     // directory, which macOS can reject. Kitty's graphics protocol explicitly
     // supports `t=s`: a POSIX shared-memory object that it opens and consumes.
     // It carries the raw frame without a filesystem permission boundary.
-    shared_frame_id +%= 1;
+    state.current_image_id = if (state.current_image_id == 1) @as(u32, 2) else @as(u32, 1);
     var name_buffer: [64]u8 = undefined;
-    const name = std.fmt.bufPrintZ(&name_buffer, "/wlfy-{d}", .{shared_frame_id}) catch return;
+    const name = std.fmt.bufPrintZ(&name_buffer, "/wlfy-{d}", .{state.current_image_id}) catch return;
     const bytes = std.mem.sliceAsBytes(engine.pixels);
 
     // Always unlink first in case a previous run left this exact ID behind
@@ -82,7 +82,6 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
     const encoded_len = std.base64.standard.Encoder.calcSize(name.len);
     const payload = std.base64.standard.Encoder.encode(encoded_name[0..encoded_len], name);
 
-    state.current_image_id = if (state.current_image_id == 1) @as(u32, 2) else @as(u32, 1);
     const old_image_id: u32 = if (state.current_image_id == 1) 2 else 1;
 
     std.debug.print("\x1b[H", .{});
@@ -198,7 +197,12 @@ pub fn drawUIFrame() void {
         state.previous_canvas_width = canvas_w;
     }
     const total_pixels = canvas_w * state.render_scale * canvas_h * state.render_scale;
-    if (total_pixels > render_canvas_buffer.len) return;
+    if (total_pixels > render_canvas_buffer.len) {
+        if (render_canvas_buffer.len > 0) std.heap.page_allocator.free(render_canvas_buffer);
+        if (idle_underlay.len > 0) std.heap.page_allocator.free(idle_underlay);
+        render_canvas_buffer = std.heap.page_allocator.alloc(u32, total_pixels) catch return;
+        idle_underlay = std.heap.page_allocator.alloc(u32, total_pixels) catch return;
+    }
     var engine = PixelEngine{
         .scale = state.render_scale,
         .width = canvas_w * state.render_scale,
@@ -232,11 +236,14 @@ pub fn drawUIFrame() void {
     const hi: isize = 164;
     const card_y: isize = 35;
     const card_x: isize = @intFromFloat(lerp(8, 0, state.mode_mix));
-    engine.fillRoundedRect(card_x, card_y, wi, hi, 26, 0, 0, 0, 255);
+    engine.fillRoundedRect(card_x, card_y, wi, hi, 26, 28, 28, 30, 255);
     if (state.setting_glow) {
         glow.widget_artwork_glow(engine.pixels.ptr, engine.width, engine.height, state.layout.width, state.layout.height, state.render_scale, ease * state.setting_intensity.multiplier(), state.animation_time, @intFromBool(state.setting_animations));
     }
-    const art_corner_radius: isize = @intFromFloat(lerp(26.0, 14.0, state.mode_mix));
+    const base_radius = lerp(26.0, 14.0, state.mode_mix);
+    const inset = (state.layout.art_size - raw_size) / 2.0;
+    const radius_reduction = inset * (1.0 - state.mode_mix);
+    const art_corner_radius: isize = @intFromFloat(@max(0.0, base_radius - radius_reduction));
     if (state.global_has_artwork) {
         const fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/art.bmp", .{ .ACCMODE = .RDONLY }, 0) catch -1;
         if (fd >= 0) {
@@ -295,9 +302,6 @@ pub fn drawUIFrame() void {
 
     if (state.mode_mix < 0.5) {
         engine.bottomScrim(card_x, card_y + 84, wi, hi - 84, 0, 162);
-        // The cover fills the tile, so draw the widget rim after the image.
-        // Otherwise the photo paints over the same visual boundary that the
-        // calendar, clock, and battery widgets use.
         drawTextOverlays(&engine, if (wide) 650 else 24, if (wide) 20 else 220, displayed_elapsed);
         engine.clipOutsideRoundedRect(card_x, card_y, wi, hi, 26);
         return publishFrame(&engine, wide);
@@ -354,19 +358,24 @@ pub fn extractColor() void {
     defer _ = std.posix.system.close(fd);
     var stat_info: std.posix.Stat = undefined;
     if (std.posix.system.fstat(fd, &stat_info) != 0 or stat_info.size <= 54) return;
-    _ = std.posix.system.lseek(fd, 54, std.posix.SEEK.SET); // skip bmp header
+    const size = @as(usize, @intCast(stat_info.size));
+    const buf = std.heap.page_allocator.alloc(u8, size) catch return;
+    defer std.heap.page_allocator.free(buf);
 
+    const n = std.posix.read(fd, buf) catch 0;
+    if (n <= 54) return;
+
+    const pixels = buf[54..n];
     var r: usize = 0;
     var g: usize = 0;
     var b: usize = 0;
     var count: usize = 0;
-    var buf: [3]u8 = undefined;
-    while (true) {
-        const n = std.posix.read(fd, &buf) catch 0;
-        if (n != 3) break;
-        b += buf[0];
-        g += buf[1];
-        r += buf[2];
+
+    var i: usize = 0;
+    while (i + 2 < pixels.len) : (i += 3) {
+        b += pixels[i];
+        g += pixels[i + 1];
+        r += pixels[i + 2];
         count += 1;
     }
     if (count > 0) {

@@ -235,7 +235,7 @@ pub fn metadataLoop(io: std.Io) void {
                             last_art_url_len = art_raw.len;
 
                             _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "curl", "-s", "-f", art_raw, "-o", "/tmp/mrc_art_raw" } }) catch {};
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "512", "512", "-s", "format", "bmp", "/tmp/mrc_art_raw", "--out", "/tmp/art-next.bmp" } }) catch {};
+                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "328", "328", "-s", "format", "bmp", "/tmp/mrc_art_raw", "--out", "/tmp/art-next.bmp" } }) catch {};
                             if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.global_has_artwork = true;
                                 render.extractColor();
@@ -308,7 +308,7 @@ pub fn metadataLoop(io: std.Io) void {
                         if (title_changed or artist_changed) state.artwork_refresh_pending = true;
                         const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
                         if (artwork_available and state.artwork_refresh_pending) {
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "512", "512", "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
+                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "328", "328", "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
                             if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.artwork_refresh_pending = false;
                                 state.global_has_artwork = true;
