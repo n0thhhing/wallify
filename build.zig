@@ -33,11 +33,23 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
     mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 
+    const metal_c = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metal", "-c" });
+    metal_c.addFileArg(b.path("src/platform/shaders.metal"));
+    metal_c.addArg("-o");
+    const metal_air = metal_c.addOutputFileArg("shaders.air");
+    
+    const metallib_cmd = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metallib" });
+    metallib_cmd.addFileArg(metal_air);
+    metallib_cmd.addArg("-o");
+    const metallib_out = metallib_cmd.addOutputFileArg("default.metallib");
+    
     const exe = b.addExecutable(.{
         .name = "wallify",
         .root_module = mod,
     });
     b.installArtifact(exe);
+    const install_metal = b.addInstallBinFile(metallib_out, "default.metallib");
+    b.getInstallStep().dependOn(&install_metal.step);
 
     const run_step = b.step("run", "Run the player");
     run_step.dependOn(b.getInstallStep());
