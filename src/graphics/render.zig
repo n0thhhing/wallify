@@ -119,6 +119,19 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
             const b = p & 0xFF;
             text_buffer[i] = (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, g) << 8) | @as(u32, r);
         }
+        
+        // Vertical flip for Metal Texture Top-Left Origin
+        const row_len = w_px;
+        var y_idx: usize = 0;
+        while (y_idx < h_px / 2) : (y_idx += 1) {
+            const opp_y = h_px - 1 - y_idx;
+            for (0..row_len) |x_idx| {
+                const tmp = text_buffer[y_idx * row_len + x_idx];
+                text_buffer[y_idx * row_len + x_idx] = text_buffer[opp_y * row_len + x_idx];
+                text_buffer[opp_y * row_len + x_idx] = tmp;
+            }
+        }
+
         @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
         
         text_cache[idx] = .{ .hash = h, .w = w_px, .h = h_px, .tex_id = target_tex };
@@ -177,6 +190,19 @@ fn drawMarqueeText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, v
             const b = p & 0xFF;
             text_buffer[i] = (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, g) << 8) | @as(u32, r);
         }
+        
+        // Vertical flip for Metal Texture Top-Left Origin
+        const row_len = w_px;
+        var y_idx: usize = 0;
+        while (y_idx < h_px / 2) : (y_idx += 1) {
+            const opp_y = h_px - 1 - y_idx;
+            for (0..row_len) |x_idx| {
+                const tmp = text_buffer[y_idx * row_len + x_idx];
+                text_buffer[y_idx * row_len + x_idx] = text_buffer[opp_y * row_len + x_idx];
+                text_buffer[opp_y * row_len + x_idx] = tmp;
+            }
+        }
+
         @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
         text_cache[idx] = .{ .hash = h, .w = w_px, .h = h_px, .tex_id = target_tex };
         cached_w = w_px;

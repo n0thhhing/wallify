@@ -37,6 +37,7 @@ static id<MTLTexture> loaded_textures[32];
 @end
 @implementation WallifyView
 - (BOOL)isFlipped { return YES; }
+- (NSView *)hitTest:(NSPoint)point { return self; }
 - (BOOL)acceptsFirstResponder { return NO; }
 - (void)updateTrackingAreas {
     for (NSTrackingArea *area in self.trackingAreas) [self removeTrackingArea:area];
