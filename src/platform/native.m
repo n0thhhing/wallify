@@ -5,6 +5,7 @@
 #include <simd/simd.h>
 
 extern void wallify_pointer(double, double, int);
+extern void wallify_set_panel_size(int w, int h);
 static NSPanel *panel;
 static NSStatusItem *statusItem;
 static id<MTLDevice> device;
@@ -95,8 +96,8 @@ bool wallify_create(bool compact, int left, int top) {
         pipelineStateDescriptor.colorAttachments[0].blendingEnabled = YES;
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
-        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
         pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         
@@ -130,6 +131,7 @@ bool wallify_create(bool compact, int left, int top) {
     panel.contentView = view;
     [panel makeFirstResponder:view];
     movePanel(left, top);
+    wallify_set_panel_size(atomic_load(&surfaceWidth), atomic_load(&surfaceHeight));
     [panel orderFrontRegardless];
     statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
     statusItem.button.title = @"♫";
@@ -258,6 +260,7 @@ void wallify_resize(bool compact) {
         [panel setFrame:frame display:YES];
         atomic_store(&surfaceWidth, (int)frame.size.width);
         atomic_store(&surfaceHeight, (int)frame.size.height);
+        wallify_set_panel_size((int)frame.size.width, (int)frame.size.height);
     });
 }
 void wallify_move(int left, int top) { dispatch_async(dispatch_get_main_queue(), ^{ movePanel(left, top); }); }

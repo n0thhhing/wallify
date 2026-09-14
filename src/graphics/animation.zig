@@ -96,11 +96,19 @@ pub fn animationLoop() void {
             .source_now_playing => state.setting_source = .now_playing,
             .source_spotify => state.setting_source = .spotify,
             .mode_compact => {
-                state.panel_resize_after_compact = state.desktop_mode and state.mode_mix >= 0.5;
+                if (state.desktop_mode) {
+                    @import("../platform/native.zig").wallify_resize(true);
+                } else {
+                    state.panel_resize_after_compact = state.mode_mix >= 0.5;
+                }
                 state.setting_mode = .compact;
             },
             .mode_expanded => {
-                if (state.desktop_mode and state.mode_mix < 0.5) resizePanel(false);
+                if (state.desktop_mode) {
+                    @import("../platform/native.zig").wallify_resize(false);
+                } else if (state.mode_mix < 0.5) {
+                    resizePanel(false);
+                }
                 state.setting_mode = .expanded;
             },
             else => {},
@@ -145,7 +153,7 @@ pub fn animationLoop() void {
         } else state.mode_mix = target_mode;
         if (state.panel_resize_after_compact and state.mode_mix <= 0.001) {
             state.panel_resize_after_compact = false;
-            resizePanel(true);
+            if (!state.desktop_mode) resizePanel(true);
         }
         if (state.panel_position_dirty) {
             state.panel_position_dirty = false;

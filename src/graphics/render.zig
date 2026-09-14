@@ -10,8 +10,29 @@ const window = @import("../ui/window.zig");
 var render_canvas_buffer: []u32 = &.{};
 var shared_frame_id: u64 = 0;
 
+const TextCacheItem = struct {
+    hash: u64 = 0,
+    w: usize = 0,
+    h: usize = 0,
+    tex_id: c_int = 0,
+};
+var text_cache: [12]TextCacheItem = undefined;
+var next_tex_id: c_int = 4;
+var text_buffer: [1000 * 100]u32 = undefined; // scratch buffer
+
+fn hashText(text: []const u8, size: f64, bold: bool, color: [3]u8) u64 {
+    var hasher = std.hash.Wyhash.init(0);
+    hasher.update(text);
+    const sz_bytes = std.mem.asBytes(&size);
+    hasher.update(sz_bytes);
+    hasher.update(&[_]u8{@intFromBool(bold), color[0], color[1], color[2]});
+    return hasher.final();
+}
+
+
 var idle_underlay: []u32 = &.{};
 fn publishFrame(engine: *PixelEngine, wide: bool) void {
+    _ = wide;
     var commands: [16]@import("../platform/native.zig").DrawCommand = undefined;
     var cmd_count: usize = 0;
     if (state.idle_mix > 0) {
@@ -27,7 +48,6 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
             .spotify => {
                 const sc = @as(f64, @floatFromInt(engine.scale));
                 if (state.mode_mix < 0.5) {
-                    // Entire compact widget tile IS the Spotify app icon
                     const full_sz: f64 = 164.0 * (128.0 / 104.0);
                     const offset: f64 = (full_sz - 164.0) / 2.0;
                     const draw_x = @as(f64, @floatFromInt(x)) - offset;
@@ -58,48 +78,71 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
             }
         }
     }
-    // `t=f` asks the sandboxed Kitty app to open a path in our temporary
-    // directory, which macOS can reject. Kitty's graphics protocol explicitly
-    // supports `t=s`: a POSIX shared-memory object that it opens and consumes.
-    // It carries the raw frame without a filesystem permission boundary.
-    state.current_image_id = if (state.current_image_id == 1) @as(u32, 2) else @as(u32, 1);
-    var name_buffer: [64]u8 = undefined;
-    const name = std.fmt.bufPrintZ(&name_buffer, "/wlfy-{d}", .{state.current_image_id}) catch return;
-    const bytes = std.mem.sliceAsBytes(engine.pixels);
-
-    // Always unlink first in case a previous run left this exact ID behind
-    // without Kitty consuming and unlinking it.
-    _ = std.c.shm_unlink(name.ptr);
-
-    const fd = std.c.shm_open(name.ptr, 0x0200 | 0x0800 | 0x0002, @as(std.posix.mode_t, 0o600)); // O_CREAT | O_EXCL | O_RDWR
-    if (fd < 0) return;
-    defer _ = std.posix.system.close(fd);
-    if (std.posix.system.ftruncate(fd, @intCast(bytes.len)) != 0) return;
-
-    const memory = std.posix.mmap(null, bytes.len, .{ .READ = true, .WRITE = true }, .{ .TYPE = .SHARED }, fd, 0) catch return;
-    defer std.posix.munmap(memory);
-
-    @memcpy(memory, bytes);
-    var encoded_name: [160]u8 = undefined;
-    const encoded_len = std.base64.standard.Encoder.calcSize(name.len);
-    const payload = std.base64.standard.Encoder.encode(encoded_name[0..encoded_len], name);
-
-    const old_image_id: u32 = if (state.current_image_id == 1) 2 else 1;
-
-    std.debug.print("\x1b[H", .{});
-    const cols: usize = if (state.desktop_mode) @intFromFloat(state.layout.cells_x) else if (wide) 112 else 70;
-    const rows: usize = if (state.desktop_mode) @intFromFloat(state.layout.cells_y) else if (wide) 12 else 24;
-
-    if (std.c.getenv("TMUX") != null) {
-        std.debug.print("\x1bPtmux;\x1b\x1b_Ga=T,C=1,f=32,s={d},v={d},c={d},r={d},p=1,i={d},z=-1,t=s,S={d};{s}\x1b\x1b\\\x1b\\", .{ engine.width, engine.height, cols, rows, state.current_image_id, bytes.len, payload });
-        std.debug.print("\x1bPtmux;\x1b\x1b_Ga=d,d=i,i={d}\x1b\x1b\\\x1b\\", .{old_image_id});
-    } else {
-        std.debug.print("\x1b_Ga=T,C=1,f=32,s={d},v={d},c={d},r={d},p=1,i={d},z=-1,t=s,S={d};{s}\x1b\\", .{ engine.width, engine.height, cols, rows, state.current_image_id, bytes.len, payload });
-        std.debug.print("\x1b_Ga=d,d=i,i={d}\x1b\\", .{old_image_id});
-    }
+    @import("../platform/native.zig").wallify_present(engine.pixels.ptr, engine.width, engine.height, &commands, cmd_count);
 }
 
-pub fn drawText(engine: *PixelEngine, text: []const u8, x: f64, y: f64, width: f64, size: f64, bold: bool, right: bool, color: [3]u8) void {
+
+pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, width: f64, size: f64, bold: bool, right: bool, color: [3]u8, commands: *var, cmd_count: *usize) void {
+    _ = engine; // We don't use CPU engine anymore!
+    if (text_str.len == 0 or width <= 0 or cmd_count.* >= 16) return;
+    const h = hashText(text_str, size, bold, color);
+    var target_idx: ?usize = null;
+    var target_tex: c_int = -1;
+    var cached_w: usize = 0;
+    var cached_h: usize = 0;
+    for (0..12) |i| {
+        if (text_cache[i].hash == h) {
+            target_idx = i;
+            target_tex = text_cache[i].tex_id;
+            cached_w = text_cache[i].w;
+            cached_h = text_cache[i].h;
+            break;
+        }
+    }
+    if (target_idx == null) {
+        // Evict or use new
+        const idx = @as(usize, @intCast((next_tex_id - 4) % 12));
+        target_tex = next_tex_id;
+        next_tex_id += 1;
+        if (next_tex_id > 15) next_tex_id = 4;
+        
+        const w_px = @as(usize, @intFromFloat(try std.math.ceil(width * state.render_scale)));
+        const h_px = @as(usize, @intFromFloat(try std.math.ceil(size * state.render_scale * 2.0)));
+        if (w_px * h_px > text_buffer.len) return;
+
+        @memset(text_buffer[0..w_px * h_px], 0);
+        text_renderer.widget_text(text_buffer[0..].ptr, w_px, h_px, text_str.ptr, text_str.len, 0, 0, width * state.render_scale, size * state.render_scale, @intFromBool(bold), @intFromBool(right), color[0], color[1], color[2]);
+        
+        for (0..w_px * h_px) |i| {
+            // Un-swap R/B if CoreText exports RGBA, or maybe CoreText exports BGRA?
+            // Actually, macOS standard CoreGraphics writes ARGB/BGRA natively depending on endianness.
+            // Let's just swap R&B in Zig to be perfectly safe, identical to our native.m loop:
+            const p = text_buffer[i];
+            const a = (p >> 24) & 0xFF;
+            const r = (p >> 16) & 0xFF;
+            const g = (p >> 8) & 0xFF;
+            const b = p & 0xFF;
+            text_buffer[i] = (a << 24) | (b << 16) | (g << 8) | r;
+        }
+        @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
+        
+        text_cache[idx] = .{ .hash = h, .w = w_px, .h = h_px, .tex_id = target_tex };
+        cached_w = w_px;
+        cached_h = h_px;
+    }
+
+    commands[cmd_count.*] = .{
+        .texture_id = target_tex,
+        .dx = @as(f32, @floatFromInt(x)),
+        .dy = @as(f32, @floatFromInt(y)),
+        .dw = @as(f32, @floatFromInt(cached_w)) / @as(f32, @floatFromInt(state.render_scale)),
+        .dh = @as(f32, @floatFromInt(cached_h)) / @as(f32, @floatFromInt(state.render_scale)),
+        .sx = 0, .sy = 0, .sw = 1, .sh = 1,
+        .alpha = 1.0,
+    };
+    cmd_count.* += 1;
+}
+
     text_renderer.widget_text(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, x * state.render_scale, y * state.render_scale, width * state.render_scale, size * state.render_scale, @intFromBool(bold), @intFromBool(right), color[0], color[1], color[2]);
 }
 
@@ -156,8 +199,10 @@ pub fn drawUIFrame() void {
     if (state.desktop_mode) {
         state.layout.cells_x = @floatFromInt(@max(1, columns));
         state.layout.cells_y = @floatFromInt(@max(1, window.widget_terminal_rows()));
-        const display_w = window.widget_cell_width() * state.layout.cells_x;
-        const display_h = window.widget_cell_height() * state.layout.cells_y;
+        // In desktop (non-PTY) mode TIOCGWINSZ xpixel/ypixel are always 0.
+        // Use the actual panel logical-point dimensions written by native.m.
+        const display_w: f64 = @floatFromInt(state.panel_pixel_width);
+        const display_h: f64 = @floatFromInt(state.panel_pixel_height);
         // During a mode morph, use the dimensions of the *current* Kitty
         // surface. Switching to compact no longer changes scale before the
         // panel itself has narrowed, which removes the size pop at the end.

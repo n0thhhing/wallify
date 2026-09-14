@@ -23,17 +23,17 @@ fn initPixels() void {
             const a = raw_pixels[byte_idx + 3];
             byte_idx += 4;
             for (0..count) |_| {
-                pixels[pixel_idx * 4] = r;
+                pixels[pixel_idx * 4] = b;
                 pixels[pixel_idx * 4 + 1] = g;
-                pixels[pixel_idx * 4 + 2] = b;
+                pixels[pixel_idx * 4 + 2] = r;
                 pixels[pixel_idx * 4 + 3] = a;
                 pixel_idx += 1;
             }
         } else {
             for (0..count) |_| {
-                pixels[pixel_idx * 4] = raw_pixels[byte_idx];
+                pixels[pixel_idx * 4] = raw_pixels[byte_idx + 2];
                 pixels[pixel_idx * 4 + 1] = raw_pixels[byte_idx + 1];
-                pixels[pixel_idx * 4 + 2] = raw_pixels[byte_idx + 2];
+                pixels[pixel_idx * 4 + 2] = raw_pixels[byte_idx];
                 pixels[pixel_idx * 4 + 3] = raw_pixels[byte_idx + 3];
                 byte_idx += 4;
                 pixel_idx += 1;
@@ -70,16 +70,18 @@ pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, p
     const dw: isize = @intCast(sprite.w);
     const dh: isize = @intCast(sprite.h);
 
-    const dx: isize = @intFromFloat(@round((@as(f64, @floatFromInt(left)) + @as(f64, @floatFromInt(width - dw)) / 2.0) * @as(f64, @floatFromInt(e.scale))));
-    const dy = (top + 164 - dh - 5) * e.scale;
 
-    const scale = @as(f32, @floatFromInt(e.scale));
+    const draw_x = left + @divTrunc(width - dw, 2);
+    const draw_y = top + 164 - dh - 5;
+
     if (cmd_count.* < commands.len) {
+        const scale = @as(isize, @intCast(@import("../../state.zig").render_scale));
         commands[cmd_count.*] = .{
             .texture_id = 1,
-            .dx = @as(f32, @floatFromInt(dx)), .dy = @as(f32, @floatFromInt(dy)),
-            .dw = @as(f32, @floatFromInt(dw)) * scale,
-            .dh = @as(f32, @floatFromInt(dh)) * scale,
+            .dx = @as(f32, @floatFromInt(draw_x * scale)),
+            .dy = @as(f32, @floatFromInt(draw_y * scale)),
+            .dw = @as(f32, @floatFromInt(dw * scale)),
+            .dh = @as(f32, @floatFromInt(dh * scale)),
             .sx = @as(f32, @floatFromInt(sprite.x)) / @as(f32, @floatFromInt(image_width)),
             .sy = @as(f32, @floatFromInt(sprite.y)) / @as(f32, @floatFromInt(image_height)),
             .sw = @as(f32, @floatFromInt(sprite.w)) / @as(f32, @floatFromInt(image_width)),
@@ -88,7 +90,10 @@ pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, p
         };
         cmd_count.* += 1;
     }
-    drawSleepMarks(e, left + @divTrunc(width - 110, 2) + 20, top + 105, time);
+    // Anchor the Z marks to the cat's head: roughly upper-right area of the sprite.
+    const head_x = draw_x + @divTrunc(dw * 55, 100);
+    const head_y = draw_y + @divTrunc(dh * 15, 100);
+    drawSleepMarks(e, head_x, head_y, time);
 }
 
 fn drawSleepMarks(e: *PixelEngine, head_x: isize, head_y: isize, time: f64) void {

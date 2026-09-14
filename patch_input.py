@@ -1,4 +1,7 @@
-const std = @import("std");
+import os
+
+with open("src/ui/input.zig", "w") as f:
+    f.write("""const std = @import("std");
 const state = @import("../state.zig");
 const window = @import("window.zig");
 const hitbox = @import("hitbox.zig");
@@ -158,3 +161,4 @@ pub export fn wallify_pointer(x: f64, y_bottom_up: f64, kind: c_int) void {
 
 pub fn enableRawMode() !void {}
 pub fn inputLoop() void {}
+""")
