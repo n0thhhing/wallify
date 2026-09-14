@@ -10,7 +10,7 @@ This checklist breaks down the massive transition from Wallify's CPU-based `Pixe
 
 ## Phase 2: Hybrid Rendering (CPU + GPU)
 - [x] **Quad Rendering**: Implement a basic textured quad shader in Metal. Update `native.m` to accept an array of vertices from Zig instead of a flat pixel buffer.
-- [ ] **Texture Uploading**: Upload static assets (like Spotify icons and the animated pixel cats) to `MTLTexture` objects during initialization. 
+- [x] **Texture Uploading**: Upload static assets (like Spotify icons and the animated pixel cats) to `MTLTexture` objects during initialization. 
 - [ ] **CPU Text Fallback**: Update `CoreText` rendering to draw just the text into small transparent CPU buffers, upload those to Metal textures per-frame, and composite them as quads using the GPU.
 - [ ] **Artwork Migration**: Load the `art.bmp` file directly into a `MTLTexture` and let the GPU handle the crossfade blending instead of stepping through bytes on the CPU.
 
