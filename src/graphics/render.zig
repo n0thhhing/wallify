@@ -83,6 +83,7 @@ fn publishFrame(engine: *PixelEngine, wide: bool, commands: []@import("../platfo
 
 pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, width: f64, size: f64, bold: bool, right: bool, color: [3]u8, commands: []@import("../platform/native.zig").DrawCommand, cmd_count: *usize) void {
     _ = engine;
+    const scale: f64 = @floatFromInt(state.render_scale);
     if (text_str.len == 0 or width <= 0 or cmd_count.* >= 16) return;
     const h = hashText(text_str, size, bold, color);
     var target_idx: ?usize = null;
@@ -120,17 +121,6 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
             text_buffer[i] = (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, g) << 8) | @as(u32, r);
         }
         
-        // Vertical flip for Metal Texture Top-Left Origin
-        const row_len = w_px;
-        var y_idx: usize = 0;
-        while (y_idx < h_px / 2) : (y_idx += 1) {
-            const opp_y = h_px - 1 - y_idx;
-            for (0..row_len) |x_idx| {
-                const tmp = text_buffer[y_idx * row_len + x_idx];
-                text_buffer[y_idx * row_len + x_idx] = text_buffer[opp_y * row_len + x_idx];
-                text_buffer[opp_y * row_len + x_idx] = tmp;
-            }
-        }
 
         @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
         
@@ -141,10 +131,10 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
 
     commands[cmd_count.*] = .{
         .texture_id = target_tex,
-        .dx = @as(f32, @floatCast(x)),
-        .dy = @as(f32, @floatCast(y)),
-        .dw = @as(f32, @floatFromInt(cached_w)) / @as(f32, @floatFromInt(state.render_scale)),
-        .dh = @as(f32, @floatFromInt(cached_h)) / @as(f32, @floatFromInt(state.render_scale)),
+        .dx = @as(f32, @floatCast(x * scale)),
+        .dy = @as(f32, @floatCast(y * scale)),
+        .dw = @as(f32, @floatFromInt(cached_w)),
+        .dh = @as(f32, @floatFromInt(cached_h)),
         .sx = 0, .sy = 0, .sw = 1, .sh = 1,
         .alpha = 1.0,
     };
@@ -153,6 +143,7 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
 
 fn drawMarqueeText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, viewport_width: f64, offset: f64, color: [3]u8, commands: []@import("../platform/native.zig").DrawCommand, cmd_count: *usize) void {
     _ = engine;
+    const scale: f64 = @floatFromInt(state.render_scale);
     if (text_str.len == 0 or viewport_width <= 0 or cmd_count.* >= 16) return;
     const size = 15;
     const h = hashText(text_str, size, true, color);
@@ -191,17 +182,6 @@ fn drawMarqueeText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, v
             text_buffer[i] = (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, g) << 8) | @as(u32, r);
         }
         
-        // Vertical flip for Metal Texture Top-Left Origin
-        const row_len = w_px;
-        var y_idx: usize = 0;
-        while (y_idx < h_px / 2) : (y_idx += 1) {
-            const opp_y = h_px - 1 - y_idx;
-            for (0..row_len) |x_idx| {
-                const tmp = text_buffer[y_idx * row_len + x_idx];
-                text_buffer[y_idx * row_len + x_idx] = text_buffer[opp_y * row_len + x_idx];
-                text_buffer[opp_y * row_len + x_idx] = tmp;
-            }
-        }
 
         @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
         text_cache[idx] = .{ .hash = h, .w = w_px, .h = h_px, .tex_id = target_tex };
@@ -214,10 +194,10 @@ fn drawMarqueeText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, v
     
     commands[cmd_count.*] = .{
         .texture_id = target_tex,
-        .dx = @as(f32, @floatCast(x)),
-        .dy = @as(f32, @floatCast(y)),
-        .dw = @as(f32, @floatFromInt(visible_w_px)) / @as(f32, @floatFromInt(state.render_scale)),
-        .dh = @as(f32, @floatFromInt(cached_h)) / @as(f32, @floatFromInt(state.render_scale)),
+        .dx = @as(f32, @floatCast(x * scale)),
+        .dy = @as(f32, @floatCast(y * scale)),
+        .dw = @as(f32, @floatFromInt(visible_w_px)),
+        .dh = @as(f32, @floatFromInt(cached_h)),
         .sx = @as(f32, @floatFromInt(offset_px)) / @as(f32, @floatFromInt(cached_w)),
         .sy = 0,
         .sw = @as(f32, @floatFromInt(visible_w_px)) / @as(f32, @floatFromInt(cached_w)),

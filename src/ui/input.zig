@@ -6,14 +6,13 @@ const media = @import("../media/controller.zig");
 const spotify = @import("../media/spotify.zig");
 const menu = @import("menu.zig");
 
-pub export fn wallify_pointer(x: f64, y_bottom_up: f64, kind: c_int) void {
+pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     const is_click = kind == 1;
     const is_release = kind == 2;
     const is_right = kind == 3;
 
-    const display_height = state.layout.height;
     const px = x;
-    const py = display_height - y_bottom_up;
+    const py = y_top_down;
 
     state.pointer_x = px;
     const point = hitbox.Point{ .x = px, .y = py };
