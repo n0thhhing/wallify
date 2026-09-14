@@ -44,7 +44,7 @@ fn initPixels() void {
     var u32_pixels = std.heap.page_allocator.alloc(u32, image_width * image_height) catch return;
     defer std.heap.page_allocator.free(u32_pixels);
     @memcpy(std.mem.sliceAsBytes(u32_pixels[0..]), pixels[0..]);
-    @import("../../platform/native.zig").wallify_load_texture(1, u32_pixels.ptr, image_width, image_height);
+    @import("../../platform/native.zig").wallify_load_texture(3, u32_pixels.ptr, image_width, image_height);
 }
 
 const Sprite = struct { x: usize, y: usize, w: usize, h: usize };
@@ -77,7 +77,7 @@ pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, p
     if (cmd_count.* < commands.len) {
         const scale = @as(isize, @intCast(@import("../../state.zig").render_scale));
         commands[cmd_count.*] = .{
-            .texture_id = 1,
+            .texture_id = 3,
             .dx = @as(f32, @floatFromInt(draw_x * scale)),
             .dy = @as(f32, @floatFromInt(draw_y * scale)),
             .dw = @as(f32, @floatFromInt(dw * scale)),
@@ -91,9 +91,9 @@ pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, p
         cmd_count.* += 1;
     }
     // Anchor the Z marks to the cat's head: roughly upper-right area of the sprite.
-    const head_x = draw_x + @divTrunc(dw * 55, 100);
-    const head_y = draw_y + @divTrunc(dh * 15, 100);
-    drawSleepMarks(e, head_x, head_y, time);
+    drawSleepMarks(e, left + @divTrunc(width - 110, 2) + 20, top + 105, time);
+    
+    
 }
 
 fn drawSleepMarks(e: *PixelEngine, head_x: isize, head_y: isize, time: f64) void {
