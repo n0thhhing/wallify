@@ -24,6 +24,9 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
     return out;
 }
 
-fragment float4 fragment_main(VertexOut in [[stage_in]]) {
-    return in.color;
+fragment float4 fragment_main(VertexOut in [[stage_in]],
+                              texture2d<half> colorTexture [[texture(0)]]) {
+    constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
+    half4 colorSample = colorTexture.sample(textureSampler, in.texCoord);
+    return in.color * float4(colorSample);
 }

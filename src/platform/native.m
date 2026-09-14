@@ -2,6 +2,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include <stdatomic.h>
+#include <simd/simd.h>
 
 extern void wallify_pointer(double, double, int);
 static NSPanel *panel;
@@ -15,6 +16,12 @@ static NSLock *frameLock;
 static NSData *latestFrame;
 static NSUInteger frameWidth, frameHeight;
 static BOOL scheduled;
+
+typedef struct {
+    simd_float2 position;
+    simd_float2 texCoord;
+    simd_float4 color;
+} Vertex;
 
 @interface WallifyView : NSView
 @end
