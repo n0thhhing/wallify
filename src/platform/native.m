@@ -221,6 +221,15 @@ static void presentLatest(void) {
     }
 }
 
+
+void wallify_swap_textures(int src, int dest) {
+    if (src >= 0 && src < 32 && dest >= 0 && dest < 32) {
+        id<MTLTexture> tmp = loaded_textures[dest];
+        loaded_textures[dest] = loaded_textures[src];
+        loaded_textures[src] = tmp;
+    }
+}
+
 void wallify_load_texture(int texture_id, const unsigned int *pixels, size_t width, size_t height) {
     @autoreleasepool {
         MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:width height:height mipmapped:NO];

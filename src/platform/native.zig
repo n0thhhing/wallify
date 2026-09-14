@@ -27,3 +27,4 @@ pub export fn wallify_set_panel_size(w: c_int, h: c_int) callconv(.c) void {
     @import("../state.zig").panel_pixel_width = w;
     @import("../state.zig").panel_pixel_height = h;
 }
+pub extern fn wallify_swap_textures(dest: c_int, src: c_int) void;
