@@ -57,7 +57,7 @@ const sprites = [_]Sprite{
     .{ .x = @intFromFloat(1143.0 * 0.38), .y = 0, .w = @intFromFloat(283.0 * 0.38), .h = @intFromFloat(135.0 * 0.38) },
 };
 
-pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, pet: bool, pointer: f64, leaving: bool, commands: *([16]@import("../../platform/native.zig").DrawCommand), cmd_count: *usize) void {
+pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, pet: bool, pointer: f64, leaving: bool, commands: []@import("../../platform/native.zig").DrawCommand, cmd_count: *usize) void {
     _ = pet;
     _ = pointer;
     _ = leaving;

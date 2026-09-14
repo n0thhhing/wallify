@@ -30,11 +30,10 @@ fn hashText(text: []const u8, size: f64, bold: bool, color: [3]u8) u64 {
 }
 
 
+
 var idle_underlay: []u32 = &.{};
-fn publishFrame(engine: *PixelEngine, wide: bool) void {
+fn publishFrame(engine: *PixelEngine, wide: bool, commands: []@import("../platform/native.zig").DrawCommand, cmd_count: *usize) void {
     _ = wide;
-    var commands: [16]@import("../platform/native.zig").DrawCommand = undefined;
-    var cmd_count: usize = 0;
     if (state.idle_mix > 0) {
         const mix = state.idle_mix;
         if (mix < 1) @memcpy(idle_underlay[0..engine.pixels.len], engine.pixels);
@@ -43,7 +42,7 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
         const w: isize = @intFromFloat(164 + (state.layout.width - 164) * state.mode_mix);
         engine.fillRoundedRect(x, 35, w, 164, 26, 30, 29, 32, 255);
         switch (state.setting_idle_style) {
-            .pixel_cat => @import("pets/idle_cat.zig").draw(engine, x, 35, w, state.cat_time, false, 0, false, &commands, &cmd_count),
+            .pixel_cat => @import("pets/idle_cat.zig").draw(engine, x, 35, w, state.cat_time, false, 0, false, commands, cmd_count),
             .banana_cat => @import("pets/banana_cat.zig").draw(engine, x, 35, 164, state.cat_time),
             .spotify => {
                 const sc = @as(f64, @floatFromInt(engine.scale));
@@ -59,8 +58,8 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
                     const draw_x: f64 = 24.0 - offset;
                     const draw_y: f64 = 49.0 - offset;
                     _ = symbols.widget_spotify_icon(engine.pixels.ptr, engine.width, engine.height, draw_x * sc, draw_y * sc, icon_sz * sc);
-                    drawText(engine, "Open Spotify", 210, 85, state.layout.bar_w, 17, true, false, .{ 240, 235, 225 });
-                    drawText(engine, "Click to launch", 210, 112, state.layout.bar_w, 13, false, false, .{ 159, 153, 145 });
+                    drawText(engine, "Open Spotify", 210, 85, state.layout.bar_w, 17, true, false, .{ 240, 235, 225 }, commands, cmd_count);
+                    drawText(engine, "Click to launch", 210, 112, state.layout.bar_w, 13, false, false, .{ 159, 153, 145 }, commands, cmd_count);
                 }
             },
         }
@@ -78,12 +77,12 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
             }
         }
     }
-    @import("../platform/native.zig").wallify_present(engine.pixels.ptr, engine.width, engine.height, &commands, cmd_count);
+    @import("../platform/native.zig").wallify_present(engine.pixels.ptr, engine.width, engine.height, commands.ptr, cmd_count.*);
 }
 
 
-pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, width: f64, size: f64, bold: bool, right: bool, color: [3]u8, commands: *var, cmd_count: *usize) void {
-    _ = engine; // We don't use CPU engine anymore!
+pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, width: f64, size: f64, bold: bool, right: bool, color: [3]u8, commands: []@import("../platform/native.zig").DrawCommand, cmd_count: *usize) void {
+    _ = engine;
     if (text_str.len == 0 or width <= 0 or cmd_count.* >= 16) return;
     const h = hashText(text_str, size, bold, color);
     var target_idx: ?usize = null;
@@ -100,29 +99,25 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
         }
     }
     if (target_idx == null) {
-        // Evict or use new
-        const idx = @as(usize, @intCast((next_tex_id - 4) % 12));
+        const idx = @as(usize, @intCast(@mod((next_tex_id - 4), 12)));
         target_tex = next_tex_id;
         next_tex_id += 1;
         if (next_tex_id > 15) next_tex_id = 4;
         
-        const w_px = @as(usize, @intFromFloat(try std.math.ceil(width * state.render_scale)));
-        const h_px = @as(usize, @intFromFloat(try std.math.ceil(size * state.render_scale * 2.0)));
+        const w_px = @as(usize, @intFromFloat(@ceil(width * state.render_scale)));
+        const h_px = @as(usize, @intFromFloat(@ceil(size * state.render_scale * 2.8)));
         if (w_px * h_px > text_buffer.len) return;
 
         @memset(text_buffer[0..w_px * h_px], 0);
         text_renderer.widget_text(text_buffer[0..].ptr, w_px, h_px, text_str.ptr, text_str.len, 0, 0, width * state.render_scale, size * state.render_scale, @intFromBool(bold), @intFromBool(right), color[0], color[1], color[2]);
         
         for (0..w_px * h_px) |i| {
-            // Un-swap R/B if CoreText exports RGBA, or maybe CoreText exports BGRA?
-            // Actually, macOS standard CoreGraphics writes ARGB/BGRA natively depending on endianness.
-            // Let's just swap R&B in Zig to be perfectly safe, identical to our native.m loop:
             const p = text_buffer[i];
             const a = (p >> 24) & 0xFF;
             const r = (p >> 16) & 0xFF;
             const g = (p >> 8) & 0xFF;
             const b = p & 0xFF;
-            text_buffer[i] = (a << 24) | (b << 16) | (g << 8) | r;
+            text_buffer[i] = (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, g) << 8) | @as(u32, r);
         }
         @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
         
@@ -133,8 +128,8 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
 
     commands[cmd_count.*] = .{
         .texture_id = target_tex,
-        .dx = @as(f32, @floatFromInt(x)),
-        .dy = @as(f32, @floatFromInt(y)),
+        .dx = @as(f32, @floatCast(x)),
+        .dy = @as(f32, @floatCast(y)),
         .dw = @as(f32, @floatFromInt(cached_w)) / @as(f32, @floatFromInt(state.render_scale)),
         .dh = @as(f32, @floatFromInt(cached_h)) / @as(f32, @floatFromInt(state.render_scale)),
         .sx = 0, .sy = 0, .sw = 1, .sh = 1,
@@ -143,19 +138,74 @@ pub fn drawText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, widt
     cmd_count.* += 1;
 }
 
-    text_renderer.widget_text(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, x * state.render_scale, y * state.render_scale, width * state.render_scale, size * state.render_scale, @intFromBool(bold), @intFromBool(right), color[0], color[1], color[2]);
-}
-
-fn drawMarqueeText(engine: *PixelEngine, text: []const u8, x: f64, y: f64, viewport_width: f64, offset: f64, color: [3]u8) void {
-    const scale: f64 = @floatFromInt(state.render_scale);
-    text_renderer.widget_text_clipped(engine.pixels.ptr, engine.width, engine.height, text.ptr, text.len, (x - offset) * scale, y * scale, x * scale, viewport_width * scale, 15 * state.render_scale, 1, color[0], color[1], color[2]);
+fn drawMarqueeText(engine: *PixelEngine, text_str: []const u8, x: f64, y: f64, viewport_width: f64, offset: f64, color: [3]u8, commands: []@import("../platform/native.zig").DrawCommand, cmd_count: *usize) void {
+    _ = engine;
+    if (text_str.len == 0 or viewport_width <= 0 or cmd_count.* >= 16) return;
+    const size = 15;
+    const h = hashText(text_str, size, true, color);
+    var target_idx: ?usize = null;
+    var target_tex: c_int = -1;
+    var cached_w: usize = 0;
+    var cached_h: usize = 0;
+    for (0..12) |i| {
+        if (text_cache[i].hash == h) {
+            target_idx = i;
+            target_tex = text_cache[i].tex_id;
+            cached_w = text_cache[i].w;
+            cached_h = text_cache[i].h;
+            break;
+        }
+    }
+    if (target_idx == null) {
+        const full_width = text_renderer.widget_text_width(text_str.ptr, text_str.len, size * state.render_scale, 1) / @as(f64, @floatFromInt(state.render_scale));
+        const alloc_w = full_width + 10;
+        const idx = @as(usize, @intCast(@mod((next_tex_id - 4), 12)));
+        target_tex = next_tex_id;
+        next_tex_id += 1;
+        if (next_tex_id > 15) next_tex_id = 4;
+        
+        const w_px = @as(usize, @intFromFloat(@ceil(alloc_w * state.render_scale)));
+        const h_px = @as(usize, @intFromFloat(@ceil(size * state.render_scale * 2.8)));
+        if (w_px * h_px > text_buffer.len) return;
+        @memset(text_buffer[0..w_px * h_px], 0);
+        text_renderer.widget_text(text_buffer[0..].ptr, w_px, h_px, text_str.ptr, text_str.len, 0, 0, alloc_w * state.render_scale, size * state.render_scale, 1, 0, color[0], color[1], color[2]);
+        for (0..w_px * h_px) |i| {
+            const p = text_buffer[i];
+            const a = (p >> 24) & 0xFF;
+            const r = (p >> 16) & 0xFF;
+            const g = (p >> 8) & 0xFF;
+            const b = p & 0xFF;
+            text_buffer[i] = (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, g) << 8) | @as(u32, r);
+        }
+        @import("../platform/native.zig").wallify_load_texture(target_tex, text_buffer[0..].ptr, w_px, h_px);
+        text_cache[idx] = .{ .hash = h, .w = w_px, .h = h_px, .tex_id = target_tex };
+        cached_w = w_px;
+        cached_h = h_px;
+    }
+    
+    const visible_w_px = @min(cached_w, @as(usize, @intFromFloat(viewport_width * state.render_scale)));
+    const offset_px = @as(usize, @intFromFloat(offset * state.render_scale));
+    
+    commands[cmd_count.*] = .{
+        .texture_id = target_tex,
+        .dx = @as(f32, @floatCast(x)),
+        .dy = @as(f32, @floatCast(y)),
+        .dw = @as(f32, @floatFromInt(visible_w_px)) / @as(f32, @floatFromInt(state.render_scale)),
+        .dh = @as(f32, @floatFromInt(cached_h)) / @as(f32, @floatFromInt(state.render_scale)),
+        .sx = @as(f32, @floatFromInt(offset_px)) / @as(f32, @floatFromInt(cached_w)),
+        .sy = 0,
+        .sw = @as(f32, @floatFromInt(visible_w_px)) / @as(f32, @floatFromInt(cached_w)),
+        .sh = 1,
+        .alpha = 1.0,
+    };
+    cmd_count.* += 1;
 }
 
 fn lerp(a: f64, b: f64, amount: f64) f64 {
     return a + (b - a) * amount;
 }
 
-fn drawTextOverlays(engine: *PixelEngine, debug_x: isize, debug_y: isize, displayed_elapsed: f64) void {
+fn drawTextOverlays(engine: *PixelEngine, debug_x: isize, debug_y: isize, displayed_elapsed: f64, commands: []@import("../platform/native.zig").DrawCommand, cmd_count: *usize) void {
     const primary = [3]u8{ 245, 245, 247 };
     const secondary = [3]u8{ @max(145, state.extracted_r), @max(145, state.extracted_g), @max(145, state.extracted_b) };
     const title = if (state.global_title_len > 0) state.global_title[0..state.global_title_len] else "Not Playing";
@@ -165,8 +215,8 @@ fn drawTextOverlays(engine: *PixelEngine, debug_x: isize, debug_y: isize, displa
     // at a threshold.  It gives the mode change one continuous focal point.
     if (state.mode_mix < 0.16) {
         const mini_card_y: isize = @intFromFloat(card_y);
-        drawMarqueeText(engine, title, 24, @floatFromInt(mini_card_y + 116), 132, state.marquee_offset, primary);
-        drawText(engine, artist, 24, @floatFromInt(mini_card_y + 137), 132, 11, false, false, secondary);
+        drawMarqueeText(engine, title, 24, @floatFromInt(mini_card_y + 116), 132, state.marquee_offset, primary, commands, cmd_count);
+        drawText(engine, artist, 24, @floatFromInt(mini_card_y + 137), 132, 11, false, false, secondary, commands, cmd_count);
         return;
     }
     const travel = @min(1.0, @max(0.0, (state.mode_mix - 0.16) / 0.84));
@@ -176,16 +226,16 @@ fn drawTextOverlays(engine: *PixelEngine, debug_x: isize, debug_y: isize, displa
     const text_width = lerp(132, state.layout.bar_w, travel);
     const title_size = lerp(15, 17, travel);
     const artist_size = lerp(11, 14, travel);
-    drawText(engine, title, text_x, title_y, text_width, title_size, true, false, primary);
-    drawText(engine, if (artist.len > 0) artist else "Play something to get started", text_x, artist_y, text_width, artist_size, false, false, secondary);
+    drawText(engine, title, text_x, title_y, text_width, title_size, true, false, primary, commands, cmd_count);
+    drawText(engine, if (artist.len > 0) artist else "Play something to get started", text_x, artist_y, text_width, artist_size, false, false, secondary, commands, cmd_count);
     if (travel < 0.88) return;
     var time_buf: [32]u8 = undefined;
     const elapsed: u32 = @intFromFloat(@max(0, displayed_elapsed));
     const duration: u32 = @intFromFloat(@max(0, state.global_duration));
     const elapsed_text = std.fmt.bufPrint(&time_buf, "{d}:{d:0>2}", .{ elapsed / 60, elapsed % 60 }) catch "0:00";
-    drawText(engine, elapsed_text, text_x, state.layout.bar_y + 13, 100, 12, false, false, secondary);
+    drawText(engine, elapsed_text, text_x, state.layout.bar_y + 13, 100, 12, false, false, secondary, commands, cmd_count);
     const duration_text = std.fmt.bufPrint(&time_buf, "{d}:{d:0>2}", .{ duration / 60, duration % 60 }) catch "0:00";
-    drawText(engine, duration_text, text_x, state.layout.bar_y + 13, state.layout.bar_w, 12, false, true, secondary);
+    drawText(engine, duration_text, text_x, state.layout.bar_y + 13, state.layout.bar_w, 12, false, true, secondary, commands, cmd_count);
 
     _ = debug_x;
     _ = debug_y;
@@ -194,6 +244,9 @@ fn drawTextOverlays(engine: *PixelEngine, debug_x: isize, debug_y: isize, displa
 pub fn drawUIFrame() void {
     window.widget_render_lock();
     defer window.widget_render_unlock();
+    var commands_arr: [32]@import("../platform/native.zig").DrawCommand = undefined;
+    const commands: []@import("../platform/native.zig").DrawCommand = &commands_arr;
+    var cmd_count: usize = 0;
     const columns = window.widget_terminal_columns();
     const wide = !state.desktop_mode and (columns == 0 or columns >= 112);
     if (state.desktop_mode) {
@@ -258,7 +311,7 @@ pub fn drawUIFrame() void {
     };
     @memset(engine.pixels, 0);
 
-    if (state.idle_mix >= 1) return publishFrame(&engine, wide);
+    if (state.idle_mix >= 1) return publishFrame(&engine, wide, commands, &cmd_count);
 
     const displayed_elapsed = if (state.global_is_dragging) state.global_elapsed else state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
     const t = state.global_anim_art_t;
@@ -349,9 +402,9 @@ pub fn drawUIFrame() void {
 
     if (state.mode_mix < 0.5) {
         engine.bottomScrim(card_x, card_y + 84, wi, hi - 84, 0, 162);
-        drawTextOverlays(&engine, if (wide) 650 else 24, if (wide) 20 else 220, displayed_elapsed);
+        drawTextOverlays(&engine, if (wide) 650 else 24, if (wide) 20 else 220, displayed_elapsed, commands, &cmd_count);
         engine.clipOutsideRoundedRect(card_x, card_y, wi, hi, 26);
-        return publishFrame(&engine, wide);
+        return publishFrame(&engine, wide, commands, &cmd_count);
     }
 
     const b_bg: u8 = 45;
@@ -394,10 +447,10 @@ pub fn drawUIFrame() void {
         if (icon_scale > 0.001) symbols.widget_icon(engine.pixels.ptr, engine.width, engine.height, button.x * state.render_scale, button.y * state.render_scale, icon_kind, hover, 1, icon_scale * state.render_scale);
     }
 
-    drawTextOverlays(&engine, if (wide) 650 else 24, if (wide) 20 else 220, displayed_elapsed);
+    drawTextOverlays(&engine, if (wide) 650 else 24, if (wide) 20 else 220, displayed_elapsed, commands, &cmd_count);
 
     if (state.desktop_mode) engine.clipOutsideRoundedRect(card_x, card_y, wi, hi, 26);
-    publishFrame(&engine, wide);
+    publishFrame(&engine, wide, commands, &cmd_count);
 }
 
 pub fn extractColor() void {
