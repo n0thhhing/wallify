@@ -12,6 +12,8 @@ var shared_frame_id: u64 = 0;
 
 var idle_underlay: []u32 = &.{};
 fn publishFrame(engine: *PixelEngine, wide: bool) void {
+    var commands: [16]@import("../platform/native.zig").DrawCommand = undefined;
+    var cmd_count: usize = 0;
     if (state.idle_mix > 0) {
         const mix = state.idle_mix;
         if (mix < 1) @memcpy(idle_underlay[0..engine.pixels.len], engine.pixels);
@@ -20,7 +22,7 @@ fn publishFrame(engine: *PixelEngine, wide: bool) void {
         const w: isize = @intFromFloat(164 + (state.layout.width - 164) * state.mode_mix);
         engine.fillRoundedRect(x, 35, w, 164, 26, 30, 29, 32, 255);
         switch (state.setting_idle_style) {
-            .pixel_cat => @import("pets/idle_cat.zig").draw(engine, x, 35, w, state.cat_time, false, 0, false),
+            .pixel_cat => @import("pets/idle_cat.zig").draw(engine, x, 35, w, state.cat_time, false, 0, false, &commands, &cmd_count),
             .banana_cat => @import("pets/banana_cat.zig").draw(engine, x, 35, 164, state.cat_time),
             .spotify => {
                 const sc = @as(f64, @floatFromInt(engine.scale));

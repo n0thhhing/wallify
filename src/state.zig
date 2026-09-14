@@ -353,3 +353,4 @@ test "IdleStyle enum values match serialization integers" {
     try std.testing.expectEqual(@as(u8, 1), @intFromEnum(IdleStyle.pixel_cat));
     try std.testing.expectEqual(@as(u8, 2), @intFromEnum(IdleStyle.banana_cat));
 }
+

@@ -23,6 +23,15 @@ typedef struct {
     simd_float4 color;
 } Vertex;
 
+typedef struct {
+    int texture_id;
+    float dx, dy, dw, dh;
+    float sx, sy, sw, sh;
+    float alpha;
+} DrawCommand;
+
+static id<MTLTexture> loaded_textures[32];
+
 @interface WallifyView : NSView
 @end
 @implementation WallifyView
@@ -44,6 +53,7 @@ typedef struct {
 - (void)mouseExited:(NSEvent *)e { wallify_pointer(-1, -1, 0); }
 - (void)rightMouseUp:(NSEvent *)e { [self pointer:e kind:3]; }
 @end
+
 @interface WallifyPanel : NSPanel
 @end
 @implementation WallifyPanel
@@ -54,17 +64,26 @@ static void movePanel(int left, int top) {
     NSRect screen = (panel.screen ?: NSScreen.mainScreen).visibleFrame;
     [panel setFrameOrigin:NSMakePoint(screen.origin.x + left, NSMaxY(screen) - top - panel.frame.size.height)];
 }
+
 bool wallify_create(bool compact, int left, int top) {
     device = MTLCreateSystemDefaultDevice();
     queue = [device newCommandQueue];
     
     NSError *error = nil;
-    id<MTLLibrary> defaultLibrary = [device newLibraryWithSource:metalShaderSource options:nil error:&error];
+    id<MTLLibrary> defaultLibrary = nil;
+    NSURL *libraryURL = [[NSBundle mainBundle] URLForResource:@"default" withExtension:@"metallib"];
+    if (libraryURL) {
+        defaultLibrary = [device newLibraryWithURL:libraryURL error:&error];
+    } else {
+        // Fallback for running purely from zig-out/bin/wallify during tests
+        NSString *execPath = [[NSBundle mainBundle] executablePath];
+        NSString *execDir = [execPath stringByDeletingLastPathComponent];
+        NSURL *fallbackURL = [NSURL fileURLWithPath:[execDir stringByAppendingPathComponent:@"default.metallib"]];
+        defaultLibrary = [device newLibraryWithURL:fallbackURL error:&error];
+    }
+    
     if (!defaultLibrary) {
-        NSString *resourcePath = [[NSBundle mainBundle] pathForResource:@"default" ofType:@"metallib"];
-        if (resourcePath) {
-            defaultLibrary = [device newLibraryWithFile:resourcePath error:&error];
-        }
+        NSLog(@"Failed to compile Metal shaders: %@", error);
     }
     
     if (defaultLibrary) {
@@ -73,6 +92,13 @@ bool wallify_create(bool compact, int left, int top) {
         pipelineStateDescriptor.vertexFunction = [defaultLibrary newFunctionWithName:@"vertex_main"];
         pipelineStateDescriptor.fragmentFunction = [defaultLibrary newFunctionWithName:@"fragment_main"];
         pipelineStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+        pipelineStateDescriptor.colorAttachments[0].blendingEnabled = YES;
+        pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+        pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+        pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         
         pipelineState = [device newRenderPipelineStateWithDescriptor:pipelineStateDescriptor error:&error];
         if (!pipelineState) NSLog(@"Failed to created pipeline state, error %@", error);
@@ -115,13 +141,19 @@ bool wallify_create(bool compact, int left, int top) {
     return true;
 }
 
-// Coalesce frames: AppKit never accumulates a queue of stale pixel buffers.
+static NSData *latestCmds;
+static size_t latestCmdCount;
+
 static void presentLatest(void) {
     @autoreleasepool {
         [frameLock lock];
         NSData *pixels = latestFrame;
         NSUInteger width = frameWidth, height = frameHeight;
+        NSData *cmds = latestCmds;
+        size_t cmdCount = latestCmdCount;
         latestFrame = nil;
+        latestCmds = nil;
+        latestCmdCount = 0;
         scheduled = NO;
         [frameLock unlock];
         if (!pixels) return;
@@ -133,31 +165,90 @@ static void presentLatest(void) {
         id<MTLTexture> texture = [device newTextureWithDescriptor:desc];
         if (!texture) return;
         [texture replaceRegion:MTLRegionMake2D(0, 0, width, height) mipmapLevel:0 withBytes:pixels.bytes bytesPerRow:width * 4];
+        
         id<MTLCommandBuffer> command = [queue commandBuffer];
-        id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
-        [blit copyFromTexture:texture sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(width,height,1) toTexture:drawable.texture destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];
-        [blit endEncoding];
+        
+        MTLRenderPassDescriptor *passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+        passDesc.colorAttachments[0].texture = drawable.texture;
+        passDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
+        passDesc.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        passDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+        
+        id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:passDesc];
+        [encoder setRenderPipelineState:pipelineState];
+        
+        Vertex vertices[] = {
+            {{0, 0}, {0, 0}, {1, 1, 1, 1}},
+            {{0, height}, {0, 1}, {1, 1, 1, 1}},
+            {{width, 0}, {1, 0}, {1, 1, 1, 1}},
+            {{width, height}, {1, 1}, {1, 1, 1, 1}}
+        };
+        simd_float2 viewportSize = { (float)width, (float)height };
+        [encoder setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+        
+        // Draw CPU Buffer first
+        [encoder setVertexBytes:&vertices length:sizeof(vertices) atIndex:0];
+        [encoder setFragmentTexture:texture atIndex:0];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+
+        // Draw overlay commands
+        if (cmds && cmdCount > 0) {
+            const DrawCommand *commandArray = (const DrawCommand *)cmds.bytes;
+            for (size_t i = 0; i < cmdCount; i++) {
+                DrawCommand c = commandArray[i];
+                id<MTLTexture> t = loaded_textures[c.texture_id];
+                if (!t) continue;
+                
+                Vertex q[] = {
+                    {{c.dx, c.dy},                 {c.sx, c.sy},                 {1, 1, 1, c.alpha}},
+                    {{c.dx, c.dy + c.dh},          {c.sx, c.sy + c.sh},          {1, 1, 1, c.alpha}},
+                    {{c.dx + c.dw, c.dy},          {c.sx + c.sw, c.sy},          {1, 1, 1, c.alpha}},
+                    {{c.dx + c.dw, c.dy + c.dh},   {c.sx + c.sw, c.sy + c.sh},   {1, 1, 1, c.alpha}}
+                };
+                [encoder setVertexBytes:&q length:sizeof(q) atIndex:0];
+                [encoder setFragmentTexture:t atIndex:0];
+                [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+            }
+        }
+        
+        [encoder endEncoding];
+        
         [command presentDrawable:drawable];
         [command commit];
     }
 }
-void wallify_present(const unsigned int *pixels, size_t width, size_t height) {
+
+void wallify_load_texture(int texture_id, const unsigned int *pixels, size_t width, size_t height) {
     @autoreleasepool {
-        // The shared software canvas uses straight alpha; Core Animation expects premultiplied RGBA.
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:width height:height mipmapped:NO];
+        desc.storageMode = MTLStorageModeShared;
+        id<MTLTexture> tex = [device newTextureWithDescriptor:desc];
+        if (tex) {
+            [tex replaceRegion:MTLRegionMake2D(0, 0, width, height) mipmapLevel:0 withBytes:pixels bytesPerRow:width * 4];
+            loaded_textures[texture_id] = tex;
+        }
+    }
+}
+
+void wallify_present(const unsigned int *pixels, size_t width, size_t height, const DrawCommand *cmds, size_t cmd_count) {
+    @autoreleasepool {
         NSMutableData *copy = [NSMutableData dataWithBytes:pixels length:width * height * 4];
         unsigned char *p = copy.mutableBytes;
         for (size_t i = 0; i < width * height; i++, p += 4) {
             for (int c = 0; c < 3; c++) p[c] = (p[c] * p[3] + 127) / 255;
             unsigned char r = p[0]; p[0] = p[2]; p[2] = r;
         }
+        NSData *cmdData = cmds && cmd_count > 0 ? [NSData dataWithBytes:cmds length:cmd_count * sizeof(DrawCommand)] : nil;
         [frameLock lock];
         latestFrame = copy; frameWidth = width; frameHeight = height;
+        latestCmds = cmdData; latestCmdCount = cmd_count;
         BOOL enqueue = !scheduled;
         scheduled = YES;
         [frameLock unlock];
         if (enqueue) dispatch_async(dispatch_get_main_queue(), ^{ presentLatest(); });
     }
 }
+
 void wallify_resize(bool compact) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSRect frame = panel.frame;

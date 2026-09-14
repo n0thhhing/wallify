@@ -30,6 +30,12 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     linkMacos(mod);
+    const native = b.addSystemCommand(&.{ "clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
+    native.addFileArg(b.path("src/platform/native.m"));
+    native.addArg("-o");
+    mod.addObjectFile(native.addOutputFileArg("native.o"));
+    mod.linkFramework("Metal", .{});
+    mod.linkFramework("QuartzCore", .{});
     mod.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
     mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 

@@ -41,6 +41,10 @@ fn initPixels() void {
         }
     }
     initialized = true;
+    var u32_pixels = std.heap.page_allocator.alloc(u32, image_width * image_height) catch return;
+    defer std.heap.page_allocator.free(u32_pixels);
+    @memcpy(std.mem.sliceAsBytes(u32_pixels[0..]), pixels[0..]);
+    @import("../../platform/native.zig").wallify_load_texture(1, u32_pixels.ptr, image_width, image_height);
 }
 
 const Sprite = struct { x: usize, y: usize, w: usize, h: usize };
@@ -53,7 +57,7 @@ const sprites = [_]Sprite{
     .{ .x = @intFromFloat(1143.0 * 0.38), .y = 0, .w = @intFromFloat(283.0 * 0.38), .h = @intFromFloat(135.0 * 0.38) },
 };
 
-pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, pet: bool, pointer: f64, leaving: bool) void {
+pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, pet: bool, pointer: f64, leaving: bool, commands: *([16]@import("../../platform/native.zig").DrawCommand), cmd_count: *usize) void {
     _ = pet;
     _ = pointer;
     _ = leaving;
@@ -69,23 +73,20 @@ pub fn draw(e: *PixelEngine, left: isize, top: isize, width: isize, time: f64, p
     const dx: isize = @intFromFloat(@round((@as(f64, @floatFromInt(left)) + @as(f64, @floatFromInt(width - dw)) / 2.0) * @as(f64, @floatFromInt(e.scale))));
     const dy = (top + 164 - dh - 5) * e.scale;
 
-    var sy: isize = 0;
-    while (sy < dh) : (sy += 1) {
-        const src_y: usize = sprite.y + @as(usize, @intCast(sy));
-        var sx: isize = 0;
-        while (sx < dw) : (sx += 1) {
-            const src_x: usize = sprite.x + @as(usize, @intCast(sx));
-            const i = (src_y * image_width + src_x) * 4;
-            const a = pixels[i + 3];
-            if (a < 64) continue;
-            var v: isize = 0;
-            while (v < e.scale) : (v += 1) {
-                var u: isize = 0;
-                while (u < e.scale) : (u += 1) {
-                    e.blendPixel(dx + sx * e.scale + u, dy + sy * e.scale + v, pixels[i], pixels[i + 1], pixels[i + 2], a);
-                }
-            }
-        }
+    const scale = @as(f32, @floatFromInt(e.scale));
+    if (cmd_count.* < commands.len) {
+        commands[cmd_count.*] = .{
+            .texture_id = 1,
+            .dx = @as(f32, @floatFromInt(dx)), .dy = @as(f32, @floatFromInt(dy)),
+            .dw = @as(f32, @floatFromInt(dw)) * scale,
+            .dh = @as(f32, @floatFromInt(dh)) * scale,
+            .sx = @as(f32, @floatFromInt(sprite.x)) / @as(f32, @floatFromInt(image_width)),
+            .sy = @as(f32, @floatFromInt(sprite.y)) / @as(f32, @floatFromInt(image_height)),
+            .sw = @as(f32, @floatFromInt(sprite.w)) / @as(f32, @floatFromInt(image_width)),
+            .sh = @as(f32, @floatFromInt(sprite.h)) / @as(f32, @floatFromInt(image_height)),
+            .alpha = 1.0,
+        };
+        cmd_count.* += 1;
     }
     drawSleepMarks(e, left + @divTrunc(width - 110, 2) + 20, top + 105, time);
 }
