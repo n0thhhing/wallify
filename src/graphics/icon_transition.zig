@@ -1,26 +1,31 @@
 const std = @import("std");
 
+const SWAP_PROGRESS: f64 = 0.5;
+const SWAP_DURATION: f64 = 0.18;
+const EXPANSION_DURATION: f64 = 0.48;
+
+
 // Measured from the supplied recording: a brief contraction, a visible
 // half-size replacement, then a longer ease-out expansion. No empty frame.
 pub fn scale(mix: f64, playing: bool) f64 {
     const progress = if (playing) mix else 1 - mix;
-    if (progress < 0.5) {
-        const t = progress * 2;
+    if (progress < SWAP_PROGRESS) {
+        const t = progress / SWAP_PROGRESS;
         return 1 - 0.5 * t * t;
     }
-    const remaining = 2 * (1 - progress);
+    const remaining = (1 - progress) / SWAP_PROGRESS;
     return 1 - 0.5 * remaining * remaining * remaining;
 }
 
 pub fn advance(mix: f64, playing: bool, dt: f64) f64 {
     var progress = if (playing) mix else 1 - mix;
     var remaining = @max(0, dt);
-    if (progress < 0.5) {
-        const used = @min(remaining, (0.5 - progress) * 0.18);
-        progress += used / 0.18; // 90 ms to the swap
+    if (progress < SWAP_PROGRESS) {
+        const used = @min(remaining, (SWAP_PROGRESS - progress) * SWAP_DURATION);
+        progress += used / SWAP_DURATION; // 90 ms to the swap
         remaining -= used;
     }
-    progress = @min(1, progress + remaining / 0.48); // 240 ms expansion
+    progress = @min(1, progress + remaining / EXPANSION_DURATION); // 240 ms expansion
     return if (playing) progress else 1 - progress;
 }
 

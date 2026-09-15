@@ -9,13 +9,12 @@ const spotify = @import("media/spotify.zig");
 
 pub fn main() !void {
     @import("platform/native.zig").wallify_prepare();
-    state.desktop_mode = true;
     window.widget_application_init();
     state.loadWidgetSettings();
     if (state.setting_debug) window.widget_debug_window_show();
     state.mode_mix = @floatFromInt(@intFromEnum(state.setting_mode));
     spotify.widget_spotify_observe();
-    if (!@import("platform/native.zig").wallify_create(state.setting_mode == .compact, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
+    if (!@import("platform/native.zig").create(state.setting_mode == .compact, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
@@ -34,6 +33,8 @@ pub fn main() !void {
 }
 
 test {
+    _ = &input.wallify_pointer;
+    _ = @import("graphics/canvas.zig");
     _ = @import("state.zig");
     _ = @import("graphics/pets/idle_cat.zig");
     _ = @import("ui/context_menu.zig");
@@ -44,5 +45,6 @@ test {
     _ = @import("media/controller.zig");
     _ = @import("media/spotify.zig");
     _ = @import("graphics/icon_transition.zig");
-    _ = @import("graphics/pixel_engine.zig");
+    _ = @import("graphics/assets.zig");
+    _ = @import("graphics/sprites.zig");
 }

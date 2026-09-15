@@ -9,6 +9,19 @@ extern "c" fn popen(command: [*c]const u8, modes: [*c]const u8) ?*anyopaque;
 extern "c" fn pclose(stream: *anyopaque) c_int;
 extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
 
+const POLL_INTERVAL_MS: u64 = 250;
+const QUERY_FAILURE_RETRY_MS: u64 = 500;
+const METADATA_HELPER_INTERVAL_US: []const u8 = "100000";
+const ARTWORK_BITMAP_SIZE: []const u8 = "328";
+const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
+const METADATA_LINE_BUFFER_SIZE: usize = 2048;
+const ARTWORK_URL_BUFFER_SIZE: usize = 512;
+const ELAPSED_CHANGE_THRESHOLD: f64 = 1.5;
+const RATE_PLAYING: f64 = 1.0;
+const RATE_STOPPED: f64 = 0.0;
+const RATE_LOCKED: u32 = 1;
+const RATE_LOCK_DURATION: f64 = 1.5;
+
 fn sleep_ms(ms: u64) void {
     const ts = std.posix.timespec{
         .sec = @intCast(ms / 1000),
@@ -61,15 +74,15 @@ pub fn triggerCommand(cmd: MediaRemoteCommand) void {
 
 pub fn togglePlayback() void {
     const now = window.widget_monotonic_time();
-    const target_rate: f64 = if (state.global_rate > 0) 0 else 1;
+    const target_rate: f64 = if (state.global_rate > 0) RATE_STOPPED else RATE_PLAYING;
     const position = state.playback_clock.position(now, state.global_duration);
     state.playback_state.request(target_rate > 0, now);
     state.global_rate = target_rate;
     state.global_elapsed = position;
     state.playback_clock.sync(position, target_rate, now, state.global_duration, true);
     triggerCommand(if (target_rate > 0) .play else .pause);
-    state.global_rate_lock = 1;
-    state.global_rate_lock_until = now + 1.5;
+    state.global_rate_lock = RATE_LOCKED;
+    state.global_rate_lock_until = now + RATE_LOCK_DURATION;
     state.requestFrame();
 }
 
@@ -117,13 +130,13 @@ pub fn metadataLoop(io: std.Io) void {
         "my $libref = DynaLoader::dl_load_file($abs) or exit(2); " ++
         "my $sym = DynaLoader::dl_find_symbol($libref, \"mrc_printNowPlayingInfo\") or exit(3); " ++
         "DynaLoader::dl_install_xsub(\"main::fetch\", $sym); " ++
-        "use Time::HiRes qw(usleep); while (1) { fetch(); usleep(100000); }";
+        "use Time::HiRes qw(usleep); while (1) { fetch(); usleep(" ++ METADATA_HELPER_INTERVAL_US ++ "); }";
 
     const command = "perl -e '" ++ perl_cmd ++ "'";
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    var last_art_url: [512]u8 = undefined;
+    var last_art_url: [ARTWORK_URL_BUFFER_SIZE]u8 = undefined;
     var last_art_url_len: usize = 0;
     var last_source: ?state.MediaSource = null;
 
@@ -138,12 +151,12 @@ pub fn metadataLoop(io: std.Io) void {
 
         if (state.setting_source == .spotify) {
             _ = arena.reset(.retain_capacity);
-            var res_buf: [1024]u8 = undefined;
+            var res_buf: [ARTWORK_REQUEST_BUFFER_SIZE]u8 = undefined;
             const res_len = spotify.widget_query_spotify(&res_buf, res_buf.len);
 
             // Query failures do not mean the application closed.
             if (res_len == 0) {
-                sleep_ms(500);
+                sleep_ms(QUERY_FAILURE_RETRY_MS);
                 continue;
             }
             const closed = std.mem.eql(u8, res_buf[0..res_len], "CLOSED");
@@ -165,7 +178,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_has_artwork = false;
                     state.requestFrame();
                 }
-                sleep_ms(500);
+                sleep_ms(QUERY_FAILURE_RETRY_MS);
                 continue;
             }
 
@@ -183,7 +196,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_has_artwork = false;
                     state.requestFrame();
                 }
-                sleep_ms(250);
+                sleep_ms(POLL_INTERVAL_MS);
                 continue;
             }
 
@@ -213,7 +226,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_rate_lock_until = 0;
                 }
                 const rate_changed = rate != state.global_rate;
-                const elapsed_changed = @abs(elapsed - state.global_elapsed) > 1.5;
+                const elapsed_changed = @abs(elapsed - state.global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
 
                 if (title_changed or artist_changed or rate_changed or elapsed_changed) {
                     @memcpy(state.global_title[0..title_span.len], title_span);
@@ -235,7 +248,7 @@ pub fn metadataLoop(io: std.Io) void {
                             last_art_url_len = art_raw.len;
 
                             _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "curl", "-s", "-f", art_raw, "-o", "/tmp/mrc_art_raw" } }) catch {};
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "328", "328", "-s", "format", "bmp", "/tmp/mrc_art_raw", "--out", "/tmp/art-next.bmp" } }) catch {};
+                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/mrc_art_raw", "--out", "/tmp/art-next.bmp" } }) catch {};
                             if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.global_has_artwork = true;
                                 render.extractColor();
@@ -249,13 +262,13 @@ pub fn metadataLoop(io: std.Io) void {
                     state.requestFrame();
                 }
             }
-            sleep_ms(250);
+            sleep_ms(POLL_INTERVAL_MS);
         } else {
             const stream = popen(command, "r") orelse {
-                sleep_ms(250);
+                sleep_ms(POLL_INTERVAL_MS);
                 continue;
             };
-            var line: [2048]u8 = undefined;
+            var line: [METADATA_LINE_BUFFER_SIZE]u8 = undefined;
             while (fgets(&line, line.len, stream) != null) {
                 if (state.setting_source == .spotify) break;
 
@@ -308,7 +321,7 @@ pub fn metadataLoop(io: std.Io) void {
                         if (title_changed or artist_changed) state.artwork_refresh_pending = true;
                         const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
                         if (artwork_available and state.artwork_refresh_pending) {
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", "328", "328", "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
+                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
                             if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.artwork_refresh_pending = false;
                                 state.global_has_artwork = true;
@@ -322,7 +335,7 @@ pub fn metadataLoop(io: std.Io) void {
                 }
             }
             _ = pclose(stream);
-            sleep_ms(250); // Restart the helper if its stream closes.
+            sleep_ms(POLL_INTERVAL_MS); // Restart the helper if its stream closes.
         }
     }
 }

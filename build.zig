@@ -30,25 +30,31 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     linkMacos(mod);
+    mod.addIncludePath(b.path("src/platform"));
     const native = b.addSystemCommand(&.{ "clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
+    native.addArg("-include");
+    native.addFileArg(b.path("src/platform/gpu.h"));
     native.addFileArg(b.path("src/platform/native.m"));
     native.addArg("-o");
     mod.addObjectFile(native.addOutputFileArg("native.o"));
     mod.linkFramework("Metal", .{});
+    mod.linkFramework("MetalPerformanceShaders", .{});
     mod.linkFramework("QuartzCore", .{});
     mod.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
     mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 
-    const metal_c = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metal", "-c" });
+    const metal_c = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metal", "-fmodules-cache-path=/tmp/wallify-metal-modules", "-c" });
+    metal_c.addArg("-include");
+    metal_c.addFileArg(b.path("src/platform/gpu.h"));
     metal_c.addFileArg(b.path("src/platform/shaders.metal"));
     metal_c.addArg("-o");
     const metal_air = metal_c.addOutputFileArg("shaders.air");
-    
+
     const metallib_cmd = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metallib" });
     metallib_cmd.addFileArg(metal_air);
     metallib_cmd.addArg("-o");
     const metallib_out = metallib_cmd.addOutputFileArg("default.metallib");
-    
+
     const exe = b.addExecutable(.{
         .name = "wallify",
         .root_module = mod,

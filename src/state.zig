@@ -12,40 +12,88 @@ pub const ButtonDef = struct {
     size: usize,
 
     pub fn bounds(self: ButtonDef) hitbox.Rect {
-        const radius: f64 = if (self.id == .PlayPause) 20 else 15;
+        const radius: f64 = if (self.id == .PlayPause) Layout.play_button_hit_radius else Layout.secondary_button_hit_radius;
         return .{ .x = self.x - radius, .y = self.y - radius, .w = radius * 2, .h = radius * 2, .radius = radius };
     }
 };
 
 pub const Layout = struct {
-    width: f64 = 600.0,
-    height: f64 = 200.0,
-    cells_x: f64 = 70.0,
-    cells_y: f64 = 12.0,
+    // Core widget geometry. Keep these here so rendering, hit testing, and
+    // panel management all consume the same source of truth.
+    pub const compact_content_width: f64 = 164.0;
+    pub const compact_content_height: f64 = 164.0;
+    pub const compact_panel_width: f64 = 180.0;
+    pub const compact_panel_height: f64 = 224.0;
+    pub const expanded_panel_width: f64 = 531.0;
+    pub const expanded_panel_height: f64 = 199.0;
+    pub const card_x_compact: f64 = 0.0;
+    pub const card_x_expanded: f64 = 0.0;
+    pub const card_y: f64 = 0.0;
+    pub const art_x_compact: f64 = 0.0;
+    pub const art_x_expanded: f64 = 16.0;
+    pub const art_y_compact: f64 = 0.0;
+    pub const art_y_expanded: f64 = 16.0;
+    pub const art_size_expanded: f64 = 136.0;
+    pub const bar_x_default: f64 = 170.0;
+    pub const bar_y_default: f64 = 70.0;
+    pub const button_y_default: f64 = 107.0;
+    pub const mini_text_width: f64 = 132.0;
+    pub const mini_title_y: f64 = 116.0;
+    pub const mini_artist_y: f64 = 137.0;
+    pub const card_radius: f64 = 26.0;
+    pub const art_corner_radius_compact: f64 = 26.0;
+    pub const art_corner_radius_expanded: f64 = 14.0;
+    pub const grid_pitch: f64 = 180.0;
+    pub const grid_max: u8 = 20;
+    pub const margin_left_default: i32 = 14;
+    pub const margin_top_default: i32 = 12;
+    pub const margin_top_min: i32 = -180;
+    pub const min_bar_width: f64 = 80.0;
+    pub const button_spacing: f64 = 41.0;
+    pub const play_button_hit_radius: f64 = 20.0;
+    pub const secondary_button_hit_radius: f64 = 15.0;
 
-    art_x: f64 = 24.0,
-    art_y: f64 = 24.0,
+    pub fn update(self: *Layout, panel_width: f64, panel_height: f64, mix: f64) void {
+        self.width = panel_width;
+        self.height = panel_height;
+        self.art_x = art_x_compact + (art_x_expanded - art_x_compact) * mix;
+        self.art_y = art_y_compact + (art_y_expanded - art_y_compact) * mix;
+        self.art_size = compact_content_width + (art_size_expanded - compact_content_width) * mix;
+        self.bar_x = bar_x_default;
+        self.bar_y = bar_y_default;
+        self.bar_w = @max(min_bar_width, panel_width - bar_x_default - 30);
+        const center = self.bar_x + self.bar_w / 2;
+        for (&self.buttons, 0..) |*button, i| {
+            button.x = center + (@as(f64, @floatFromInt(i)) - 1) * button_spacing;
+            button.y = button_y_default;
+        }
+    }
+    pub fn card(self: Layout, mix: f64) hitbox.Rect {
+        return .{ .x = card_x_compact + (card_x_expanded - card_x_compact) * mix, .y = card_y, .w = compact_content_width + (self.width - compact_content_width) * mix, .h = compact_content_height, .radius = card_radius };
+    }
+
+    width: f64 = expanded_panel_width,
+    height: f64 = expanded_panel_height,
+
+    art_x: f64 = art_x_expanded,
+    art_y: f64 = art_y_expanded,
     art_size: f64 = 152.0,
 
-    bar_x: f64 = 210.0,
-    bar_y: f64 = 105.0,
+    bar_x: f64 = bar_x_default,
+    bar_y: f64 = bar_y_default,
     bar_w: f64 = 360.0,
     bar_h: f64 = 5.0,
     bar_hit_pad_y: f64 = 14.0,
 
     buttons: [3]ButtonDef = .{
-        .{ .id = .Prev, .name = "Action: Previous", .x = 349.0, .y = 160.0, .size = 12.0 },
-        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = 390.0, .y = 160.0, .size = 14.0 },
-        .{ .id = .Next, .name = "Action: Next", .x = 431.0, .y = 160.0, .size = 12.0 },
+        .{ .id = .Prev, .name = "Action: Previous", .x = 349.0, .y = 125.0, .size = 12.0 },
+        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = 390.0, .y = 125.0, .size = 14.0 },
+        .{ .id = .Next, .name = "Action: Next", .x = 431.0, .y = 125.0, .size = 12.0 },
     },
 };
 
 pub var layout = Layout{};
-pub var desktop_mode = false;
-pub var pixel_mouse = false;
 pub const render_scale = 2;
-
-pub var original_termios: std.posix.termios = undefined;
 
 pub var global_title: [256]u8 = undefined;
 pub var global_title_len: usize = 0;
@@ -173,7 +221,7 @@ pub var spotify_closed = std.atomic.Value(bool).init(false);
 pub var idle_mix: f64 = 0;
 pub var cat_time: f64 = 0;
 pub var cat_pet_until: f64 = 0;
-pub var pointer_x: f64 = 90;
+pub var pointer_x: f64 = Layout.compact_panel_width / 2.0;
 pub fn spotifyIdle() bool {
     return setting_source == .spotify and spotify_closed.load(.acquire);
 }
@@ -200,10 +248,10 @@ pub var widget_grid_y: u8 = 0;
 pub var global_panel_dragging = false;
 pub var widget_drag_start_mouse_x: f64 = 0;
 pub var widget_drag_start_mouse_y: f64 = 0;
-pub var widget_drag_start_margin_left: i32 = 14;
-pub var widget_drag_start_margin_top: i32 = 12;
-pub var widget_margin_left: i32 = 14;
-pub var widget_margin_top: i32 = 12;
+pub var widget_drag_start_margin_left: i32 = Layout.margin_left_default;
+pub var widget_drag_start_margin_top: i32 = Layout.margin_top_default;
+pub var widget_margin_left: i32 = Layout.margin_left_default;
+pub var widget_margin_top: i32 = Layout.margin_top_default;
 pub var panel_position_dirty = false;
 pub var panel_snap_active = false;
 pub var panel_snap_elapsed: f64 = 0;
@@ -222,14 +270,11 @@ pub fn requestFrame() void {
     frame_requested.store(true, .release);
 }
 
-pub var previous_canvas_width: usize = 0;
 pub var artwork_refresh_pending = true;
-pub var cached_art: []u8 = &.{};
-pub var previous_art: []u8 = &.{};
 pub var art_transition_until: f64 = 0;
 
 pub fn loadWidgetSettings() void {
-    const fd = std.posix.openatZ(std.posix.AT.FDCWD, "widget-settings.conf", .{ .ACCMODE = .RDONLY }, 0) catch return;
+    const fd = std.posix.openatZ(std.posix.AT.FDCWD, @import("platform/native.zig").wallify_settings_path(), .{ .ACCMODE = .RDONLY }, 0) catch return;
     defer _ = std.posix.system.close(fd);
     var buffer: [1024]u8 = undefined;
     const n = std.posix.read(fd, &buffer) catch return;
@@ -247,14 +292,14 @@ pub fn loadWidgetSettings() void {
         if (std.mem.eql(u8, key, "animation_speed")) setting_speed = @enumFromInt(@min(2, level));
         if (std.mem.eql(u8, key, "media_source")) setting_source = @enumFromInt(@min(1, level));
         if (std.mem.eql(u8, key, "widget_mode")) setting_mode = @enumFromInt(@min(1, level));
-        if (std.mem.eql(u8, key, "widget_grid_x")) widget_grid_x = @min(20, level);
-        if (std.mem.eql(u8, key, "widget_grid_y")) widget_grid_y = @min(20, level);
+        if (std.mem.eql(u8, key, "widget_grid_x")) widget_grid_x = @min(Layout.grid_max, level);
+        if (std.mem.eql(u8, key, "widget_grid_y")) widget_grid_y = @min(Layout.grid_max, level);
         if (std.mem.eql(u8, key, "widget_margin_left")) {
-            widget_margin_left = @max(0, std.fmt.parseInt(i32, value, 10) catch 14);
+            widget_margin_left = @max(0, std.fmt.parseInt(i32, value, 10) catch Layout.margin_left_default);
             has_saved_margins = true;
         }
         if (std.mem.eql(u8, key, "widget_margin_top")) {
-            widget_margin_top = @max(-180, std.fmt.parseInt(i32, value, 10) catch 12);
+            widget_margin_top = @max(Layout.margin_top_min, std.fmt.parseInt(i32, value, 10) catch Layout.margin_top_default);
             has_saved_margins = true;
         }
         if (std.mem.startsWith(u8, text, "artwork_glow=")) setting_glow = !std.mem.endsWith(u8, text, "false");
@@ -264,19 +309,18 @@ pub fn loadWidgetSettings() void {
         if (std.mem.startsWith(u8, text, "widget_debug=")) setting_debug = !std.mem.endsWith(u8, text, "false");
     }
     if (!has_saved_margins) {
-        widget_margin_left = 14 + @as(i32, widget_grid_x) * 180;
-        widget_margin_top = 12 + @as(i32, widget_grid_y) * 180;
+        widget_margin_left = Layout.margin_left_default + @as(i32, widget_grid_x) * @as(i32, @intFromFloat(Layout.grid_pitch));
+        widget_margin_top = Layout.margin_top_default + @as(i32, widget_grid_y) * @as(i32, @intFromFloat(Layout.grid_pitch));
     }
 }
 
 pub fn saveWidgetSettings() void {
     var buffer: [512]u8 = undefined;
     const text = std.fmt.bufPrint(&buffer, "# Wallify widget preferences; also editable from the right-click menu.\nartwork_glow={s}\nanimations={s}\ndim_paused_artwork={s}\nwidget_debug={s}\nidle_style={d}\nframe_strength={d}\nglow_intensity={d}\nanimation_speed={d}\nmedia_source={d}\nwidget_mode={d}\nwidget_grid_x={d}\nwidget_grid_y={d}\nwidget_margin_left={d}\nwidget_margin_top={d}\n", .{ if (setting_glow) "true" else "false", if (setting_animations) "true" else "false", if (setting_dim) "true" else "false", if (setting_debug) "true" else "false", @intFromEnum(setting_idle_style), @intFromEnum(setting_frame), @intFromEnum(setting_intensity), @intFromEnum(setting_speed), @intFromEnum(setting_source), @intFromEnum(setting_mode), widget_grid_x, widget_grid_y, widget_margin_left, widget_margin_top }) catch return;
-    const fd = std.posix.openatZ(std.posix.AT.FDCWD, "widget-settings.conf", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
+    const fd = std.posix.openatZ(std.posix.AT.FDCWD, @import("platform/native.zig").wallify_settings_path(), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
     defer _ = std.posix.system.close(fd);
     _ = std.posix.system.write(fd, text.ptr, text.len);
 }
-pub var current_image_id: u32 = 1;
 
 test "FrameStrength multiplier reflects visual intensity" {
     try std.testing.expectEqual(@as(f64, 0.0), FrameStrength.off.multiplier());
@@ -354,5 +398,16 @@ test "IdleStyle enum values match serialization integers" {
     try std.testing.expectEqual(@as(u8, 2), @intFromEnum(IdleStyle.banana_cat));
 }
 
-pub var panel_pixel_width: c_int = 0;
-pub var panel_pixel_height: c_int = 0;
+test "layout shares native geometry with rendered card and control hitboxes" {
+    var value = Layout{};
+    value.update(Layout.compact_panel_width, Layout.compact_panel_height, 0);
+    try std.testing.expectEqual(Layout.compact_content_width, value.card(0).w);
+    try std.testing.expectEqual(Layout.art_x_compact, value.art_x);
+    value.update(Layout.expanded_panel_width, Layout.expanded_panel_height, 1);
+    try std.testing.expectEqual(Layout.expanded_panel_width, value.card(1).w);
+    try std.testing.expectEqual(Layout.art_size_expanded, value.art_size);
+    for (value.buttons) |button| {
+        try std.testing.expect(value.card(1).contains(.{ .x = button.x, .y = button.y }));
+        try std.testing.expect(button.bounds().contains(.{ .x = button.x, .y = button.y }));
+    }
+}

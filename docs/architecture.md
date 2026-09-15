@@ -1,49 +1,60 @@
-# Architecture and maintenance
+# Architecture
 
-`main.zig` coordinates shared state, media updates, input, animation, and rendering.
-`media/controller.zig` manages metadata acquisition and updates shared playback
-state; provider-specific Spotify integration and the metadata library live beside
-it. `graphics/render.zig` composes the widget using the pixel engine and specialized
-text, symbol, glow, transition, and pet renderers.
+`main.zig` initializes AppKit and assets, starts animation and media workers, and
+runs the native event loop. `state.Layout` owns logical-point geometry used by
+rendering, input hitboxes, and native panel sizing.
 
-`platform/` provides clean macOS interoperability modules (`core_foundation.zig`,
-`core_graphics.zig`, `core_text.zig`, `objc.zig`, and `media_remote.zig`), with
-`platform/macos.zig` acting as the aggregated facade. Graphics, UI, and media
-modules import platform declarations as a leaf dependency without circular re-exports.
+## GPU renderer
 
-`state.zig` owns shared runtime data and settings serialization. Keep preference
-keys coordinated with `run-desktop.sh`, which reads panel geometry before startup.
-The root `widget-settings.conf` path is deliberately retained for compatibility.
-The Kitty configuration lives in `config/kitty.conf`.
+`graphics/render.zig` composes an ordered scene using `graphics/canvas.zig`.
+A scene contains at most 128 small commands, each with geometry, color, texture
+coordinates, and the shared rounded card clip. `platform/gpu.h` is the single ABI
+definition imported by Zig, Objective-C, and the Metal shader.
 
-## Adding code
+`platform/native.m` snapshots the command list and its immutable texture references
+under a lock. Only the latest pending scene is retained, with at most two GPU
+command buffers in flight. A single render pass draws the commands directly into
+a framebuffer-only CAMetalLayer drawable. Rounded coverage, borders, gradients,
+texture sampling, opacity, and clipping execute in `platform/shaders.metal`.
+No CPU frame buffer or per-frame texture allocation is involved.
 
-- Put graphics primitives in `graphics/`, pet artwork/renderers in `graphics/pets/`,
-  media providers in `media/`, and user interaction code in `ui/`.
-- Keep macOS bridge declarations in `platform/`.
-- Keep tests beside the implementation and import new test modules in `main.zig`.
-- Put asset converters in `tools/` and executable workflow wrappers in `scripts/`.
-- Keep cat artwork as PNGs in `assets/cat/`. The build runs the Swift decoder
-  with expected dimensions and exposes cached output through named embed imports.
-  Never check the generated RGBA data into the source tree.
-- Run the build and unit tests after moving modules; update relative imports,
-  embed paths, launch scripts, and asset documentation together.
+## Cached resources
 
-## Build and helper commands
+`graphics/assets.zig` uploads static sprites and controls once. Media events mark
+artwork dirty; only then is the BMP read, validated, decoded, and hashed. Changed
+artwork gets a new texture and GPU Gaussian blur. The previous textures remain
+available for crossfades. Asset updates and rendering share a Metal command queue,
+so blur completes before a draw samples its result.
 
-`build.zig` defines the player, metadata dylib, unit tests, and cat preview.
-The player and tests share their framework-linking configuration.
-PNG decoding is a cached build dependency shared by the player, tests, and preview.
-Swift and Apple image frameworks are needed at build time; animation does not
-read PNG files at runtime. The preview
-uses the same pixel engine and cat renderer without requiring a running player.
-Its entry point stays under `src/` to keep relative imports within Zig's module
-root; no source-directory symlink is needed.
+`graphics/text_cache.zig` shares one bounded cache for captions, timestamps, and
+marquee text. White Core Text masks are tinted in the shader; positions, widths,
+and animation scale do not change the cache key. Font masks and SF Symbols still
+need CPU rasterization on cache misses, and compressed assets need initial decoding.
+Those operations do not repaint the widget every frame.
 
-`scripts/relaunch.sh` restarts an already installed launch agent for the current
-user. Its default label is `com.levi.spotify-panel`; override it with
-`WALLIFY_LAUNCH_AGENT`. It does not install a launch agent.
+`graphics/sprites.zig` defines atlas regions and validates the RLE data emitted by
+the Swift build helper. Both pet renderers emit textured quads; sleep marks emit
+small GPU rectangles. `preview_cat.zig` is an independent offline contact-sheet
+writer sharing the atlas decoder, without the app or former pixel engine.
 
-The package manifest retains the original `.foo` name and fingerprint to avoid
-changing package identity during an organizational cleanup. Distribution paths
-include the assets, configuration, launchers, and documentation needed by users.
+## Interaction and media
+
+AppKit supplies top-left logical pointer coordinates to `ui/input.zig`. It handles
+playback, seeking, hover, dragging, and right-click menus. Native panel moves and
+resizes are dispatched to AppKit's main thread. There is no terminal input parser
+or keyboard shortcut handler.
+
+`media/controller.zig` coordinates Spotify / MediaRemote metadata and playback.
+`platform/` contains macOS bindings. `state.zig` owns runtime state and preferences;
+bundled runs resolve settings through the native Application Support path.
+
+## Build and verification
+
+The build compiles Zig, the Objective-C bridge, and a Metal library. Swift decodes
+PNG sprite sheets into cached embedded assets. `run.sh` builds ReleaseFast and
+`scripts/package-app.sh` packages and ad-hoc signs `Wallify.app`, including its
+Metal library, Spotify icon, and metadata dylib.
+
+Unit tests cover playback, layout/hitboxes, GPU command clipping, BMP validation,
+and sprite decoding. `WALLIFY_PROFILE=1` enables scene-preparation and GPU timing
+plus upload counters; normal rendering does not print performance logs.

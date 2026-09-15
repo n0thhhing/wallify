@@ -1,58 +1,60 @@
 # Wallify
 
-A macOS desktop music widget written in Zig, displayed through Kitty. It combines
-Spotify / system media metadata, playback controls, and animated idle artwork.
+A native macOS music widget written in Zig with an AppKit window and Metal GPU
+renderer. Includes Spotify / system media metadata, playback controls, animated
+artwork, and cat sprites. No terminal is needed to run the built app.
 
 ## Run
 
-Requires Zig **0.16.0**, Swift (Xcode or Command Line Tools), macOS frameworks, and Kitty with the `kitten` executable
-(on `PATH` or in `/Applications/kitty.app`).
+Build requirements: Zig **0.16.0**, Swift/Clang, and the Xcode Metal toolchain
+(`xcrun metal` and `xcrun metallib`). A Metal-capable Mac is required.
 
 ```sh
-zig build
-./run.sh           # Run in the current Kitty terminal
-./run-desktop.sh   # Build ReleaseFast and launch the desktop panel
+./run.sh                 # Build ReleaseFast, package, and open Wallify.app
 ```
 
-Both launch scripts resolve paths from the project root. The desktop launcher
-replaces the existing player process. Runtime assets and the metadata library are
-loaded relative to the project root; launch through these scripts.
+After building, open `zig-out/Wallify.app` from Finder. Drag the card to move it,
+right-click for settings, and use the buttons and seek bar to control playback.
+Quit from the music-note menu-bar item. There are no keyboard shortcuts, and the
+widget does not take keyboard focus.
+
+Bundled runs save preferences in `~/Library/Application Support/Wallify/`.
+The bundled `widget-settings.conf` seeds the first launch; rebuilding does not
+replace saved preferences. Bare executable development runs use the project root.
 
 ## Develop
 
 ```sh
-zig build test          # Unit tests
-zig fmt --check build.zig build.zig.zon src
-zig build preview-cat   # Render /tmp/wallify-poses.ppm without launching the widget
-./scripts/preview.sh    # Render, convert to PNG, and open the cat preview
+zig build -Doptimize=ReleaseFast
+zig build test
+zig build preview-cat    # Offline sprite contact sheet: /tmp/wallify-poses.ppm
+bash scripts/package-app.sh
 ```
 
-If the default global cache is not writable, append
-`--global-cache-dir /tmp/wallify-global-cache` to build commands.
+If compiler caches are restricted, supply writable `--cache-dir` and
+`--global-cache-dir` paths. The native bridge and Metal compiler use module
+caches under `/tmp`. `zig build` without an optimization option builds Debug;
+use ReleaseFast for performance measurements.
 
-## Layout
+## Rendering
 
-| Path | Purpose |
-| --- | --- |
-| `src/main.zig` | Application and unit-test entry point |
-| `src/state.zig` | Shared runtime state and settings persistence |
-| `src/graphics/` | Rendering, animation, text, symbols, and pixel engine |
-| `src/graphics/pets/` | Cat renderers |
-| `src/media/` | Media controller, providers, metadata bridge, and playback state |
-| `src/platform/` | macOS interoperability facade |
-| `src/ui/` | Input, windows, menus, and hit testing |
-| `src/preview_cat.zig` | Standalone preview entry point sharing the app renderer |
-| `assets/` | Source artwork, runtime Spotify icon, and reference previews |
-| `config/` | Kitty panel configuration |
-| `scripts/` | Development and launch helpers |
-| `tools/` | Asset conversion utilities |
-| `docs/` | Architecture and maintenance notes |
-| `archive/` | Historical notes and incomplete experiments; excluded from packages |
+The live renderer submits a bounded list of drawing commands. Metal draws rounded
+shapes, clipping, gradients, artwork transitions, text, controls, and both sprite
+animations. Metal Performance Shaders blurs artwork when it changes.
 
-`widget-settings.conf` remains at the root because both the player and desktop
-launcher read it there. It contains saved preferences and is rewritten by the app.
-Build output (`zig-out/`) and caches (`.zig-cache/`) are generated and ignored.
-Cat PNGs are decoded at build time into cached RGBA data and embedded in the
-executable; raw `.bin` / `.rgba` assets are not stored in the source tree.
+Artwork and sprite atlases stay in GPU textures. Text and SF Symbols are rasterized
+only when needed and cached as textures; layout and marquee animation move GPU
+quads. There is no full-frame CPU pixel engine, pixel conversion pass, or bitmap
+upload on each frame.
 
-See [architecture](docs/architecture.md) and [cat assets](assets/cat/README.md).
+For optional renderer timing, stop the running app and launch:
+
+```sh
+WALLIFY_PROFILE=1 ./zig-out/Wallify.app/Contents/MacOS/Wallify
+```
+
+Every 300 prepared scenes this reports mean scene-preparation CPU time, completed
+GPU time, draw count, and asset upload bytes. These are renderer measurements,
+not total app CPU usage or end-to-end input latency. Normal app launches are quiet.
+
+See [architecture](docs/architecture.md) for module ownership.

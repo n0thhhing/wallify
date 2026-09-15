@@ -23,78 +23,19 @@ const CFStringGetLength = macos.CFStringGetLength;
 const CGWindowListCopyWindowInfo = macos.CGWindowListCopyWindowInfo;
 const CGRectMakeWithDictionaryRepresentation = macos.CGRectMakeWithDictionaryRepresentation;
 
+const GRID_PITCH: f64 = @import("../state.zig").Layout.grid_pitch;
+const VISIBLE_RIM: f64 = 8.0;
+const SNAP_PREVIEW_INSET: f64 = 7.0;
+const SNAP_THRESHOLD: f64 = 1100.0 * 1100.0;
+const MAX_CANDIDATE_WIDTH: f64 = 1400.0;
+const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
+const MIN_CANDIDATE_SIZE: f64 = 80.0;
+const OUTLINE_RADIUS: f64 = 31.0;
+const DEBUG_PANEL_LEVEL: isize = 101;
+const OUTLINE_LEVEL_FALLBACK: isize = -2;
+
 // 1. Mutex & POSIX & Time Helpers
 var render_mutex: std.atomic.Mutex = .unlocked;
-
-// Kitty's panel is an NSWindow in this process. Moving that window keeps the
-// terminal, image surface, and playback state alive; recreating the panel does
-// not. Positions are stored as desktop-widget grid coordinates.
-var panel_drag_window: Ref = null;
-var panel_drag_mouse: Point = .{ .x = 0, .y = 0 };
-var panel_drag_origin: Point = .{ .x = 0, .y = 0 };
-var panel_drag_grid_x: i32 = 0;
-var panel_drag_grid_y: i32 = 0;
-const widget_grid_pitch: f64 = 180.0;
-
-fn panelWindow() Ref {
-    const app = send0(Ref, objc_getClass("NSApplication"), "sharedApplication");
-    // The persistent debug and snap-preview panels belong to this same
-    // process. Never let either become the draggable Kitty panel.
-    const windows = send0(Ref, app, "windows");
-    const count = send0(usize, windows, "count");
-    for (0..count) |index| {
-        const window = send1(Ref, windows, "objectAtIndex:", usize, index);
-        if (send0(bool, window, "isVisible") and stringEquals(send0(Ref, window, "title"), "spotify-player")) return window;
-    }
-    if (send0(Ref, app, "keyWindow")) |window| if (window != snap_debug_panel and window != snap_outline) return window;
-    if (send0(Ref, app, "mainWindow")) |window| if (window != snap_debug_panel and window != snap_outline) return window;
-    return null;
-}
-
-pub export fn widget_begin_panel_drag(grid_x: c_int, grid_y: c_int) callconv(.c) void {
-    panel_drag_window = panelWindow();
-    panel_drag_mouse = send0(Point, objc_getClass("NSEvent"), "mouseLocation");
-    if (panel_drag_window) |window| panel_drag_origin = send0(Rect, window, "frame").origin;
-    panel_drag_grid_x = @max(0, grid_x);
-    panel_drag_grid_y = @max(0, grid_y);
-}
-
-pub export fn widget_update_panel_drag() callconv(.c) void {
-    const window = panel_drag_window orelse return;
-    const mouse = send0(Point, objc_getClass("NSEvent"), "mouseLocation");
-    const dx = mouse.x - panel_drag_mouse.x;
-    // AppKit's screen coordinates start at the bottom, while widget rows grow
-    // down from the menu bar.
-    const dy = panel_drag_mouse.y - mouse.y;
-    const origin = Point{ .x = panel_drag_origin.x + dx, .y = panel_drag_origin.y - dy };
-    send1(void, window, "setFrameOrigin:", Point, origin);
-}
-
-pub export fn widget_end_panel_drag() callconv(.c) void {
-    if (panel_drag_window) |window| {
-        const screen = send0(Ref, window, "screen");
-        if (screen != null) {
-            const visible = send0(Rect, screen, "visibleFrame");
-            const frame = send0(Rect, window, "frame");
-            panel_drag_grid_x = @max(0, @as(i32, @intFromFloat(@round((frame.origin.x - visible.origin.x - 14) / widget_grid_pitch))));
-            panel_drag_grid_y = @max(0, @as(i32, @intFromFloat(@round((visible.origin.y + visible.size.height - 12 - frame.size.height - frame.origin.y) / widget_grid_pitch))));
-            const snapped = Point{
-                .x = visible.origin.x + 14 + @as(f64, @floatFromInt(panel_drag_grid_x)) * widget_grid_pitch,
-                .y = visible.origin.y + visible.size.height - 12 - frame.size.height - @as(f64, @floatFromInt(panel_drag_grid_y)) * widget_grid_pitch,
-            };
-            send1(void, window, "setFrameOrigin:", Point, snapped);
-        }
-    }
-    panel_drag_window = null;
-}
-
-pub export fn widget_panel_grid_x() callconv(.c) c_int {
-    return panel_drag_grid_x;
-}
-
-pub export fn widget_panel_grid_y() callconv(.c) c_int {
-    return panel_drag_grid_y;
-}
 
 pub export fn widget_render_lock() callconv(.c) void {
     while (!render_mutex.tryLock()) std.Thread.yield() catch {};
@@ -102,33 +43,6 @@ pub export fn widget_render_lock() callconv(.c) void {
 
 pub export fn widget_render_unlock() callconv(.c) void {
     render_mutex.unlock();
-}
-
-pub export fn widget_terminal_columns() callconv(.c) c_int {
-    var size: std.posix.winsize = std.mem.zeroes(std.posix.winsize);
-    return if (std.posix.system.ioctl(std.posix.STDIN_FILENO, std.posix.T.IOCGWINSZ, &size) == 0) size.col else 0;
-}
-
-pub export fn widget_terminal_rows() callconv(.c) c_int {
-    var size: std.posix.winsize = std.mem.zeroes(std.posix.winsize);
-    return if (std.posix.system.ioctl(std.posix.STDIN_FILENO, std.posix.T.IOCGWINSZ, &size) == 0) size.row else 0;
-}
-
-pub export fn widget_scale_factor() callconv(.c) f64 {
-    const screen = send0(Ref, objc_getClass("NSScreen"), "mainScreen") orelse return 1.0;
-    return send0(f64, screen, "backingScaleFactor");
-}
-
-pub export fn widget_cell_width() callconv(.c) f64 {
-    var size: std.posix.winsize = std.mem.zeroes(std.posix.winsize);
-    if (std.posix.system.ioctl(std.posix.STDIN_FILENO, std.posix.T.IOCGWINSZ, &size) != 0 or size.col == 0) return 0;
-    return @as(f64, @floatFromInt(size.xpixel)) / @as(f64, @floatFromInt(size.col));
-}
-
-pub export fn widget_cell_height() callconv(.c) f64 {
-    var size: std.posix.winsize = std.mem.zeroes(std.posix.winsize);
-    if (std.posix.system.ioctl(std.posix.STDIN_FILENO, std.posix.T.IOCGWINSZ, &size) != 0 or size.row == 0) return 0;
-    return @as(f64, @floatFromInt(size.ypixel)) / @as(f64, @floatFromInt(size.row));
 }
 
 pub export fn widget_monotonic_time() callconv(.c) f64 {
@@ -162,20 +76,20 @@ var snap_last_distance_sq: f64 = 0;
 var snap_last_visual: Point = .{ .x = 0, .y = 0 };
 var snap_last_margin: Point = .{ .x = 0, .y = 0 };
 var snap_debug_mode_mix: f64 = 0;
-var snap_debug_card_width: f64 = 164;
-var snap_debug_card_height: f64 = 164;
+var snap_debug_card_width: f64 = @import("../state.zig").Layout.compact_content_width;
+var snap_debug_card_height: f64 = @import("../state.zig").Layout.compact_content_height;
 var snap_debug_dragging = false;
 
-const KittyWindowInfo = struct { number: i64 = 0, layer: i64 = 0, frame: Rect = rect(0, 0, 0, 0) };
+const PanelWindowInfo = struct { number: i64 = 0, layer: i64 = 0, frame: Rect = rect(0, 0, 0, 0) };
 
-fn kittyPlayerWindowInfo() KittyWindowInfo {
+fn playerWindowInfo() PanelWindowInfo {
     const list = CGWindowListCopyWindowInfo(1, 0) orelse return .{};
     defer CFRelease(list);
     const count = CFArrayGetCount(list);
     var index: isize = 0;
     while (index < count) : (index += 1) {
         const info = CFArrayGetValueAtIndex(list, index);
-        if (!stringEquals(CFDictionaryGetValue(info, macos.kCGWindowName), "spotify-player")) continue;
+        if (!stringEquals(CFDictionaryGetValue(info, macos.kCGWindowName), "Wallify")) continue;
         const value = CFDictionaryGetValue(info, macos.kCGWindowNumber) orelse continue;
         var number: i64 = 0;
         if (!CFNumberGetValue(value, 4, @ptrCast(&number))) continue;
@@ -206,8 +120,8 @@ fn updateSnapDebug() void {
         if (panel == null) return;
         snap_debug_panel = panel;
         send1(void, panel, "setTitle:", Ref, string("Wallify Snap Debug"));
-        send1(void, panel, "setLevel:", isize, 101);
-        // NSPanel normally hides whenever its app deactivates. Kitty changes
+        send1(void, panel, "setLevel:", isize, DEBUG_PANEL_LEVEL);
+        // NSPanel normally hides whenever its app deactivates. Wallify changes
         // activation while a panel moves, so make this an actual persistent
         // inspector rather than a transient utility panel.
         send1(void, panel, "setHidesOnDeactivate:", bool, false);
@@ -237,12 +151,12 @@ fn updateSnapDebug() void {
     }
     var message: [512]u8 = undefined;
     const actual = if (snap_outline) |panel| send0(Rect, panel, "frame") else rect(0, 0, 0, 0);
-    const kitty = kittyPlayerWindowInfo();
+    const player = playerWindowInfo();
     const screen = send0(Ref, objc_getClass("NSScreen"), "mainScreen");
     const screen_frame = if (screen) |value| send0(Rect, value, "frame") else rect(0, 0, 0, 0);
     const outline_level = if (snap_outline) |value| send0(isize, value, "level") else 0;
     const outline_number = if (snap_outline) |value| send0(isize, value, "windowNumber") else 0;
-    const text = std.fmt.bufPrint(&message, "WALLIFY SNAP DEBUG  •  one process\nDrag={s}  mode mix={d:.2}  card={d:.0}×{d:.0}\nPreview ≤180  commit ≤150  candidates={d}  distance²={d:.0}\nMargins: x={d:.0} y={d:.0}  visual: x={d:.0} y={d:.0}\nTarget CG:  x={d:.0} y={d:.0}  {d:.0}×{d:.0}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0} visible={s}\nOutline #{d} level={d}  screen={d:.0}×{d:.0}\nKitty CG #{d} layer={d}: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ if (snap_debug_dragging) "yes" else "no", snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, snap_candidate_count, snap_last_distance_sq, snap_last_margin.x, snap_last_margin.y, snap_last_visual.x, snap_last_visual.y, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, actual.origin.x, actual.origin.y, actual.size.width, actual.size.height, if (snap_outline != null and send0(bool, snap_outline, "isVisible")) "yes" else "no", outline_number, outline_level, screen_frame.size.width, screen_frame.size.height, kitty.number, kitty.layer, kitty.frame.origin.x, kitty.frame.origin.y, kitty.frame.size.width, kitty.frame.size.height }) catch return;
+    const text = std.fmt.bufPrint(&message, "WALLIFY SNAP DEBUG  •  one process\nDrag={s}  mode mix={d:.2}  card={d:.0}×{d:.0}\nPreview ≤180  commit ≤150  candidates={d}  distance²={d:.0}\nMargins: x={d:.0} y={d:.0}  visual: x={d:.0} y={d:.0}\nTarget CG:  x={d:.0} y={d:.0}  {d:.0}×{d:.0}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0} visible={s}\nOutline #{d} level={d}  screen={d:.0}×{d:.0}\nWallify CG #{d} layer={d}: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ if (snap_debug_dragging) "yes" else "no", snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, snap_candidate_count, snap_last_distance_sq, snap_last_margin.x, snap_last_margin.y, snap_last_visual.x, snap_last_visual.y, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, actual.origin.x, actual.origin.y, actual.size.width, actual.size.height, if (snap_outline != null and send0(bool, snap_outline, "isVisible")) "yes" else "no", outline_number, outline_level, screen_frame.size.width, screen_frame.size.height, player.number, player.layer, player.frame.origin.x, player.frame.origin.y, player.frame.size.width, player.frame.size.height }) catch return;
     setLabelText(snap_debug_text, text);
     if (!send0(bool, snap_debug_panel, "isVisible")) {
         send1(void, snap_debug_panel, "setAlphaValue:", f64, 0);
@@ -258,7 +172,7 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
     // rim. Keep its logical target exact, then expand only its visual shell.
     // The guide remains visible outside the card even when it is underneath
     // the moving player near the final drop location.
-    const inset: f64 = 7;
+    const inset: f64 = SNAP_PREVIEW_INSET;
     const preview_rect = rect(
         snap_outline_rect.origin.x - inset,
         snap_outline_rect.origin.y - inset,
@@ -283,7 +197,7 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
         send1(void, panel, "setHasShadow:", bool, false);
         send1(void, panel, "setHidesOnDeactivate:", bool, false);
         send1(void, panel, "setReleasedWhenClosed:", bool, false);
-        // A level strictly below Kitty's panel ensures the guide stays underneath
+        // A level strictly below Wallify's panel ensures the guide stays underneath
         // the card even across separate process hierarchies.
         send1(void, panel, "setLevel:", isize, -2);
         // Keep the preview with the desktop across spaces and above the
@@ -298,15 +212,15 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
         const layer = send0(Ref, view, "layer");
         send1(void, layer, "setMasksToBounds:", bool, true);
         // Card rim is 26pt; the 5pt outer preview shell follows it at 31pt.
-        send1(void, layer, "setCornerRadius:", f64, 31);
+        send1(void, layer, "setCornerRadius:", f64, OUTLINE_RADIUS);
         send1(void, layer, "setBorderWidth:", f64, 3);
         const rim = send1(Ref, send0(Ref, objc_getClass("NSColor"), "systemGrayColor"), "colorWithAlphaComponent:", f64, 0.78);
         send1(void, layer, "setBorderColor:", Ref, send0(Ref, rim, "CGColor"));
         send1(void, layer, "setBackgroundColor:", Ref, send0(Ref, send0(Ref, objc_getClass("NSColor"), "clearColor"), "CGColor"));
     }
     send2(void, snap_outline, "setFrame:display:", Rect, frame, bool, true);
-    const kitty_info = kittyPlayerWindowInfo();
-    const target_level: isize = if (kitty_info.number > 0) @as(isize, @intCast(kitty_info.layer)) - 1 else -2;
+    const panel_info = playerWindowInfo();
+    const target_level: isize = if (panel_info.number > 0) @as(isize, @intCast(panel_info.layer)) - 1 else OUTLINE_LEVEL_FALLBACK;
     send1(void, snap_outline, "setLevel:", isize, target_level);
     send0(void, snap_outline, "orderFrontRegardless");
     if (!snap_outline_was_visible) {
@@ -368,18 +282,12 @@ fn stringEquals(value: Ref, expected: []const u8) bool {
     return std.mem.eql(u8, std.mem.sliceTo(&buffer, 0), expected);
 }
 
-fn stringContains(value: Ref, needle: []const u8) bool {
-    if (value == null) return false;
-    var buffer: [128]u8 = undefined;
-    if (CFStringGetCString(value, &buffer, buffer.len, 0x08000100) == 0) return false;
-    return std.mem.indexOf(u8, std.mem.sliceTo(&buffer, 0), needle) != null;
-}
-
 var cached_offset_x: f64 = 0;
 var cached_offset_y: f64 = 36;
 var has_cached_offsets: bool = false;
 
 pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width: f64) callconv(.c) void {
+    _ = visual_width;
     const list = CGWindowListCopyWindowInfo(1, 0) orelse return;
     defer CFRelease(list);
     const count = CFArrayGetCount(list);
@@ -389,16 +297,7 @@ pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width:
         const bounds_dict = CFDictionaryGetValue(info, macos.kCGWindowBounds) orelse continue;
         var bounds: Rect = undefined;
         if (!CGRectMakeWithDictionaryRepresentation(bounds_dict, &bounds)) continue;
-        if (stringEquals(CFDictionaryGetValue(info, macos.kCGWindowName), "spotify-player")) {
-            cached_offset_x = bounds.origin.x - @as(f64, @floatFromInt(margin_left));
-            cached_offset_y = bounds.origin.y - @as(f64, @floatFromInt(margin_top));
-            has_cached_offsets = true;
-            return;
-        }
-        const owner = CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
-        if (stringContains(owner, "kitty") and
-            bounds.size.width >= visual_width * 0.7 and bounds.size.width <= visual_width * 5.0)
-        {
+        if (stringEquals(CFDictionaryGetValue(info, macos.kCGWindowName), "Wallify")) {
             cached_offset_x = bounds.origin.x - @as(f64, @floatFromInt(margin_left));
             cached_offset_y = bounds.origin.y - @as(f64, @floatFromInt(margin_top));
             has_cached_offsets = true;
@@ -422,7 +321,7 @@ pub export fn widget_nearby_panel_snap(margin_left: i32, margin_top: i32, visual
         if (!CGRectMakeWithDictionaryRepresentation(bounds_dict, &bounds)) continue;
         const owner = CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
         if (!stringEquals(owner, "Notification Center")) continue;
-        if (bounds.size.width < 80 or bounds.size.height < 80 or bounds.size.width > 1400 or bounds.size.height > 800) continue;
+        if (bounds.size.width < MIN_CANDIDATE_SIZE or bounds.size.height < MIN_CANDIDATE_SIZE or bounds.size.width > MAX_CANDIDATE_WIDTH or bounds.size.height > MAX_CANDIDATE_HEIGHT) continue;
         if (candidate_count < candidates.len) {
             candidates[candidate_count] = bounds;
             candidate_count += 1;
@@ -453,15 +352,15 @@ pub fn calculatePanelSnap(
     visual_left: f64,
     visual_top: f64,
 ) PanelSnap {
-    const grid_pitch: f64 = 180.0;
-    // Align the rendered card rim, which sits a few points inside Kitty's
+    const grid_pitch: f64 = GRID_PITCH;
+    // Align the rendered card rim, which sits a few points inside Wallify's
     // surface, rather than the surface's raw CGWindow bounds.
-    const visible_rim_x: f64 = 8.0;
-    const visible_rim_y: f64 = 8.0;
+    const visible_rim_x: f64 = VISIBLE_RIM;
+    const visible_rim_y: f64 = VISIBLE_RIM;
     // Capture begins while the player is still visibly approaching a widget;
     // on a large desktop, the former one-slot radius was too small to ever
     // expose a preview before mouse-up.
-    const threshold_sq: f64 = 1100.0 * 1100.0;
+    const threshold_sq: f64 = SNAP_THRESHOLD;
     var best_dist = threshold_sq;
     var result = PanelSnap{};
     // Compact occupies one grid column. Expanded occupies three tiles, and
