@@ -8,9 +8,9 @@ preview_frame
 dump_windows
 test_fs
 test_send1
-f
-
 # Scratch experiments & temporary test scripts
+out
+*.diff
 scratch_out/
 dump_windows.zig
 test_fs.zig
@@ -35,3 +35,4 @@ screenshot.png
 *.log
 *.tmp
 *.sock
+zls.json

@@ -32,13 +32,6 @@ fn sleep_ms(ms: u64) void {
 
 pub const MediaRemoteCommand = media_remote.MediaRemoteCommand;
 
-pub const MRMediaRemoteCommandPlay = MediaRemoteCommand.play;
-pub const MRMediaRemoteCommandPause = MediaRemoteCommand.pause;
-pub const MRMediaRemoteCommandTogglePlayPause = MediaRemoteCommand.toggle_play_pause;
-pub const MRMediaRemoteCommandStop = MediaRemoteCommand.stop;
-pub const MRMediaRemoteCommandNextTrack = MediaRemoteCommand.next_track;
-pub const MRMediaRemoteCommandPreviousTrack = MediaRemoteCommand.previous_track;
-
 pub fn triggerSeekInner(target: f64) void {
     if (state.setting_source == .spotify) {
         spotify.widget_spotify_seek(target);

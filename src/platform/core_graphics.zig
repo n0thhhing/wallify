@@ -14,6 +14,7 @@ pub extern "c" var kCGWindowName: Ref;
 pub extern "c" var kCGWindowOwnerName: Ref;
 pub extern "c" var kCGWindowLayer: Ref;
 pub extern "c" var kCGWindowNumber: Ref;
+pub extern "c" var kCGWindowAlpha: Ref;
 
 pub extern "c" fn CGWindowListCopyWindowInfo(option: u32, relative_to_window: u32) Ref;
 pub extern "c" fn CGRectMakeWithDictionaryRepresentation(dict: Ref, out_rect: *Rect) bool;

@@ -4,7 +4,6 @@ const SWAP_PROGRESS: f64 = 0.5;
 const SWAP_DURATION: f64 = 0.18;
 const EXPANSION_DURATION: f64 = 0.48;
 
-
 // Measured from the supplied recording: a brief contraction, a visible
 // half-size replacement, then a longer ease-out expansion. No empty frame.
 pub fn scale(mix: f64, playing: bool) f64 {

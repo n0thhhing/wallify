@@ -60,6 +60,7 @@ pub fn animationLoop() void {
             .next_track => media.triggerCommand(.next_track),
             .open_spotify => spotify.widget_open_spotify(),
             .toggle_glow => state.setting_glow = !state.setting_glow,
+            .toggle_aurora => state.setting_aurora = !state.setting_aurora,
             .toggle_animations => state.setting_animations = !state.setting_animations,
             .toggle_dim => state.setting_dim = !state.setting_dim,
             .idle_spotify => state.setting_idle_style = .spotify,
@@ -78,6 +79,7 @@ pub fn animationLoop() void {
                 resizePanel(false);
                 state.setting_idle_style = .spotify;
                 state.setting_glow = true;
+                state.setting_aurora = true;
                 state.setting_animations = true;
                 state.setting_dim = true;
                 state.setting_frame = .subtle;
@@ -180,6 +182,20 @@ pub fn animationLoop() void {
             state.marquee_offset = 0;
             state.marquee_direction = 1;
         }
+
+        const aurora_target: f64 = if (state.setting_aurora and state.global_rate > 0 and state.idle_mix < 0.5 and state.global_has_artwork) 1 else 0;
+        if (!state.setting_animations) {
+            state.aurora_mix = aurora_target;
+        } else if (@abs(state.aurora_mix - aurora_target) > 0.001) {
+            state.aurora_mix += (aurora_target - state.aurora_mix) * @min(1, dt * 3.5);
+            needs_draw = true;
+        } else {
+            state.aurora_mix = aurora_target;
+        }
+        if (state.aurora_mix > 0.001 and state.global_rate > 0 and state.setting_animations) {
+            needs_draw = true;
+        }
+
         previous_time = now;
         const seek_target: f64 = if (state.global_is_dragging) 1 else 0;
         if (@abs(state.seek_expansion - seek_target) > SEEK_EXPANSION_EPSILON or @abs(state.seek_velocity) > SEEK_VELOCITY_EPSILON) {

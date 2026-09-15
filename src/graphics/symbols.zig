@@ -13,8 +13,8 @@ var symbol_sizes: [4]macos.Size = .{ .{ .width = 0, .height = 0 }, .{ .width = 0
 var symbol_once: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
 
 pub fn initSymbols() void {
-    const pool = macos.send0(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc"), "init");
-    defer macos.send0(void, pool, "release");
+    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
+    defer macos.send(void, pool, "release", .{});
 
     const names = [_][]const u8{ "play.fill", "pause.fill", "backward.fill", "forward.fill" };
     const img_cls = macos.objc_getClass("NSImage");
@@ -25,22 +25,31 @@ pub fn initSymbols() void {
 
         const name_str = macos.string(name);
         defer macos.CFRelease(name_str);
-        var img = macos.send2(macos.Ref, img_cls, "imageWithSystemSymbolName:accessibilityDescription:", macos.Ref, name_str, macos.Ref, null);
+        var img = macos.send(macos.Ref, img_cls, "imageWithSystemSymbolName:accessibilityDescription:", .{ name_str, @as(macos.Ref, null) });
         if (img == null) continue;
 
-        const cfg = macos.send2(macos.Ref, cfg_cls, "configurationWithPointSize:weight:", f64, pt_size, f64, 0.0);
-        img = macos.send1(macos.Ref, img, "imageWithSymbolConfiguration:", macos.Ref, cfg);
+        const cfg = macos.send(macos.Ref, cfg_cls, "configurationWithPointSize:weight:", .{ pt_size, @as(f64, 0.0) });
+        img = macos.send(macos.Ref, img, "imageWithSymbolConfiguration:", .{cfg});
         if (img == null) continue;
 
-        const sz = macos.send0(macos.Size, img, "size");
+        const sz = macos.send(macos.Size, img, "size", .{});
         const raster_sz = macos.Size{ .width = sz.width * 3, .height = sz.height * 3 };
 
-        const raster = macos.send1(macos.Ref, macos.send0(macos.Ref, img_cls, "alloc"), "initWithSize:", macos.Size, raster_sz);
-        macos.send0(void, raster, "lockFocus");
-        macos.send4(void, img, "drawInRect:fromRect:operation:fraction:", macos.Rect, macos.rect(0, 0, raster_sz.width, raster_sz.height), macos.Rect, macos.rect(0, 0, 0, 0), usize, 2, f64, 1.0);
-        macos.send0(void, raster, "unlockFocus");
+        const raster = macos.send(macos.Ref, macos.send(macos.Ref, img_cls, "alloc", .{}), "initWithSize:", .{raster_sz});
+        macos.send(void, raster, "lockFocus", .{});
+        macos.send(void, img, "drawInRect:fromRect:operation:fraction:", .{
+            macos.rect(0, 0, raster_sz.width, raster_sz.height),
+            macos.rect(0, 0, 0, 0),
+            @as(usize, 2),
+            @as(f64, 1.0),
+        });
+        macos.send(void, raster, "unlockFocus", .{});
 
-        const cg = macos.send3(macos.Ref, raster, "CGImageForProposedRect:context:hints:", ?*macos.Rect, null, macos.Ref, null, macos.Ref, null);
+        const cg = macos.send(macos.Ref, raster, "CGImageForProposedRect:context:hints:", .{
+            @as(?*macos.Rect, null),
+            @as(macos.Ref, null),
+            @as(macos.Ref, null),
+        });
         if (cg != null) {
             symbol_images[i] = macos.CGImageRetain(cg);
             symbol_sizes[i] = sz;

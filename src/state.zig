@@ -226,6 +226,8 @@ pub fn spotifyIdle() bool {
     return setting_source == .spotify and spotify_closed.load(.acquire);
 }
 pub var setting_glow = true;
+pub var setting_aurora = true;
+pub var aurora_mix: f64 = 0.0;
 pub var setting_animations = true;
 pub var setting_dim = true;
 // Diagnostics are opt-in, including when preferences are missing.
@@ -303,6 +305,7 @@ pub fn loadWidgetSettings() void {
             has_saved_margins = true;
         }
         if (std.mem.startsWith(u8, text, "artwork_glow=")) setting_glow = !std.mem.endsWith(u8, text, "false");
+        if (std.mem.startsWith(u8, text, "aurora=")) setting_aurora = !std.mem.endsWith(u8, text, "false");
         if (std.mem.startsWith(u8, text, "animations=")) setting_animations = !std.mem.endsWith(u8, text, "false");
         if (std.mem.startsWith(u8, text, "dim_paused_artwork=")) setting_dim = !std.mem.endsWith(u8, text, "false");
         if (std.mem.eql(u8, key, "idle_style")) setting_idle_style = @enumFromInt(@min(2, level));
@@ -316,7 +319,42 @@ pub fn loadWidgetSettings() void {
 
 pub fn saveWidgetSettings() void {
     var buffer: [512]u8 = undefined;
-    const text = std.fmt.bufPrint(&buffer, "# Wallify widget preferences; also editable from the right-click menu.\nartwork_glow={s}\nanimations={s}\ndim_paused_artwork={s}\nwidget_debug={s}\nidle_style={d}\nframe_strength={d}\nglow_intensity={d}\nanimation_speed={d}\nmedia_source={d}\nwidget_mode={d}\nwidget_grid_x={d}\nwidget_grid_y={d}\nwidget_margin_left={d}\nwidget_margin_top={d}\n", .{ if (setting_glow) "true" else "false", if (setting_animations) "true" else "false", if (setting_dim) "true" else "false", if (setting_debug) "true" else "false", @intFromEnum(setting_idle_style), @intFromEnum(setting_frame), @intFromEnum(setting_intensity), @intFromEnum(setting_speed), @intFromEnum(setting_source), @intFromEnum(setting_mode), widget_grid_x, widget_grid_y, widget_margin_left, widget_margin_top }) catch return;
+    const text = std.fmt.bufPrint(
+        &buffer,
+        "# Wallify widget preferences; also editable from the right-click menu.\n" ++
+            "artwork_glow={s}\n" ++
+            "aurora={s}\n" ++
+            "animations={s}\n" ++
+            "dim_paused_artwork={s}\n" ++
+            "widget_debug={s}\n" ++
+            "idle_style={d}\n" ++
+            "frame_strength={d}\n" ++
+            "glow_intensity={d}\n" ++
+            "animation_speed={d}\n" ++
+            "media_source={d}\n" ++
+            "widget_mode={d}\n" ++
+            "widget_grid_x={d}\n" ++
+            "widget_grid_y={d}\n" ++
+            "widget_margin_left={d}\n" ++
+            "widget_margin_top={d}\n",
+        .{
+            if (setting_glow) "true" else "false",
+            if (setting_aurora) "true" else "false",
+            if (setting_animations) "true" else "false",
+            if (setting_dim) "true" else "false",
+            if (setting_debug) "true" else "false",
+            @intFromEnum(setting_idle_style),
+            @intFromEnum(setting_frame),
+            @intFromEnum(setting_intensity),
+            @intFromEnum(setting_speed),
+            @intFromEnum(setting_source),
+            @intFromEnum(setting_mode),
+            widget_grid_x,
+            widget_grid_y,
+            widget_margin_left,
+            widget_margin_top,
+        },
+    ) catch return;
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, @import("platform/native.zig").wallify_settings_path(), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
     defer _ = std.posix.system.close(fd);
     _ = std.posix.system.write(fd, text.ptr, text.len);
@@ -338,76 +376,4 @@ test "AnimationSpeed multiplier paces framerate transitions" {
     try std.testing.expectEqual(@as(f64, 0.7), AnimationSpeed.slow.multiplier());
     try std.testing.expectEqual(@as(f64, 1.0), AnimationSpeed.normal.multiplier());
     try std.testing.expectEqual(@as(f64, 1.4), AnimationSpeed.fast.multiplier());
-}
-
-test "HitTarget fromActionId and toActionId are consistent" {
-    const actions = [_]ActionId{ .PlayPause, .Prev, .Next };
-    for (actions) |action| {
-        const target = HitTarget.fromActionId(action);
-        try std.testing.expectEqual(action, target.toActionId().?);
-    }
-    try std.testing.expect(HitTarget.none.toActionId() == null);
-    try std.testing.expect(HitTarget.art.toActionId() == null);
-    try std.testing.expect(HitTarget.bar.toActionId() == null);
-}
-
-test "ButtonDef bounds calculates centering and radius" {
-    const play_btn = ButtonDef{ .id = .PlayPause, .name = "Action: Play/Pause", .x = 100, .y = 100, .size = 14 };
-    const play_b = play_btn.bounds();
-    try std.testing.expectEqual(@as(f64, 80), play_b.x);
-    try std.testing.expectEqual(@as(f64, 80), play_b.y);
-    try std.testing.expectEqual(@as(f64, 40), play_b.w);
-    try std.testing.expectEqual(@as(f64, 40), play_b.h);
-    try std.testing.expectEqual(@as(f64, 20), play_b.radius);
-
-    const prev_btn = ButtonDef{ .id = .Prev, .name = "Action: Previous", .x = 100, .y = 100, .size = 12 };
-    const prev_b = prev_btn.bounds();
-    try std.testing.expectEqual(@as(f64, 85), prev_b.x);
-    try std.testing.expectEqual(@as(f64, 85), prev_b.y);
-    try std.testing.expectEqual(@as(f64, 30), prev_b.w);
-    try std.testing.expectEqual(@as(f64, 30), prev_b.h);
-    try std.testing.expectEqual(@as(f64, 15), prev_b.radius);
-}
-
-test "HitTarget labels provide descriptive names" {
-    try std.testing.expectEqualStrings("None", HitTarget.none.label());
-    try std.testing.expectEqualStrings("Geometry: Art", HitTarget.art.label());
-    try std.testing.expectEqualStrings("Geometry: Bar", HitTarget.bar.label());
-    try std.testing.expectEqualStrings("Action: Play/Pause", HitTarget.button_play_pause.label());
-}
-
-test "idle tile requires Spotify-only source and a closed application" {
-    const old_source = setting_source;
-    const old_closed = spotify_closed.load(.acquire);
-    defer {
-        setting_source = old_source;
-        spotify_closed.store(old_closed, .release);
-    }
-    setting_source = .now_playing;
-    spotify_closed.store(true, .release);
-    try std.testing.expect(!spotifyIdle());
-    setting_source = .spotify;
-    try std.testing.expect(spotifyIdle());
-    spotify_closed.store(false, .release);
-    try std.testing.expect(!spotifyIdle());
-}
-
-test "IdleStyle enum values match serialization integers" {
-    try std.testing.expectEqual(@as(u8, 0), @intFromEnum(IdleStyle.spotify));
-    try std.testing.expectEqual(@as(u8, 1), @intFromEnum(IdleStyle.pixel_cat));
-    try std.testing.expectEqual(@as(u8, 2), @intFromEnum(IdleStyle.banana_cat));
-}
-
-test "layout shares native geometry with rendered card and control hitboxes" {
-    var value = Layout{};
-    value.update(Layout.compact_panel_width, Layout.compact_panel_height, 0);
-    try std.testing.expectEqual(Layout.compact_content_width, value.card(0).w);
-    try std.testing.expectEqual(Layout.art_x_compact, value.art_x);
-    value.update(Layout.expanded_panel_width, Layout.expanded_panel_height, 1);
-    try std.testing.expectEqual(Layout.expanded_panel_width, value.card(1).w);
-    try std.testing.expectEqual(Layout.art_size_expanded, value.art_size);
-    for (value.buttons) |button| {
-        try std.testing.expect(value.card(1).contains(.{ .x = button.x, .y = button.y }));
-        try std.testing.expect(button.bounds().contains(.{ .x = button.x, .y = button.y }));
-    }
 }

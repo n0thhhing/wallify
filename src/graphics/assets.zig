@@ -13,6 +13,7 @@ pub const transition_duration = 0.5;
 fn upload(texture: Texture, pixels: []const u32, w: usize, h: usize) void {
     native.wallify_load_texture(@intFromEnum(texture), pixels.ptr, w, h);
 }
+
 pub fn init() !void {
     if (initialized) return;
     upload(.white, &.{0xffffffff}, 1, 1);
@@ -64,6 +65,7 @@ pub const Bitmap = struct {
         return @as(u32, p[2]) | (@as(u32, p[1]) << 8) | (@as(u32, p[0]) << 16) | 0xff000000;
     }
 };
+
 pub fn refreshArtwork() void {
     if (!artwork_dirty.swap(false, .acq_rel)) return;
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/art.bmp", .{ .ACCMODE = .RDONLY }, 0) catch return;
@@ -102,6 +104,7 @@ pub fn refreshArtwork() void {
     state.extracted_g = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[1])) / @as(f64, @floatFromInt(pixels.len)) * boost));
     state.extracted_b = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[2])) / @as(f64, @floatFromInt(pixels.len)) * boost));
 }
+
 test "BMP decoder handles row padding and rejects truncated data" {
     var data = [_]u8{0} ** 62;
     @memcpy(data[0..2], "BM");

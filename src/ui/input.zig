@@ -35,7 +35,18 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         state.global_panel_dragging = false;
         window.widget_hide_snap_outline();
         state.global_hover_target = .none;
-        menu.widget_context_menu(@intFromBool(state.global_rate > 0), @intFromBool(state.setting_glow), @intFromBool(state.setting_animations), @intFromBool(state.setting_dim), state.setting_frame, state.setting_intensity, state.setting_speed, state.setting_source, state.setting_mode);
+        menu.widget_context_menu(
+            @intFromBool(state.global_rate > 0),
+            @intFromBool(state.setting_glow),
+            @intFromBool(state.setting_aurora),
+            @intFromBool(state.setting_animations),
+            @intFromBool(state.setting_dim),
+            state.setting_frame,
+            state.setting_intensity,
+            state.setting_speed,
+            state.setting_source,
+            state.setting_mode,
+        );
         state.requestFrame();
         return;
     }

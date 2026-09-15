@@ -2,6 +2,7 @@ const state = @import("../state.zig");
 pub const gpu = @cImport({
     @cInclude("gpu.h");
 });
+
 pub const DrawCommand = gpu.DrawCommand;
 pub extern fn wallify_present(width: f32, height: f32, cmds: [*]const DrawCommand, count: usize) void;
 extern fn wallify_create(width: c_int, height: c_int, margin_left: c_int, margin_top: c_int) bool;

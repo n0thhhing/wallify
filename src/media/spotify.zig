@@ -32,24 +32,24 @@ pub export fn widget_open_spotify() callconv(.c) void {
         fn run(_: macos.Ref) callconv(.c) void {
             const url_str = macos.string("spotify:");
             defer macos.CFRelease(url_str);
-            const url = macos.send1(macos.Ref, macos.objc_getClass("NSURL"), "URLWithString:", macos.Ref, url_str);
-            const ws = macos.send0(macos.Ref, macos.objc_getClass("NSWorkspace"), "sharedWorkspace");
-            _ = macos.send1(bool, ws, "openURL:", macos.Ref, url);
+            const url = macos.send(macos.Ref, macos.objc_getClass("NSURL"), "URLWithString:", .{url_str});
+            const ws = macos.send(macos.Ref, macos.objc_getClass("NSWorkspace"), "sharedWorkspace", .{});
+            _ = macos.send(bool, ws, "openURL:", .{url});
         }
     };
     macos.dispatch_async_f(main_q, null, Work.run);
 }
 
 pub export fn widget_is_spotify_running() callconv(.c) c_int {
-    const pool = macos.send0(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc"), "init");
-    defer macos.send0(void, pool, "release");
+    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
+    defer macos.send(void, pool, "release", .{});
 
     const bundle_id = macos.string("com.spotify.client");
     defer macos.CFRelease(bundle_id);
 
-    const apps = macos.send1(macos.Ref, macos.objc_getClass("NSRunningApplication"), "runningApplicationsWithBundleIdentifier:", macos.Ref, bundle_id);
+    const apps = macos.send(macos.Ref, macos.objc_getClass("NSRunningApplication"), "runningApplicationsWithBundleIdentifier:", .{bundle_id});
     if (apps == null) return 0;
-    const count = macos.send0(usize, apps, "count");
+    const count = macos.send(usize, apps, "count", .{});
     return if (count > 0) 1 else 0;
 }
 
@@ -64,23 +64,23 @@ pub fn scriptForControl(cmd: SpotifyControl) []const u8 {
 }
 
 pub export fn widget_spotify_control(cmd: SpotifyControl) callconv(.c) void {
-    const pool = macos.send0(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc"), "init");
-    defer macos.send0(void, pool, "release");
+    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
+    defer macos.send(void, pool, "release", .{});
 
     const script_text = scriptForControl(cmd);
     const str = macos.string(script_text);
     defer macos.CFRelease(str);
 
-    const script = macos.send1(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAppleScript"), "alloc"), "initWithSource:", macos.Ref, str);
+    const script = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAppleScript"), "alloc", .{}), "initWithSource:", .{str});
     if (script != null) {
-        defer macos.send0(void, script, "release");
-        _ = macos.send1(macos.Ref, script, "executeAndReturnError:", ?*macos.Ref, null);
+        defer macos.send(void, script, "release", .{});
+        _ = macos.send(macos.Ref, script, "executeAndReturnError:", .{@as(?*macos.Ref, null)});
     }
 }
 
 pub export fn widget_spotify_seek(position: f64) callconv(.c) void {
-    const pool = macos.send0(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc"), "init");
-    defer macos.send0(void, pool, "release");
+    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
+    defer macos.send(void, pool, "release", .{});
 
     var buf: [128]u8 = undefined;
     const script_fmt = std.fmt.bufPrintZ(&buf, "tell application \"Spotify\" to set player position to {d:.2}", .{position}) catch return;
@@ -88,18 +88,18 @@ pub export fn widget_spotify_seek(position: f64) callconv(.c) void {
     const str = macos.string(script_fmt);
     defer macos.CFRelease(str);
 
-    const script = macos.send1(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAppleScript"), "alloc"), "initWithSource:", macos.Ref, str);
+    const script = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAppleScript"), "alloc", .{}), "initWithSource:", .{str});
     if (script != null) {
-        defer macos.send0(void, script, "release");
-        _ = macos.send1(macos.Ref, script, "executeAndReturnError:", ?*macos.Ref, null);
+        defer macos.send(void, script, "release", .{});
+        _ = macos.send(macos.Ref, script, "executeAndReturnError:", .{@as(?*macos.Ref, null)});
     }
 }
 
 var cached_query_script: ?macos.Ref = null;
 
 pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usize {
-    const pool = macos.send0(macos.Ref, macos.send0(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc"), "init");
-    defer macos.send0(void, pool, "release");
+    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
+    defer macos.send(void, pool, "release", .{});
 
     if (cached_query_script == null) {
         const script_text =
@@ -125,17 +125,17 @@ pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usiz
         const str = macos.string(script_text);
         if (str != null) {
             const script_cls = macos.objc_getClass("NSAppleScript");
-            cached_query_script = macos.send1(macos.Ref, macos.send0(macos.Ref, script_cls, "alloc"), "initWithSource:", macos.Ref, str);
+            cached_query_script = macos.send(macos.Ref, macos.send(macos.Ref, script_cls, "alloc", .{}), "initWithSource:", .{str});
             macos.CFRelease(str);
         }
     }
 
     const script = cached_query_script orelse return 0;
 
-    const desc = macos.send1(macos.Ref, script, "executeAndReturnError:", ?*macos.Ref, null);
+    const desc = macos.send(macos.Ref, script, "executeAndReturnError:", .{@as(?*macos.Ref, null)});
     if (desc == null) return 0;
 
-    const str_val = macos.send0(macos.Ref, desc, "stringValue");
+    const str_val = macos.send(macos.Ref, desc, "stringValue", .{});
     if (str_val == null) return 0;
 
     const len = macos.CFStringGetLength(str_val);
@@ -157,10 +157,4 @@ test "scriptForControl generates valid AppleScript commands" {
         try std.testing.expect(script.len > 0);
         try std.testing.expect(std.mem.indexOf(u8, script, "tell application \"Spotify\"") != null);
     }
-}
-
-test "widget_spotify_take_state resets pending state" {
-    pending_state.store(1, .monotonic);
-    try std.testing.expectEqual(@as(c_int, 1), widget_spotify_take_state());
-    try std.testing.expectEqual(@as(c_int, -1), widget_spotify_take_state());
 }

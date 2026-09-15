@@ -35,9 +35,13 @@ pub fn main() !void {
 test {
     _ = &input.wallify_pointer;
     _ = @import("graphics/canvas.zig");
+    _ = @import("graphics/render/idle.zig");
+    _ = @import("graphics/render/player.zig");
     _ = @import("state.zig");
+    _ = @import("settings.zig");
     _ = @import("graphics/pets/idle_cat.zig");
-    _ = @import("ui/context_menu.zig");
+    _ = @import("ui/layout.zig");
+    _ = @import("ui/snap.zig");
     _ = @import("ui/hitbox.zig");
     _ = @import("ui/window.zig");
     _ = @import("media/playback_state.zig");

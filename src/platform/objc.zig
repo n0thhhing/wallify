@@ -15,32 +15,44 @@ pub fn dispatch_get_main_queue() Ref {
     return @ptrCast(&_dispatch_main_q);
 }
 
-pub fn send0(comptime R: type, obj: Ref, selector: [*:0]const u8) R {
+// Unified Objective-C message sender replacing numbered send0/1/2/3/4 calls.
+// Accepts an arbitrary tuple of arguments: send(ReturnType, obj, "selector", .{ arg1, arg2, ... }).
+pub fn send(comptime R: type, obj: Ref, selector: [*:0]const u8, args: anytype) R {
     const sel = sel_registerName(selector);
-    const f = @as(*const fn (Ref, Ref) callconv(.c) R, @ptrCast(&objc_msgSend));
-    return f(obj, sel);
-}
-
-pub fn send1(comptime R: type, obj: Ref, selector: [*:0]const u8, comptime A: type, a: A) R {
-    const sel = sel_registerName(selector);
-    const f = @as(*const fn (Ref, Ref, A) callconv(.c) R, @ptrCast(&objc_msgSend));
-    return f(obj, sel, a);
-}
-
-pub fn send2(comptime R: type, obj: Ref, selector: [*:0]const u8, comptime A: type, a: A, comptime B: type, b: B) R {
-    const sel = sel_registerName(selector);
-    const f = @as(*const fn (Ref, Ref, A, B) callconv(.c) R, @ptrCast(&objc_msgSend));
-    return f(obj, sel, a, b);
-}
-
-pub fn send3(comptime R: type, obj: Ref, selector: [*:0]const u8, comptime A: type, a: A, comptime B: type, b: B, comptime C: type, c: C) R {
-    const sel = sel_registerName(selector);
-    const f = @as(*const fn (Ref, Ref, A, B, C) callconv(.c) R, @ptrCast(&objc_msgSend));
-    return f(obj, sel, a, b, c);
-}
-
-pub fn send4(comptime R: type, obj: Ref, selector: [*:0]const u8, comptime A: type, a: A, comptime B: type, b: B, comptime C: type, c: C, comptime D: type, d: D) R {
-    const sel = sel_registerName(selector);
-    const f = @as(*const fn (Ref, Ref, A, B, C, D) callconv(.c) R, @ptrCast(&objc_msgSend));
-    return f(obj, sel, a, b, c, d);
+    const Args = @TypeOf(args);
+    const info = @typeInfo(Args);
+    if (info != .@"struct" or !info.@"struct".is_tuple) {
+        @compileError("send expects a tuple of arguments, e.g. .{} or .{arg1, arg2}");
+    }
+    return switch (args.len) {
+        0 => {
+            const f: *const fn (Ref, Ref) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel);
+        },
+        1 => {
+            const f: *const fn (Ref, Ref, @TypeOf(args[0])) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel, args[0]);
+        },
+        2 => {
+            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1])) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel, args[0], args[1]);
+        },
+        3 => {
+            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2])) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel, args[0], args[1], args[2]);
+        },
+        4 => {
+            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2]), @TypeOf(args[3])) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel, args[0], args[1], args[2], args[3]);
+        },
+        5 => {
+            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2]), @TypeOf(args[3]), @TypeOf(args[4])) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel, args[0], args[1], args[2], args[3], args[4]);
+        },
+        6 => {
+            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2]), @TypeOf(args[3]), @TypeOf(args[4]), @TypeOf(args[5])) callconv(.c) R = @ptrCast(&objc_msgSend);
+            return f(obj, sel, args[0], args[1], args[2], args[3], args[4], args[5]);
+        },
+        else => @compileError("Too many arguments for send (max supported is 6)"),
+    };
 }

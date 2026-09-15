@@ -140,7 +140,7 @@ bool wallify_create(int width, int height, int left, int top) {
     movePanel(left, top);
     [panel orderFrontRegardless];
     statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
-    statusItem.button.title = @"♫";
+    statusItem.button.title = @"\u266b";
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Wallify"];
     NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit Wallify" action:@selector(terminate:) keyEquivalent:@""];
     quit.target = NSApp;
@@ -160,12 +160,30 @@ static void presentLatest(void) {
         }
         DrawCommand commands[WALLIFY_MAX_COMMANDS];
         size_t count = latestCount;
+        if (count == 0) {
+            scheduled = NO;
+            [frameLock unlock];
+            dispatch_semaphore_signal(inFlight);
+            return;
+        }
         memcpy(commands, latestCommands, count * sizeof(DrawCommand));
         simd_float2 size = latestSize;
         id<MTLTexture> textures[WALLIFY_MAX_TEXTURES];
         for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; i++) textures[i] = latestTextures[i];
         scheduled = NO;
         [frameLock unlock];
+
+        // Ensure all texture bindings in the array are populated with valid textures (fallback to textures[0])
+        id<MTLTexture> defaultTex = textures[0];
+        if (!defaultTex) {
+            [frameLock lock];
+            defaultTex = loadedTextures[0];
+            [frameLock unlock];
+        }
+        for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; i++) {
+            if (!textures[i]) textures[i] = defaultTex;
+        }
+
         surface.drawableSize = CGSizeMake(size.x * surface.contentsScale, size.y * surface.contentsScale);
         id<CAMetalDrawable> drawable = [surface nextDrawable];
         if (!drawable) { dispatch_semaphore_signal(inFlight); return; }
@@ -176,21 +194,17 @@ static void presentLatest(void) {
         pass.colorAttachments[0].loadAction = MTLLoadActionClear;
         pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
         pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+
         id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:pass];
         [encoder setRenderPipelineState:pipelineState];
+        [encoder setVertexBytes:commands length:count * sizeof(DrawCommand) atIndex:0];
         [encoder setVertexBytes:&size length:sizeof(size) atIndex:1];
-        for (size_t i = 0; i < count; i++) {
-            DrawCommand *c = &commands[i];
-            id<MTLTexture> texture = textures[0]; // valid fallback for solid draws
-            if (c->texture_id >= 0 && c->texture_id < WALLIFY_MAX_TEXTURES) texture = textures[c->texture_id];
-            if (!texture) continue;
-            [encoder setVertexBytes:c length:sizeof(*c) atIndex:0];
-            [encoder setFragmentBytes:c length:sizeof(*c) atIndex:0];
-            [encoder setFragmentTexture:texture atIndex:0];
-            [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
-        }
+        [encoder setFragmentBytes:commands length:count * sizeof(DrawCommand) atIndex:0];
+        [encoder setFragmentTextures:textures withRange:NSMakeRange(0, WALLIFY_MAX_TEXTURES)];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4 instanceCount:count];
         [encoder endEncoding];
-        if (profiling) atomic_fetch_add(&drawCalls, count);
+
+        if (profiling) atomic_fetch_add(&drawCalls, 1);
         [command presentDrawable:drawable];
         [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
             if (completed.status == MTLCommandBufferStatusError) NSLog(@"Wallify GPU error: %@", completed.error);
@@ -230,12 +244,14 @@ void wallify_load_texture(int textureID, const unsigned int *pixels, size_t widt
         [frameLock unlock];
     }
 }
+
 // Bake transformed artwork into transparent padding before blurring. This
 // keeps the glow localized to the cover instead of smearing opaque edge colors
 // across the player. All work happens once per artwork update on the GPU.
 float wallify_glow_extent(float artSize) {
     return ceilf(artSize * fmaxf(WALLIFY_GLOW_SCALE_X, WALLIFY_GLOW_SCALE_Y) + 6 * WALLIFY_GLOW_BLUR);
 }
+
 void wallify_blur_texture(int source, int destination, float artSize) {
     if (source < 0 || source >= WALLIFY_MAX_TEXTURES || destination < 0 || destination >= WALLIFY_MAX_TEXTURES) return;
     @autoreleasepool {
@@ -271,8 +287,10 @@ void wallify_blur_texture(int source, int destination, float artSize) {
         [encoder setVertexBytes:&c length:sizeof(c) atIndex:0];
         [encoder setVertexBytes:&size length:sizeof(size) atIndex:1];
         [encoder setFragmentBytes:&c length:sizeof(c) atIndex:0];
-        [encoder setFragmentTexture:input atIndex:0];
-        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+        id<MTLTexture> blurTextures[WALLIFY_MAX_TEXTURES];
+        for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; i++) blurTextures[i] = input;
+        [encoder setFragmentTextures:blurTextures withRange:NSMakeRange(0, WALLIFY_MAX_TEXTURES)];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4 instanceCount:1];
         [encoder endEncoding];
         MPSImageGaussianBlur *blur = [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:WALLIFY_GLOW_BLUR];
         blur.edgeMode = MPSImageEdgeModeZero;
