@@ -4,7 +4,7 @@ pub const cat_height = 52;
 pub const banana_width = 98;
 pub const banana_frame_height = 114;
 pub const banana_frames = 45;
-pub const cat_data = @embedFile("cat_pixels");
+pub const cat_data = @embedFile("cat_pixels.bin");
 pub const banana_data = @embedFile("banana_pixels");
 pub const Region = struct { x: usize, y: usize = 0, w: usize, h: usize };
 pub const cat_regions = [_]Region{

@@ -5,7 +5,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Decode source PNGs once per asset change; outputs live only in Zig's cache.
-    const cat_pixels = decodeCat(b, "assets/cat/cat.png", "cat.rgba", "1426", "138", "0.38");
     const banana_pixels = decodeCat(b, "assets/cat/banana-cat.png", "banana.rgba", "98", "5130", "1.0");
 
     // MediaRemote bridge loaded by the Perl metadata helper.
@@ -35,12 +34,13 @@ pub fn build(b: *std.Build) void {
     native.addArg("-include");
     native.addFileArg(b.path("src/platform/gpu.h"));
     native.addFileArg(b.path("src/platform/native.m"));
+    native.addFileInput(b.path("src/platform/settings_window.m"));
+    native.addFileInput(b.path("src/platform/settings_window.h"));
     native.addArg("-o");
     mod.addObjectFile(native.addOutputFileArg("native.o"));
     mod.linkFramework("Metal", .{});
     mod.linkFramework("MetalPerformanceShaders", .{});
     mod.linkFramework("QuartzCore", .{});
-    mod.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
     mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 
     const metal_c = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metal", "-fmodules-cache-path=/tmp/wallify-metal-modules", "-c" });
@@ -63,6 +63,11 @@ pub fn build(b: *std.Build) void {
     const install_metal = b.addInstallBinFile(metallib_out, "default.metallib");
     b.getInstallStep().dependOn(&install_metal.step);
 
+    const copy_app_bin = b.addInstallFile(exe.getEmittedBin(), "Wallify.app/Contents/MacOS/Wallify");
+    b.getInstallStep().dependOn(&copy_app_bin.step);
+    const copy_app_metal = b.addInstallFile(metallib_out, "Wallify.app/Contents/Resources/default.metallib");
+    b.getInstallStep().dependOn(&copy_app_metal.step);
+
     const run_step = b.step("run", "Run the player");
     run_step.dependOn(b.getInstallStep());
     run_step.dependOn(&b.addRunArtifact(exe).step);
@@ -81,7 +86,6 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    preview.root_module.addAnonymousImport("cat_pixels", .{ .root_source_file = cat_pixels });
     const preview_step = b.step("preview-cat", "Render cat samples to /tmp/wallify-poses.ppm");
     preview_step.dependOn(&b.addRunArtifact(preview).step);
 }

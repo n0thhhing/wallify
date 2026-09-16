@@ -118,7 +118,7 @@ pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
 pub fn metadataLoop(io: std.Io) void {
     const perl_cmd =
         "use strict; use warnings; use Cwd \"abs_path\"; use DynaLoader; $| = 1; " ++
-        "my $abs = abs_path(\"zig-out/lib/libmetadata_fetcher.dylib\"); " ++
+        "my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || '', 'zig-out/lib/libmetadata_fetcher.dylib', '../Frameworks/libmetadata_fetcher.dylib', '../Resources/libmetadata_fetcher.dylib', '../Resources/zig-out/lib/libmetadata_fetcher.dylib', '/Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib') { if ($p && -f $p) { $abs = abs_path($p); last; } } " ++
         "if (!$abs) { exit(1); } " ++
         "my $libref = DynaLoader::dl_load_file($abs) or exit(2); " ++
         "my $sym = DynaLoader::dl_find_symbol($libref, \"mrc_printNowPlayingInfo\") or exit(3); " ++
@@ -193,55 +193,42 @@ pub fn metadataLoop(io: std.Io) void {
                 continue;
             }
 
-            // Format: Title|||Artist|||State|||Position|||Duration|||ArtworkURL
-            var spl = std.mem.splitSequence(u8, res_buf[0..res_len], "|||");
-            const title_raw = spl.next() orelse "";
-            const artist_raw = spl.next() orelse "";
-            const pstate_raw = spl.next() orelse "";
-            const pos_raw = spl.next() orelse "0.0";
-            const dur_raw = spl.next() orelse "0.0";
-            const art_raw = spl.next() orelse "";
-
-            const title_span = utf8Prefix(title_raw, state.global_title.len);
-            const artist_span = utf8Prefix(artist_raw, state.global_artist.len);
-
-            const rate: f64 = if (std.mem.eql(u8, pstate_raw, "playing")) 1.0 else 0.0;
-            const elapsed = std.fmt.parseFloat(f64, pos_raw) catch 0.0;
-            const duration = std.fmt.parseFloat(f64, dur_raw) catch 0.0;
-
-            if (title_span.len > 0) {
-                const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
-                const artist_changed = artist_span.len != state.global_artist_len or !std.mem.eql(u8, artist_span, state.global_artist[0..state.global_artist_len]);
+            if (parseSpotifyPayload(res_buf[0..res_len])) |item| {
+                const title_changed = item.title.len != state.global_title_len or !std.mem.eql(u8, item.title, state.global_title[0..state.global_title_len]);
+                const artist_changed = item.artist.len != state.global_artist_len or !std.mem.eql(u8, item.artist, state.global_artist[0..state.global_artist_len]);
                 const now = window.widget_monotonic_time();
-
+                const accept_state = state.playback_state.accept(item.playing, state.global_rate > 0, now, title_changed);
                 if (now >= state.global_rate_lock_until or title_changed) {
                     state.global_rate_lock = 0;
                     state.global_rate_lock_until = 0;
                 }
+                const rate = if (item.playing) RATE_PLAYING else RATE_STOPPED;
                 const rate_changed = rate != state.global_rate;
-                const elapsed_changed = @abs(elapsed - state.global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
+                const elapsed_changed = @abs(item.elapsed - state.global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
 
                 if (title_changed or artist_changed or rate_changed or elapsed_changed) {
+                    const title_span = utf8Prefix(item.title, state.global_title.len);
                     @memcpy(state.global_title[0..title_span.len], title_span);
                     state.global_title_len = title_span.len;
 
+                    const artist_span = utf8Prefix(item.artist, state.global_artist.len);
                     @memcpy(state.global_artist[0..artist_span.len], artist_span);
                     state.global_artist_len = artist_span.len;
 
-                    if (!state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
-                        state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
+                    if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
+                        state.playback_clock.sync(item.elapsed, rate, window.widget_monotonic_time(), item.duration, title_changed);
                         state.global_rate = rate;
-                        state.global_elapsed = elapsed;
+                        state.global_elapsed = item.elapsed;
                     }
-                    state.global_duration = duration;
+                    state.global_duration = item.duration;
 
-                    if (art_raw.len > 0 and std.mem.startsWith(u8, art_raw, "http")) {
-                        if (art_raw.len != last_art_url_len or !std.mem.eql(u8, art_raw, last_art_url[0..last_art_url_len])) {
-                            @memcpy(last_art_url[0..art_raw.len], art_raw);
-                            last_art_url_len = art_raw.len;
-
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "curl", "-s", "-f", art_raw, "-o", "/tmp/mrc_art_raw" } }) catch {};
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/mrc_art_raw", "--out", "/tmp/art-next.bmp" } }) catch {};
+                    if (item.artwork_url.len > 0) {
+                        const art_changed = item.artwork_url.len != last_art_url_len or !std.mem.eql(u8, item.artwork_url, last_art_url[0..last_art_url_len]);
+                        if (art_changed) {
+                            @memcpy(last_art_url[0..item.artwork_url.len], item.artwork_url);
+                            last_art_url_len = item.artwork_url.len;
+                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "curl", "-s", "-o", "/tmp/art.raw", item.artwork_url } }) catch {};
+                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/art.raw", "--out", "/tmp/art-next.bmp" } }) catch {};
                             if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
                                 state.global_has_artwork = true;
                                 render.extractColor();
@@ -262,6 +249,7 @@ pub fn metadataLoop(io: std.Io) void {
                 continue;
             };
             var line: [METADATA_LINE_BUFFER_SIZE]u8 = undefined;
+            var empty_polls: usize = 0;
             while (fgets(&line, line.len, stream) != null) {
                 if (state.setting_source == .spotify) break;
 
@@ -269,62 +257,77 @@ pub fn metadataLoop(io: std.Io) void {
                 const line_len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;
                 const raw = std.mem.trim(u8, line[0..line_len], " \r\n");
 
-                if (raw.len > 0) {
-                    var spl = std.mem.splitSequence(u8, raw, "|||");
-
-                    const title_raw = spl.next() orelse "";
-                    const artist_raw = spl.next() orelse "";
-                    const title_span = utf8Prefix(title_raw, state.global_title.len);
-                    const artist_span = utf8Prefix(artist_raw, state.global_artist.len);
-                    const has_artwork_span = spl.next() orelse "0";
-                    const rate_span = spl.next() orelse "0.0";
-                    const elapsed_span = spl.next() orelse "0.0";
-                    const duration_span = spl.next() orelse "0.0";
-
-                    const rate = std.fmt.parseFloat(f64, rate_span) catch 0.0;
-                    const elapsed = std.fmt.parseFloat(f64, elapsed_span) catch 0.0;
-                    const duration = std.fmt.parseFloat(f64, duration_span) catch 0.0;
-
-                    if (title_span.len == 0) continue;
-                    const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
-                    const artist_changed = artist_span.len != state.global_artist_len or !std.mem.eql(u8, artist_span, state.global_artist[0..state.global_artist_len]);
-                    const now = window.widget_monotonic_time();
-                    const accept_state = state.playback_state.accept(rate > 0, state.global_rate > 0, now, title_changed);
-                    if (now >= state.global_rate_lock_until or title_changed) {
-                        state.global_rate_lock = 0;
-                        state.global_rate_lock_until = 0;
-                    }
-                    const rate_changed = rate != state.global_rate;
-                    const elapsed_changed = elapsed != state.global_elapsed;
-
-                    if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.artwork_refresh_pending and std.mem.eql(u8, has_artwork_span, "1"))) {
-                        @memcpy(state.global_title[0..title_span.len], title_span);
-                        state.global_title_len = title_span.len;
-
-                        @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                        state.global_artist_len = artist_span.len;
-
-                        if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
-                            state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
-                            state.global_rate = rate;
-                            state.global_elapsed = elapsed;
-                        }
-                        state.global_duration = duration;
-
-                        if (title_changed or artist_changed) state.artwork_refresh_pending = true;
-                        const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
-                        if (artwork_available and state.artwork_refresh_pending) {
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
-                            if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
-                                state.artwork_refresh_pending = false;
-                                state.global_has_artwork = true;
-                            }
-                            render.extractColor();
-                        } else if (!artwork_available and title_changed) {
+                if (raw.len == 0) {
+                    empty_polls += 1;
+                    if (empty_polls >= 3) {
+                        if (state.global_title_len > 0 or state.global_rate > 0 or state.global_has_artwork) {
+                            state.global_title_len = 0;
+                            state.global_artist_len = 0;
+                            state.global_rate = 0.0;
+                            state.global_elapsed = 0.0;
+                            state.global_duration = 0.0;
                             state.global_has_artwork = false;
+                            state.requestFrame();
                         }
-                        state.requestFrame();
                     }
+                    continue;
+                }
+                empty_polls = 0;
+
+                var spl = std.mem.splitSequence(u8, raw, "|||");
+
+                const title_raw = spl.next() orelse "";
+                const artist_raw = spl.next() orelse "";
+                const title_span = utf8Prefix(title_raw, state.global_title.len);
+                const artist_span = utf8Prefix(artist_raw, state.global_artist.len);
+                const has_artwork_span = spl.next() orelse "0";
+                const rate_span = spl.next() orelse "0.0";
+                const elapsed_span = spl.next() orelse "0.0";
+                const duration_span = spl.next() orelse "0.0";
+
+                const rate = std.fmt.parseFloat(f64, rate_span) catch 0.0;
+                const elapsed = std.fmt.parseFloat(f64, elapsed_span) catch 0.0;
+                const duration = std.fmt.parseFloat(f64, duration_span) catch 0.0;
+
+                if (title_span.len == 0) continue;
+                const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
+                const artist_changed = artist_span.len != state.global_artist_len or !std.mem.eql(u8, artist_span, state.global_artist[0..state.global_artist_len]);
+                const now = window.widget_monotonic_time();
+                const accept_state = state.playback_state.accept(rate > 0, state.global_rate > 0, now, title_changed);
+                if (now >= state.global_rate_lock_until or title_changed) {
+                    state.global_rate_lock = 0;
+                    state.global_rate_lock_until = 0;
+                }
+                const rate_changed = rate != state.global_rate;
+                const elapsed_changed = elapsed != state.global_elapsed;
+
+                if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.artwork_refresh_pending and std.mem.eql(u8, has_artwork_span, "1"))) {
+                    @memcpy(state.global_title[0..title_span.len], title_span);
+                    state.global_title_len = title_span.len;
+
+                    @memcpy(state.global_artist[0..artist_span.len], artist_span);
+                    state.global_artist_len = artist_span.len;
+
+                    if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
+                        state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
+                        state.global_rate = rate;
+                        state.global_elapsed = elapsed;
+                    }
+                    state.global_duration = duration;
+
+                    if (title_changed or artist_changed) state.artwork_refresh_pending = true;
+                    const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
+                    if (artwork_available and state.artwork_refresh_pending) {
+                        _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
+                        if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
+                            state.artwork_refresh_pending = false;
+                            state.global_has_artwork = true;
+                        }
+                        render.extractColor();
+                    } else if (!artwork_available and title_changed) {
+                        state.global_has_artwork = false;
+                    }
+                    state.requestFrame();
                 }
             }
             _ = pclose(stream);
@@ -341,7 +344,7 @@ test "utf8Prefix preserves short strings and chops safely on boundaries" {
     // Multi-byte characters: "café" (c a f \xc3 \xa9) -> 5 bytes
     const cafe = "café";
     try std.testing.expectEqualStrings("café", utf8Prefix(cafe, 5));
-    // Slicing at max_len=4 falls on the second byte of 'é'. utf8Prefix should back up to 3 ("caf")
+    // Slicing at max_len=4 falls on the second byte of '\xe9'. utf8Prefix should back up to 3 ("caf")
     try std.testing.expectEqualStrings("caf", utf8Prefix(cafe, 4));
 
     // Emoji: "🎶" is 4 bytes (\xf0 \x9f \x8e \xb6)

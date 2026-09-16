@@ -14,7 +14,7 @@ fn lerp(a: f64, b: f64, t: f64) f64 {
 }
 
 pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
-    const elapsed = if (state.global_is_dragging)
+    const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
         state.global_elapsed
     else
         state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
@@ -62,7 +62,13 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
         .w = size,
         .h = size,
     };
-    const alpha: f32 = @floatCast(0.5 * ease * state.setting_intensity.multiplier());
+    var alpha: f32 = @floatCast(0.5 * ease * state.setting_intensity.multiplier());
+
+    // In animated transition modes, pulse the ambient glow slightly during the transition
+    if (state.setting_transition != .default and mix < 1.0) {
+        const pulse = @as(f32, @floatCast(std.math.sin(mix * std.math.pi)));
+        alpha *= (1.0 + 0.35 * pulse);
+    }
 
     if (mix < 1.0) {
         _ = canvas.add(native.gpu.WALLIFY_GLOW, @intFromEnum(gpu.Texture.previous_glow), rect, .{ 1.0, 1.0, 1.0, alpha * @as(f32, @floatCast(1.0 - mix)) });
@@ -72,8 +78,22 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
 
 fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, ease: f64, mix: f64) void {
     if (state.global_has_artwork and assets.has_art) {
-        if (mix < 1.0) canvas.image(.previous_artwork, art, 1.0);
-        canvas.image(.artwork, art, @floatCast(mix));
+        if (state.setting_transition != .default and mix < 1.0) {
+            canvas.transition(
+                state.setting_transition,
+                .artwork,
+                .previous_artwork,
+                art,
+                @floatCast(mix),
+                @floatCast(state.animation_time),
+                @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
+                @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
+                @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
+            );
+        } else {
+            if (mix < 1.0) canvas.image(.previous_artwork, art, 1.0);
+            canvas.image(.artwork, art, @floatCast(mix));
+        }
 
         if (state.setting_dim) {
             canvas.fill(art, .{ 0.0, 0.0, 0.0, @floatCast(0.4 * (1.0 - ease)) });

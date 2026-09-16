@@ -1,10 +1,12 @@
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <QuartzCore/CATransaction.h>
 #include <stdatomic.h>
 #include <simd/simd.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #include "gpu.h"
+#import "settings_window.h"
 
 extern void wallify_pointer(double, double, int);
 static NSPanel *panel;
@@ -44,6 +46,7 @@ void wallify_profile_scene(double seconds) {
 - (BOOL)isFlipped { return YES; }
 - (NSView *)hitTest:(NSPoint)point { return self; }
 - (BOOL)acceptsFirstResponder { return NO; }
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 - (void)updateTrackingAreas {
     for (NSTrackingArea *area in self.trackingAreas) [self removeTrackingArea:area];
     [self addTrackingArea:[[NSTrackingArea alloc] initWithRect:NSZeroRect options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect owner:self userInfo:nil]];
@@ -65,6 +68,29 @@ void wallify_profile_scene(double seconds) {
 @end
 @implementation WallifyPanel
 - (BOOL)canBecomeKeyWindow { return NO; }
+@end
+
+@interface WallifyStatusMenuTarget : NSObject
++ (instancetype)sharedTarget;
+- (void)statusOpenSettings:(id)sender;
+- (void)statusOpenSpotify:(id)sender;
+@end
+
+@implementation WallifyStatusMenuTarget
++ (instancetype)sharedTarget {
+    static WallifyStatusMenuTarget *target = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        target = [[WallifyStatusMenuTarget alloc] init];
+    });
+    return target;
+}
+- (void)statusOpenSettings:(id)sender {
+    wallify_show_settings_window();
+}
+- (void)statusOpenSpotify:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"spotify:"]];
+}
 @end
 
 static void movePanel(int left, int top) {
@@ -132,6 +158,7 @@ bool wallify_create(int width, int height, int left, int top) {
     surface.device = device;
     surface.pixelFormat = MTLPixelFormatBGRA8Unorm;
     surface.framebufferOnly = YES;
+    surface.presentsWithTransaction = YES;
     surface.opaque = NO;
     surface.contentsScale = NSScreen.mainScreen.backingScaleFactor;
     view.wantsLayer = YES;
@@ -139,10 +166,28 @@ bool wallify_create(int width, int height, int left, int top) {
     panel.contentView = view;
     movePanel(left, top);
     [panel orderFrontRegardless];
+
     statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
     statusItem.button.title = @"\u266b";
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Wallify"];
-    NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit Wallify" action:@selector(terminate:) keyEquivalent:@""];
+
+    NSMenuItem *header = [[NSMenuItem alloc] initWithTitle:@"Wallify" action:nil keyEquivalent:@""];
+    [header setEnabled:NO];
+    [menu addItem:header];
+
+    NSMenuItem *settings = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(statusOpenSettings:) keyEquivalent:@","];
+    settings.target = [WallifyStatusMenuTarget sharedTarget];
+    [menu addItem:settings];
+
+    [menu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *spotify = [[NSMenuItem alloc] initWithTitle:@"Open Spotify" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    spotify.target = [WallifyStatusMenuTarget sharedTarget];
+    [menu addItem:spotify];
+
+    [menu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"Quit Wallify" action:@selector(terminate:) keyEquivalent:@"q"];
     quit.target = NSApp;
     [menu addItem:quit];
     statusItem.menu = menu;
@@ -205,7 +250,6 @@ static void presentLatest(void) {
         [encoder endEncoding];
 
         if (profiling) atomic_fetch_add(&drawCalls, 1);
-        [command presentDrawable:drawable];
         [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
             if (completed.status == MTLCommandBufferStatusError) NSLog(@"Wallify GPU error: %@", completed.error);
             if (profiling) {
@@ -216,6 +260,21 @@ static void presentLatest(void) {
             dispatch_async(dispatch_get_main_queue(), ^{ presentLatest(); });
         }];
         [command commit];
+        [command waitUntilScheduled];
+
+        // Commit window geometry and its matching drawable together. Resizing
+        // earlier stretches the previous (expanded) frame into the compact tile.
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        NSRect frame = panel.frame;
+        if (frame.size.width != size.x || frame.size.height != size.y) {
+            CGFloat top = NSMaxY(frame);
+            frame.size = NSMakeSize(size.x, size.y);
+            frame.origin.y = top - frame.size.height;
+            [panel setFrame:frame display:NO];
+        }
+        [drawable present];
+        [CATransaction commit];
     }
 }
 
@@ -316,15 +375,10 @@ void wallify_present(float width, float height, const DrawCommand *commands, siz
 }
 
 void wallify_resize(int width, int height) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSRect frame = panel.frame;
-        CGFloat top = NSMaxY(frame);
-        frame.size = NSMakeSize(width, height);
-        frame.origin.y = top - frame.size.height;
-        [panel setFrame:frame display:YES];
-        atomic_store(&surfaceWidth, (int)frame.size.width);
-        atomic_store(&surfaceHeight, (int)frame.size.height);
-    });
+    // Publish the requested scene size immediately; presentLatest applies the
+    // native resize only once a frame with these dimensions is ready.
+    atomic_store(&surfaceWidth, width);
+    atomic_store(&surfaceHeight, height);
 }
 void wallify_move(int left, int top) { dispatch_async(dispatch_get_main_queue(), ^{ movePanel(left, top); }); }
 int wallify_width(void) { return atomic_load(&surfaceWidth); }
@@ -345,3 +399,23 @@ void wallify_prepare(void) {
     }
 }
 const char *wallify_settings_path(void) { return (settingsPath ?: @"widget-settings.conf").fileSystemRepresentation; }
+
+NSInteger wallify_panel_window_number(void) {
+    return panel ? [panel windowNumber] : 0;
+}
+
+bool wallify_panel_offsets(double *out_x, double *out_y) {
+    if (!panel) return false;
+    NSScreen *primary = NSScreen.screens.firstObject ?: NSScreen.mainScreen;
+    NSScreen *screen = panel.screen ?: (NSScreen.mainScreen ?: primary);
+    if (!screen || !primary) return false;
+    NSRect visible = screen.visibleFrame;
+    NSRect primFrame = primary.frame;
+    double primTop = primFrame.origin.y + primFrame.size.height;
+    double screenVisibleTop = visible.origin.y + visible.size.height;
+    if (out_x) *out_x = visible.origin.x;
+    if (out_y) *out_y = primTop - screenVisibleTop;
+    return true;
+}
+
+#import "settings_window.m"

@@ -15,8 +15,24 @@ pub fn dispatch_get_main_queue() Ref {
     return @ptrCast(&_dispatch_main_q);
 }
 
-// Unified Objective-C message sender replacing numbered send0/1/2/3/4 calls.
-// Accepts an arbitrary tuple of arguments: send(ReturnType, obj, "selector", .{ arg1, arg2, ... }).
+/// Unified Objective-C message dispatcher leveraging Zig's comptime `@Fn` and `@call`.
+///
+/// ## Background & Objective-C ABI Requirements
+/// In the Apple Objective-C runtime (both ARM64 and x86_64), `objc_msgSend` is an assembly trampoline
+/// with no fixed C prototype. Crucially, it must NEVER be called through a C variadic signature (`...`)
+/// because the Darwin ARM64 ABI passes variadic arguments on the stack, whereas fixed parameters are
+/// passed directly in CPU registers (`x0`–`x7` for integers/pointers and `d0`–`d7` for floats).
+/// Calling `objc_msgSend` therefore requires casting it to a function pointer whose exact parameter
+/// types and return type match the target method selector.
+///
+/// ## Implementation
+/// Rather than writing hardcoded switch branches for every parameter count, this function:
+/// 1. Prepends the mandatory Objective-C receiver (`id` / `Ref`) and selector (`SEL` / `Ref`) to `args`.
+/// 2. Dynamically generates parameter type arrays and attributes at comptime.
+/// 3. Uses Zig 0.16's `@Fn` builtin to construct the exact C function type: `*const fn (Ref, Ref, ...) callconv(.c) R`.
+/// 4. Dispatches the call via `@call(.auto, f, full_args)` with zero runtime overhead.
+///
+/// Example: `send(void, panel, "setAlphaValue:", .{@as(f64, 1.0)});`
 pub fn send(comptime R: type, obj: Ref, selector: [*:0]const u8, args: anytype) R {
     const sel = sel_registerName(selector);
     const Args = @TypeOf(args);
@@ -24,35 +40,17 @@ pub fn send(comptime R: type, obj: Ref, selector: [*:0]const u8, args: anytype) 
     if (info != .@"struct" or !info.@"struct".is_tuple) {
         @compileError("send expects a tuple of arguments, e.g. .{} or .{arg1, arg2}");
     }
-    return switch (args.len) {
-        0 => {
-            const f: *const fn (Ref, Ref) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel);
-        },
-        1 => {
-            const f: *const fn (Ref, Ref, @TypeOf(args[0])) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel, args[0]);
-        },
-        2 => {
-            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1])) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel, args[0], args[1]);
-        },
-        3 => {
-            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2])) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel, args[0], args[1], args[2]);
-        },
-        4 => {
-            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2]), @TypeOf(args[3])) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel, args[0], args[1], args[2], args[3]);
-        },
-        5 => {
-            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2]), @TypeOf(args[3]), @TypeOf(args[4])) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel, args[0], args[1], args[2], args[3], args[4]);
-        },
-        6 => {
-            const f: *const fn (Ref, Ref, @TypeOf(args[0]), @TypeOf(args[1]), @TypeOf(args[2]), @TypeOf(args[3]), @TypeOf(args[4]), @TypeOf(args[5])) callconv(.c) R = @ptrCast(&objc_msgSend);
-            return f(obj, sel, args[0], args[1], args[2], args[3], args[4], args[5]);
-        },
-        else => @compileError("Too many arguments for send (max supported is 6)"),
-    };
+    const full_args = .{ obj, sel } ++ args;
+    const full_info = @typeInfo(@TypeOf(full_args)).@"struct";
+
+    comptime var param_types: [full_info.fields.len]type = undefined;
+    comptime var param_attrs: [full_info.fields.len]std.builtin.Type.Fn.Param.Attributes = undefined;
+    inline for (full_info.fields, 0..) |field, i| {
+        param_types[i] = field.type;
+        param_attrs[i] = .{ .@"noalias" = false };
+    }
+
+    const FnType = @Fn(&param_types, &param_attrs, R, .{ .@"callconv" = .c, .varargs = false });
+    const f: *const FnType = @ptrCast(&objc_msgSend);
+    return @call(.auto, f, full_args);
 }

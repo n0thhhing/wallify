@@ -27,3 +27,10 @@ pub extern fn wallify_blur_texture(source: c_int, destination: c_int, art_size: 
 pub extern fn wallify_profile_scene(seconds: f64) void;
 
 pub extern fn wallify_glow_extent(art_size: f32) f32;
+
+pub extern fn wallify_show_settings_window() void;
+pub extern fn wallify_close_settings_window() void;
+pub extern fn wallify_has_settings_flag() bool;
+
+pub extern fn wallify_panel_window_number() isize;
+pub extern fn wallify_panel_offsets(out_x: *f64, out_y: *f64) bool;

@@ -14,7 +14,7 @@ pub fn drawIdle(canvas: *gpu.Canvas, card: gpu.Rect) void {
     canvas.fill(card, idle_card_bg);
 
     switch (state.setting_idle_style) {
-        .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.cat_time),
+        .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.cat_time, state.animation_time < state.cat_pet_until),
         .banana_cat => @import("../pets/banana_cat.zig").draw(canvas, card, state.cat_time),
         .spotify => drawSpotifyLauncher(canvas, card),
     }
@@ -43,7 +43,7 @@ fn drawSpotifyLauncher(canvas: *gpu.Canvas, card: gpu.Rect) void {
 test "both pets emit clipped GPU commands within the scene budget" {
     const card = gpu.Rect{ .x = 0, .y = 0, .w = 531, .h = 164, .radius = 26 };
     var cat = gpu.Canvas{ .clip = card };
-    @import("../pets/idle_cat.zig").draw(&cat, card, 0.7);
+    @import("../pets/idle_cat.zig").draw(&cat, card, 0.7, false);
     try std.testing.expectEqual(@as(usize, 40), cat.count);
     try std.testing.expectEqual(@as(c_int, @intFromEnum(gpu.Texture.cat)), cat.commands[0].texture_id);
     for (cat.commands[0..cat.count]) |c| try std.testing.expectEqual(@as(f32, 26), c.clip_radius);

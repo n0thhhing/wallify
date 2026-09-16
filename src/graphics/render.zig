@@ -57,13 +57,9 @@ pub fn drawUIFrame() void {
             @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
             @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
         };
-        const sec = [3]f32{
-            pri[1] * 0.85 + pri[2] * 0.15,
-            pri[2] * 0.85 + pri[0] * 0.15,
-            pri[0] * 0.85 + pri[1] * 0.15,
-        };
-        const alpha: f32 = @floatCast(0.28 * state.aurora_mix * (1.0 - state.idle_mix));
-        canvas.aurora(card, pri, sec, @floatCast(state.animation_time), alpha);
+        const dim_factor: f32 = if (state.setting_dim and state.global_rate == 0) 0.65 else 1.0;
+        const alpha: f32 = @floatCast(0.32 * state.aurora_mix * (1.0 - state.idle_mix) * dim_factor);
+        canvas.aurora(card, pri, pri, @floatCast(state.animation_time), alpha);
     }
 
     // Active media player or idle view

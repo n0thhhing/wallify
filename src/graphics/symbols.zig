@@ -36,6 +36,9 @@ pub fn initSymbols() void {
         const raster_sz = macos.Size{ .width = sz.width * 3, .height = sz.height * 3 };
 
         const raster = macos.send(macos.Ref, macos.send(macos.Ref, img_cls, "alloc", .{}), "initWithSize:", .{raster_sz});
+        if (raster == null) continue;
+        defer macos.send(void, raster, "release", .{});
+
         macos.send(void, raster, "lockFocus", .{});
         macos.send(void, img, "drawInRect:fromRect:operation:fraction:", .{
             macos.rect(0, 0, raster_sz.width, raster_sz.height),

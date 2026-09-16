@@ -1,6 +1,7 @@
 const std = @import("std");
 const macos = @import("../platform/macos.zig");
 const state = @import("../state.zig");
+const native = @import("../platform/native.zig");
 
 const Ref = macos.Ref;
 const Point = macos.Point;
@@ -8,14 +9,13 @@ const Rect = macos.Rect;
 const rect = macos.rect;
 
 // Grid metrics & snap tuning
+// macOS Sequoia arranges small desktop widgets in 180×180pt tiles.
 const GRID_PITCH: f64 = state.Layout.grid_pitch;
-const VISIBLE_RIM: f64 = 8.0;
-const SNAP_PREVIEW_INSET: f64 = 7.0;
 const SNAP_THRESHOLD: f64 = 1100.0 * 1100.0;
 const MAX_CANDIDATE_WIDTH: f64 = 1400.0;
 const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
 const MIN_CANDIDATE_SIZE: f64 = 80.0;
-const OUTLINE_RADIUS: f64 = 31.0;
+const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
 const DEBUG_PANEL_LEVEL: isize = 101;
 const OUTLINE_LEVEL_FALLBACK: isize = -2;
 
@@ -50,26 +50,51 @@ var snap_debug_card_width: f64 = state.Layout.compact_content_width;
 var snap_debug_card_height: f64 = state.Layout.compact_content_height;
 var snap_debug_dragging = false;
 
+// WindowServer (CGWindowList) coordinates start from top-left of the display.
+// AppKit panel margins are positioned relative to the visible screen frame (below the 33pt menu bar).
+// These offsets bridge the two coordinate frames during drags.
 var cached_offset_x: f64 = 0;
-var cached_offset_y: f64 = 36;
+var cached_offset_y: f64 = 33;
 var has_cached_offsets: bool = false;
 
 fn stringEquals(value: Ref, expected: []const u8) bool {
     if (value == null) return false;
     var buffer: [128]u8 = undefined;
     if (macos.CFStringGetCString(value, &buffer, buffer.len, 0x08000100) == 0) return false;
-    return std.mem.eql(u8, std.mem.sliceTo(&buffer, 0), expected);
+    return std.ascii.eqlIgnoreCase(std.mem.sliceTo(&buffer, 0), expected);
 }
 
 fn isPlayerWindow(info: Ref) bool {
-    const owner = macos.CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
     const name = macos.CFDictionaryGetValue(info, macos.kCGWindowName);
+    if (name) |n| {
+        if (stringEquals(n, "Wallify Snap Debug") or
+            stringEquals(n, "Wallify Snap Outline") or
+            stringEquals(n, "Wallify Settings")) return false;
+    }
+
+    const expected_id = native.wallify_panel_window_number();
+    if (expected_id > 0) {
+        if (macos.CFDictionaryGetValue(info, macos.kCGWindowNumber)) |num_ref| {
+            var win_id: i64 = 0;
+            if (macos.CFNumberGetValue(num_ref, 4, @ptrCast(&win_id))) {
+                return win_id == @as(i64, @intCast(expected_id));
+            }
+        }
+    }
+
+    const owner = macos.CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
     const matches = stringEquals(name, "Wallify") or stringEquals(owner, "Wallify");
     if (!matches) return false;
+
     if (name) |n| {
-        if (stringEquals(n, "Wallify Snap Debug")) return false;
+        if (!stringEquals(n, "Wallify")) return false;
     }
-    return true;
+
+    var layer: i64 = 0;
+    if (macos.CFDictionaryGetValue(info, macos.kCGWindowLayer)) |layer_ref| {
+        _ = macos.CFNumberGetValue(layer_ref, 4, @ptrCast(&layer));
+    }
+    return layer == -1;
 }
 
 fn playerWindowInfo() PanelWindowInfo {
@@ -148,17 +173,7 @@ fn updateSnapDebug() void {
 fn updateSnapOutline(_: Ref) callconv(.c) void {
     const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
     const screen_frame = macos.send(Rect, screen, "frame", .{});
-    // The native widget target preview sits just outside the destination's
-    // rim. Keep its logical target exact, then expand only its visual shell.
-    // The guide remains visible outside the card even when it is underneath
-    // the moving player near the final drop location.
-    const inset: f64 = SNAP_PREVIEW_INSET;
-    const preview_rect = rect(
-        snap_outline_rect.origin.x - inset,
-        snap_outline_rect.origin.y - inset,
-        snap_outline_rect.size.width + inset * 2,
-        snap_outline_rect.size.height + inset * 2,
-    );
+    const preview_rect = snap_outline_rect;
     // CGWindowList uses a top-left origin; AppKit windows use bottom-left.
     const frame = Rect{ .origin = .{
         .x = preview_rect.origin.x,
@@ -169,6 +184,7 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
         const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ frame, @as(usize, 0), @as(usize, 2), false });
         if (panel == null) return;
         snap_outline = panel;
+        macos.send(void, panel, "setTitle:", .{macos.string("Wallify Snap Outline")});
         macos.send(void, panel, "setOpaque:", .{false});
         macos.send(void, panel, "setBackgroundColor:", .{macos.send(Ref, macos.objc_getClass("NSColor"), "clearColor", .{})});
         macos.send(void, panel, "setAlphaValue:", .{@as(f64, 1)});
@@ -182,13 +198,15 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
         const view = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, frame.size.width, frame.size.height)});
         macos.send(void, panel, "setContentView:", .{view});
         macos.send(void, view, "setWantsLayer:", .{true});
+        macos.send(void, view, "setAutoresizingMask:", .{@as(usize, 18)});
         const layer = macos.send(Ref, view, "layer", .{});
         macos.send(void, layer, "setMasksToBounds:", .{true});
         macos.send(void, layer, "setCornerRadius:", .{@as(f64, OUTLINE_RADIUS)});
-        macos.send(void, layer, "setBorderWidth:", .{@as(f64, 3)});
-        const rim = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSColor"), "systemGrayColor", .{}), "colorWithAlphaComponent:", .{@as(f64, 0.78)});
+        macos.send(void, layer, "setBorderWidth:", .{@as(f64, 2.5)});
+        const rim = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSColor"), "whiteColor", .{}), "colorWithAlphaComponent:", .{@as(f64, 0.45)});
         macos.send(void, layer, "setBorderColor:", .{macos.send(Ref, rim, "CGColor", .{})});
-        macos.send(void, layer, "setBackgroundColor:", .{macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSColor"), "clearColor", .{}), "CGColor", .{})});
+        const bg = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSColor"), "whiteColor", .{}), "colorWithAlphaComponent:", .{@as(f64, 0.08)});
+        macos.send(void, layer, "setBackgroundColor:", .{macos.send(Ref, bg, "CGColor", .{})});
     }
     macos.send(void, snap_outline, "setFrame:display:", .{ frame, true });
     const panel_info = playerWindowInfo();
@@ -202,6 +220,8 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
     }
     const content = macos.send(Ref, snap_outline, "contentView", .{});
     macos.send(void, content, "setFrame:", .{rect(0, 0, frame.size.width, frame.size.height)});
+    const layer = macos.send(Ref, content, "layer", .{});
+    if (layer != null) macos.send(void, layer, "setFrame:", .{rect(0, 0, frame.size.width, frame.size.height)});
     updateSnapDebug();
 }
 
@@ -245,6 +265,14 @@ pub export fn widget_hide_snap_outline() callconv(.c) void {
 
 pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width: f64) callconv(.c) void {
     _ = visual_width;
+    var ox: f64 = 0;
+    var oy: f64 = 0;
+    if (native.wallify_panel_offsets(&ox, &oy)) {
+        cached_offset_x = ox;
+        cached_offset_y = oy;
+        has_cached_offsets = true;
+        return;
+    }
     const list = macos.CGWindowListCopyWindowInfo(1, 0) orelse return;
     defer macos.CFRelease(list);
     const count = macos.CFArrayGetCount(list);
@@ -263,6 +291,16 @@ pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width:
     }
 }
 
+/// Identifies active macOS desktop widgets and computes the closest grid snap position.
+///
+/// ## Desktop Widget Detection Strategy
+/// Notification Center hosts desktop widgets, but without Screen Recording permissions macOS TCC
+/// redacts `kCGWindowName` for foreign processes. We distinguish actual visible desktop widgets from
+/// internal scratch surfaces (buffers, sidebars, alerts) using physical WindowServer properties:
+/// 1. **Owner**: Owned by `Notification Center`.
+/// 2. **Alpha**: Fully composited tiles have `alpha >= 0.5` (scratch caches linger at `0.0`).
+/// 3. **Layer**: Live desktop widgets reside on the desktop layer (`-2147483601`).
+/// 4. **Dimensions**: Size must be within plausible widget ranges (80pt to 1400pt).
 pub export fn widget_nearby_panel_snap(margin_left: i32, margin_top: i32, visual_left: f64, visual_top: f64, visual_width: f64, visual_height: f64) callconv(.c) PanelSnap {
     const list = macos.CGWindowListCopyWindowInfo(1, 0) orelse return .{};
     defer macos.CFRelease(list);
@@ -279,18 +317,6 @@ pub export fn widget_nearby_panel_snap(margin_left: i32, margin_top: i32, visual
         const owner = macos.CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
         if (!stringEquals(owner, "Notification Center") and !stringEquals(owner, "NotificationCenter")) continue;
 
-        // Notification Center hosts both interactive desktop widgets and an assortment
-        // of internal scratch surfaces (cached render targets, off-screen drawers, and
-        // slide-out sidebars). Because macOS TCC redacts `kCGWindowName` for foreign
-        // processes without Screen Recording entitlement, we identify genuine desktop
-        // tiles through physical WindowServer properties:
-        //
-        // 1. Transparency: Scratch buffers linger with alpha = 0.0, while visible
-        //    tiles are fully composited.
-        // 2. Layering: Desktop widgets live exclusively on the desktop icon plane
-        //    (-2147483601). Notification alerts float high above (>= 0), while
-        //    hidden background caches drop to -2147483602.
-        // 3. Geometry: Discard staging rects that sit completely off-screen.
         if (macos.CFDictionaryGetValue(info, macos.kCGWindowAlpha)) |alpha_ref| {
             var alpha: f64 = 1.0;
             if (macos.CFNumberGetValue(alpha_ref, 13, @ptrCast(&alpha))) {
@@ -325,6 +351,14 @@ pub export fn widget_nearby_panel_snap(margin_left: i32, margin_top: i32, visual
     return result;
 }
 
+/// Pure geometric snap solver against detected widget candidate tiles.
+/// Evaluates adjacent positions (above, below, left, and right) aligned to the 180pt grid pitch.
+///
+/// Multi-column widgets (e.g. 360pt wide Weather Forecast) and multi-column Wallify configurations
+/// are evaluated per 180pt slot so widgets snap flush with uniform 16pt gutters.
+///
+/// The resulting outline is placed at the exact 164pt card position (target + 8pt) so the
+/// outline preview matches the visible frosted card identically.
 pub fn calculatePanelSnap(
     candidates: []const Rect,
     visual_x: f64,
@@ -337,24 +371,23 @@ pub fn calculatePanelSnap(
     visual_top: f64,
 ) PanelSnap {
     const grid_pitch: f64 = GRID_PITCH;
-    const visible_rim_x: f64 = VISIBLE_RIM;
-    const visible_rim_y: f64 = VISIBLE_RIM;
     const threshold_sq: f64 = SNAP_THRESHOLD;
     var best_dist = threshold_sq;
     var result = PanelSnap{};
-    const player_columns: i32 = @max(1, @as(i32, @intFromFloat(@round((visual_width + 16.0) / grid_pitch))));
+    const player_columns: i32 = @max(1, @as(i32, @intFromFloat(@round(visual_width / grid_pitch))));
 
     for (candidates) |neighbor| {
         var col: i32 = 0;
         const columns: i32 = @max(1, @as(i32, @intFromFloat(@round(neighbor.size.width / grid_pitch))));
+        const rows: i32 = @max(1, @as(i32, @intFromFloat(@round(neighbor.size.height / grid_pitch))));
         while (col < columns) : (col += 1) {
             const cell_x = neighbor.origin.x + @as(f64, @floatFromInt(col)) * grid_pitch;
             var player_col: i32 = 0;
             while (player_col < player_columns) : (player_col += 1) {
-                const aligned_left = cell_x - @as(f64, @floatFromInt(player_col)) * grid_pitch + visible_rim_x;
+                const aligned_left = cell_x - @as(f64, @floatFromInt(player_col)) * grid_pitch;
                 const targets = [_]Point{
-                    .{ .x = aligned_left, .y = neighbor.origin.y - visual_height - visible_rim_y },
-                    .{ .x = aligned_left, .y = neighbor.origin.y + neighbor.size.height + visible_rim_y },
+                    .{ .x = aligned_left, .y = neighbor.origin.y - visual_height },
+                    .{ .x = aligned_left, .y = neighbor.origin.y + neighbor.size.height },
                 };
                 for (targets) |target| {
                     const dx = target.x - visual_x;
@@ -366,36 +399,40 @@ pub fn calculatePanelSnap(
                             .found = true,
                             .margin_left = @as(i32, @intFromFloat(@round(target.x - offset_x - visual_left))),
                             .margin_top = @as(i32, @intFromFloat(@round(target.y - offset_y - visual_top))),
-                            .outline_x = target.x,
-                            .outline_y = target.y,
-                            .outline_width = visual_width,
-                            .outline_height = visual_height,
+                            .outline_x = target.x + 8.0,
+                            .outline_y = target.y + 8.0,
+                            .outline_width = visual_width - 16.0,
+                            .outline_height = visual_height - 16.0,
                             .distance_sq = dist_sq,
                         };
                     }
                 }
             }
         }
-        const side_targets = [_]Point{
-            .{ .x = neighbor.origin.x - visual_width - visible_rim_x, .y = neighbor.origin.y + visible_rim_y },
-            .{ .x = neighbor.origin.x + neighbor.size.width + visible_rim_x, .y = neighbor.origin.y + visible_rim_y },
-        };
-        for (side_targets) |target| {
-            const dx = target.x - visual_x;
-            const dy = target.y - visual_y;
-            const distance = dx * dx + dy * dy;
-            if (distance < best_dist) {
-                best_dist = distance;
-                result = .{
-                    .found = true,
-                    .margin_left = @as(i32, @intFromFloat(@round(target.x - offset_x - visual_left))),
-                    .margin_top = @as(i32, @intFromFloat(@round(target.y - offset_y - visual_top))),
-                    .outline_x = target.x,
-                    .outline_y = target.y,
-                    .outline_width = visual_width,
-                    .outline_height = visual_height,
-                    .distance_sq = distance,
-                };
+        var row: i32 = 0;
+        while (row < rows) : (row += 1) {
+            const aligned_top = neighbor.origin.y + @as(f64, @floatFromInt(row)) * grid_pitch;
+            const side_targets = [_]Point{
+                .{ .x = neighbor.origin.x - visual_width, .y = aligned_top },
+                .{ .x = neighbor.origin.x + neighbor.size.width, .y = aligned_top },
+            };
+            for (side_targets) |target| {
+                const dx = target.x - visual_x;
+                const dy = target.y - visual_y;
+                const distance = dx * dx + dy * dy;
+                if (distance < best_dist) {
+                    best_dist = distance;
+                    result = .{
+                        .found = true,
+                        .margin_left = @as(i32, @intFromFloat(@round(target.x - offset_x - visual_left))),
+                        .margin_top = @as(i32, @intFromFloat(@round(target.y - offset_y - visual_top))),
+                        .outline_x = target.x + 8.0,
+                        .outline_y = target.y + 8.0,
+                        .outline_width = visual_width - 16.0,
+                        .outline_height = visual_height - 16.0,
+                        .distance_sq = distance,
+                    };
+                }
             }
         }
     }
@@ -403,7 +440,7 @@ pub fn calculatePanelSnap(
 }
 
 test "panel snap returns not found when candidates list is empty" {
-    const snap = calculatePanelSnap(&.{}, 100, 100, 164, 164, 0, 0, 0, 0);
+    const snap = calculatePanelSnap(&.{}, 100, 100, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(!snap.found);
     try std.testing.expectEqual(@as(f64, 0), snap.distance_sq);
 }
@@ -412,33 +449,86 @@ test "panel snap vertically aligns above/below neighboring widget" {
     const neighbor = rect(200, 300, 180, 180);
     const candidates = [_]Rect{neighbor};
 
-    const snap_below = calculatePanelSnap(&candidates, 208, 495, 164, 164, 0, 0, 0, 0);
+    const snap_below = calculatePanelSnap(&candidates, 208, 495, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(snap_below.found);
     try std.testing.expectEqual(@as(f64, 488), snap_below.outline_y);
     try std.testing.expectEqual(@as(f64, 208), snap_below.outline_x);
+    try std.testing.expectEqual(@as(f64, 164), snap_below.outline_width);
+    try std.testing.expectEqual(@as(f64, 164), snap_below.outline_height);
 
-    const snap_above = calculatePanelSnap(&candidates, 208, 125, 164, 164, 0, 0, 0, 0);
+    const snap_above = calculatePanelSnap(&candidates, 208, 125, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(snap_above.found);
     try std.testing.expectEqual(@as(f64, 128), snap_above.outline_y);
+    try std.testing.expectEqual(@as(f64, 164), snap_above.outline_width);
+    try std.testing.expectEqual(@as(f64, 164), snap_above.outline_height);
 }
 
 test "panel snap horizontally aligns to neighboring widget sides" {
     const neighbor = rect(400, 200, 180, 180);
     const candidates = [_]Rect{neighbor};
 
-    const snap_right = calculatePanelSnap(&candidates, 590, 208, 164, 164, 0, 0, 0, 0);
+    const snap_right = calculatePanelSnap(&candidates, 590, 208, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(snap_right.found);
     try std.testing.expectEqual(@as(f64, 588), snap_right.outline_x);
     try std.testing.expectEqual(@as(f64, 208), snap_right.outline_y);
+    try std.testing.expectEqual(@as(f64, 164), snap_right.outline_width);
+    try std.testing.expectEqual(@as(f64, 164), snap_right.outline_height);
 
-    const snap_left = calculatePanelSnap(&candidates, 225, 208, 164, 164, 0, 0, 0, 0);
+    const snap_left = calculatePanelSnap(&candidates, 225, 208, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(snap_left.found);
     try std.testing.expectEqual(@as(f64, 228), snap_left.outline_x);
+}
+
+test "expanded 3-column panel snap calculates 524x164 card preview" {
+    const neighbor = rect(188, 221, 180, 180);
+    const candidates = [_]Rect{neighbor};
+
+    // Expanded panel is 540x180 (3 columns). Snapping right of neighbor at 188:
+    const snap_right = calculatePanelSnap(&candidates, 370, 225, 540, 180, 0, 0, 0, 0);
+    try std.testing.expect(snap_right.found);
+    try std.testing.expectEqual(@as(f64, 376), snap_right.outline_x); // 188 + 180 + 8
+    try std.testing.expectEqual(@as(f64, 229), snap_right.outline_y); // 221 + 8
+    try std.testing.expectEqual(@as(f64, 524), snap_right.outline_width); // 540 - 16
+    try std.testing.expectEqual(@as(f64, 164), snap_right.outline_height); // 180 - 16
 }
 
 test "panel snap rejects candidates beyond distance threshold" {
     const neighbor = rect(2000, 2000, 180, 180);
     const candidates = [_]Rect{neighbor};
-    const snap = calculatePanelSnap(&candidates, 100, 100, 164, 164, 0, 0, 0, 0);
+    const snap = calculatePanelSnap(&candidates, 100, 100, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(!snap.found);
+}
+
+test "isPlayerWindow rejects settings and debug windows" {
+    // Construct mock CFDictionary for Wallify Settings
+    const name_key = macos.kCGWindowName;
+    const owner_key = macos.kCGWindowOwnerName;
+    const layer_key = macos.kCGWindowLayer;
+
+    // Create a dictionary for Wallify Settings (owner: Wallify, name: Wallify Settings, layer: 3)
+    const dict_cls = macos.objc_getClass("NSMutableDictionary");
+    const dict = macos.send(macos.Ref, macos.send(macos.Ref, dict_cls, "alloc", .{}), "init", .{});
+    defer macos.CFRelease(dict);
+
+    const owner_val = macos.string("Wallify");
+    defer macos.CFRelease(owner_val);
+    const name_settings = macos.string("Wallify Settings");
+    defer macos.CFRelease(name_settings);
+    const num_cls = macos.objc_getClass("NSNumber");
+    const layer_val = macos.send(macos.Ref, num_cls, "numberWithInt:", .{@as(c_int, 3)});
+
+    macos.send(void, dict, "setObject:forKey:", .{ owner_val, owner_key });
+    macos.send(void, dict, "setObject:forKey:", .{ name_settings, name_key });
+    macos.send(void, dict, "setObject:forKey:", .{ layer_val, layer_key });
+
+    try std.testing.expect(!isPlayerWindow(dict));
+
+    // Now change name to Wallify and layer to -1 (the actual widget panel)
+    const name_widget = macos.string("Wallify");
+    defer macos.CFRelease(name_widget);
+    const widget_layer = macos.send(macos.Ref, num_cls, "numberWithInt:", .{@as(c_int, -1)});
+    macos.send(void, dict, "setObject:forKey:", .{ name_widget, name_key });
+    macos.send(void, dict, "setObject:forKey:", .{ widget_layer, layer_key });
+
+    try std.testing.expect(isPlayerWindow(dict));
 }

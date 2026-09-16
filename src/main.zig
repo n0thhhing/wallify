@@ -6,6 +6,7 @@ const media = @import("media/controller.zig");
 const render = @import("graphics/render.zig");
 const window = @import("ui/window.zig");
 const spotify = @import("media/spotify.zig");
+pub const settings_window = @import("ui/settings_window.zig");
 
 pub fn main() !void {
     @import("platform/native.zig").wallify_prepare();
@@ -20,6 +21,8 @@ pub fn main() !void {
     defer threaded.deinit();
     const io = threaded.io();
 
+    const open_settings_on_launch = @import("platform/native.zig").wallify_has_settings_flag();
+
     state.requestFrame();
 
     render.drawUIFrame();
@@ -28,6 +31,10 @@ pub fn main() !void {
     anim.detach();
     const metadata = try std.Thread.spawn(.{}, media.metadataLoop, .{io});
     metadata.detach();
+
+    if (open_settings_on_launch) {
+        settings_window.open();
+    }
 
     window.widget_application_run();
 }
@@ -44,6 +51,7 @@ test {
     _ = @import("ui/snap.zig");
     _ = @import("ui/hitbox.zig");
     _ = @import("ui/window.zig");
+    _ = @import("ui/settings_window.zig");
     _ = @import("media/playback_state.zig");
     _ = @import("media/playback_clock.zig");
     _ = @import("media/controller.zig");

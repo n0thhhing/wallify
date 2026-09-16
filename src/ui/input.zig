@@ -9,7 +9,7 @@ const menu = @import("menu.zig");
 const POINTER_CLICK: c_int = 1;
 const POINTER_RELEASE: c_int = 2;
 const POINTER_RIGHT_CLICK: c_int = 3;
-const SNAP_STEP_THRESHOLD: i32 = 8;
+const SNAP_STEP_THRESHOLD: i32 = 1;
 const CLICK_TOLERANCE: f64 = 5.0;
 const PET_DURATION: f64 = 2.5;
 const RATE_LOCKED: u32 = 1;
@@ -26,7 +26,6 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     const px = x;
     const py = y_top_down;
-
     state.pointer_x = px;
     const point = hitbox.Point{ .x = px, .y = py };
 
@@ -46,6 +45,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
             state.setting_speed,
             state.setting_source,
             state.setting_mode,
+            state.setting_transition,
         );
         state.requestFrame();
         return;
@@ -117,15 +117,47 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
                 state.panel_position_dirty = true;
             }
         }
+
+        const visual_left: f64 = 0.0;
+        const visual_top: f64 = 0.0;
+        const visual_width: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) state.Layout.compact_panel_width else state.Layout.expanded_panel_width;
+        const visual_height: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) state.Layout.compact_panel_height else state.Layout.expanded_panel_height;
+
+        window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, true);
+        const live_snap = window.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, visual_left, visual_top, visual_width, visual_height);
+
+        const preview_radius: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) 180.0 else 240.0;
+        const commit_radius: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) 150.0 else 190.0;
+        const show_snap_preview = live_snap.found and live_snap.distance_sq <= preview_radius * preview_radius;
+
+        if (!is_release and show_snap_preview) {
+            window.widget_show_snap_outline(live_snap.outline_x, live_snap.outline_y, live_snap.outline_width, live_snap.outline_height);
+        } else if (!is_release) {
+            window.widget_hide_snap_outline();
+        }
+
         if (is_release) {
             const mouse = window.widget_mouse_location();
             const idle_click = state.spotifyIdle() and @abs(mouse.x - state.widget_drag_start_mouse_x) < CLICK_TOLERANCE and @abs(mouse.y - state.widget_drag_start_mouse_y) < CLICK_TOLERANCE;
             if (idle_click) {
                 if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else spotify.widget_open_spotify();
             }
+
+            const snap_target = live_snap;
+            if (!idle_click and snap_target.found and snap_target.distance_sq <= commit_radius * commit_radius) {
+                state.panel_snap_active = true;
+                state.panel_snap_elapsed = 0;
+                state.panel_snap_start_left = state.widget_margin_left;
+                state.panel_snap_start_top = state.widget_margin_top;
+                state.panel_snap_target_left = @max(0, snap_target.margin_left);
+                state.panel_snap_target_top = @max(PANEL_DRAG_TOP_MIN, snap_target.margin_top);
+                state.panel_save_after_snap = true;
+            }
+
             state.global_panel_dragging = false;
+            window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, false);
             window.widget_hide_snap_outline();
-            state.saveWidgetSettings();
+            if (!state.panel_snap_active) state.saveWidgetSettings();
         }
         state.requestFrame();
         return;
@@ -148,7 +180,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
                 }
             }
         }
-        state.global_click_target = .none;
+        pressed = null;
     }
 
     if (state.global_is_dragging) {
@@ -171,7 +203,10 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         }
     }
 
-    if (state_changed) {
-        state.requestFrame();
-    }
+    if (is_release) pressed = null;
+    if (state_changed) state.requestFrame();
 }
+
+pub fn enableRawMode() !void {}
+pub fn disableRawMode() void {}
+pub fn inputLoop() void {}

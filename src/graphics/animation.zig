@@ -42,6 +42,7 @@ fn resizePanel(compact: bool) void {
 }
 fn movePanelToWidgetGrid() void {
     @import("../platform/native.zig").wallify_move(state.widget_margin_left, state.widget_margin_top);
+    @import("../ui/settings_window.zig").notify_position_changed();
 }
 
 pub fn animationLoop() void {
@@ -66,6 +67,12 @@ pub fn animationLoop() void {
             .idle_spotify => state.setting_idle_style = .spotify,
             .idle_pixel => state.setting_idle_style = .pixel_cat,
             .idle_banana => state.setting_idle_style = .banana_cat,
+            .transition_default => state.setting_transition = .default,
+            .transition_cinematic => state.setting_transition = .cinematic,
+            .transition_ripple => state.setting_transition = .ripple,
+            .transition_flip => state.setting_transition = .flip,
+            .transition_vinyl => state.setting_transition = .vinyl,
+            .transition_glitch => state.setting_transition = .glitch,
             .frame_off => state.setting_frame = .off,
             .frame_subtle => state.setting_frame = .subtle,
             .frame_strong => state.setting_frame = .strong,
@@ -76,8 +83,10 @@ pub fn animationLoop() void {
             .speed_normal => state.setting_speed = .normal,
             .speed_fast => state.setting_speed = .fast,
             .restore_defaults => {
+                state.panel_resize_after_compact = false;
                 resizePanel(false);
-                state.setting_idle_style = .spotify;
+                state.setting_idle_style = .pixel_cat;
+                state.setting_transition = .cinematic;
                 state.setting_glow = true;
                 state.setting_aurora = true;
                 state.setting_animations = true;
@@ -99,10 +108,13 @@ pub fn animationLoop() void {
                 resizePanel(false);
                 state.setting_mode = .expanded;
             },
+            .open_settings => {
+                @import("../ui/settings_window.zig").open();
+            },
             else => {},
         }
         if (menu_action != .none) {
-            if (@intFromEnum(menu_action) >= 5) state.saveWidgetSettings();
+            if (@intFromEnum(menu_action) >= 5 and menu_action != .open_settings) state.saveWidgetSettings();
             needs_draw = true;
         }
         if (!state.setting_animations) {
@@ -138,7 +150,9 @@ pub fn animationLoop() void {
         } else state.mode_mix = target_mode;
         if (state.panel_resize_after_compact and state.mode_mix <= 0.001) {
             state.panel_resize_after_compact = false;
+            state.mode_mix = 0;
             resizePanel(true);
+            needs_draw = true;
         }
         if (state.panel_position_dirty) {
             state.panel_position_dirty = false;
@@ -183,7 +197,7 @@ pub fn animationLoop() void {
             state.marquee_direction = 1;
         }
 
-        const aurora_target: f64 = if (state.setting_aurora and state.global_rate > 0 and state.idle_mix < 0.5 and state.global_has_artwork) 1 else 0;
+        const aurora_target: f64 = if (state.setting_aurora and state.idle_mix < 0.5 and state.global_has_artwork) 1 else 0;
         if (!state.setting_animations) {
             state.aurora_mix = aurora_target;
         } else if (@abs(state.aurora_mix - aurora_target) > 0.001) {

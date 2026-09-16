@@ -63,6 +63,46 @@ pub const Canvas = struct {
         _ = self.add(native.gpu.WALLIFY_TEXTURE, @intFromEnum(texture), rect, .{ 1, 1, 1, opacity });
     }
 
+    pub fn transition(
+        self: *Canvas,
+        style: @import("../state.zig").TransitionStyle,
+        new_tex: Texture,
+        old_tex: Texture,
+        rect: Rect,
+        mix: f32,
+        time: f32,
+        r: f32,
+        g: f32,
+        b: f32,
+    ) void {
+        const kind: c_int = switch (style) {
+            .cinematic => native.gpu.WALLIFY_CINEMATIC,
+            .ripple => native.gpu.WALLIFY_RIPPLE,
+            .flip => native.gpu.WALLIFY_FLIP,
+            .vinyl => native.gpu.WALLIFY_VINYL,
+            .glitch => native.gpu.WALLIFY_GLITCH,
+            .default => return,
+        };
+        const c = self.add(kind, @intFromEnum(new_tex), rect, .{ r, g, b, 1.0 });
+        c.parameter = @floatFromInt(@intFromEnum(old_tex));
+        c.sx = mix;
+        c.sy = time;
+    }
+
+    pub fn cinematic(
+        self: *Canvas,
+        new_tex: Texture,
+        old_tex: Texture,
+        rect: Rect,
+        mix: f32,
+        time: f32,
+        r: f32,
+        g: f32,
+        b: f32,
+    ) void {
+        self.transition(.cinematic, new_tex, old_tex, rect, mix, time, r, g, b);
+    }
+
     pub fn glass(self: *Canvas, rect: Rect, color: Color, art_r: f32, art_g: f32, art_b: f32, ambient_intensity: f32) void {
         const c = self.add(native.gpu.WALLIFY_GLASS, 0, rect, color);
         c.sx = art_r;

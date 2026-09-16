@@ -10,7 +10,12 @@ Build requirements: Zig **0.16.0**, Swift/Clang, and the Xcode Metal toolchain
 (`xcrun metal` and `xcrun metallib`). A Metal-capable Mac is required.
 
 ```sh
-./run.sh                 # Build ReleaseFast, package, and open Wallify.app
+./run                    # Build ReleaseFast, package, and launch Wallify.app
+./run -f                 # Run in foreground to stream logs to terminal
+./run -d                 # Debug build with runtime assertions enabled
+./run -t                 # Run test suite before launching
+./run -k                 # Stop running instance
+./run -h                 # Show all options
 ```
 
 After building, open `zig-out/Wallify.app` from Finder. Drag the card to move it,
@@ -38,23 +43,3 @@ use ReleaseFast for performance measurements.
 
 ## Rendering
 
-The live renderer submits a bounded list of drawing commands. Metal draws rounded
-shapes, clipping, gradients, artwork transitions, text, controls, and both sprite
-animations. Metal Performance Shaders blurs artwork when it changes.
-
-Artwork and sprite atlases stay in GPU textures. Text and SF Symbols are rasterized
-only when needed and cached as textures; layout and marquee animation move GPU
-quads. There is no full-frame CPU pixel engine, pixel conversion pass, or bitmap
-upload on each frame.
-
-For optional renderer timing, stop the running app and launch:
-
-```sh
-WALLIFY_PROFILE=1 ./zig-out/Wallify.app/Contents/MacOS/Wallify
-```
-
-Every 300 prepared scenes this reports mean scene-preparation CPU time, completed
-GPU time, draw count, and asset upload bytes. These are renderer measurements,
-not total app CPU usage or end-to-end input latency. Normal app launches are quiet.
-
-See [architecture](docs/architecture.md) for module ownership.
