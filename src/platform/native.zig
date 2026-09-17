@@ -37,3 +37,7 @@ pub extern fn wallify_panel_offsets(out_x: *f64, out_y: *f64) bool;
 pub extern "c" fn wallify_refresh_settings_ui() void;
 
 pub extern "c" fn wallify_update_glass_rect(x: f64, y: f64, w: f64, h: f64, radius: f64, active: bool) void;
+
+/// Install or remove the CGEventTap for hardware media key interception.
+/// target: 0=off, 1=active source, 2=spotify, 3=spotifast
+pub extern "c" fn wallify_update_media_key_tap(target: c_int) void;

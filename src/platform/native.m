@@ -472,3 +472,96 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
         }
     });
 }
+
+// ─── Hardware Media Key Interception ──────────────────────────────────────────
+// macOS routes F7/F8/F9 (and Touch Bar equivalents) as NSSystemDefined events
+// with subtype 8 (NX_SUBTYPE_AUX_CONTROL_BUTTONS). Key codes map to:
+//   NX_KEYTYPE_PLAY  = 16  (F8 / play-pause)
+//   NX_KEYTYPE_FAST  = 19  (F9 / next track)
+//   NX_KEYTYPE_REWIND = 20 (F7 / previous track)
+//
+// By installing a CGEventTap at kCGSessionEventTap we intercept these before
+// they reach the system media remote daemon (rpcd), which would otherwise wake
+// Apple Music. We consume the event and dispatch to Wallify's own pipeline.
+
+extern void wallify_media_key_event(int keyCode); // exported from Zig
+
+static CFMachPortRef mediaKeyTap = NULL;
+static CFRunLoopSourceRef mediaKeyTapSource = NULL;
+static int mediaKeyTarget = 0; // 0=off, 1=active, 2=spotify, 3=spotifast
+
+static CGEventRef mediaKeyCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
+    // Re-enable the tap if it was auto-disabled after a timeout
+    if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+        CGEventTapEnable(mediaKeyTap, true);
+        return event;
+    }
+
+    NSEvent *nsEvent = [NSEvent eventWithCGEvent:event];
+    if (!nsEvent || nsEvent.type != NSEventTypeSystemDefined || nsEvent.subtype != 8) return event;
+
+    // Decode the key from the data1 field — same format as IOKit NXEventData
+    int keyCode  = (int)((nsEvent.data1 & 0xFFFF0000) >> 16);
+    int keyFlags = (int)(nsEvent.data1 & 0x0000FFFF);
+    int keyState = (int)((keyFlags & 0xFF00) >> 8); // 0x0A = down, 0x0B = up
+
+    // Only act on key-down, not key-up (to avoid double-fire)
+    if (keyState != 0x0A) return NULL; // consume both, act only on down
+
+    if (keyCode == 16 || keyCode == 19 || keyCode == 20) {
+        // Dispatch to Zig — it knows the active source and routes accordingly
+        wallify_media_key_event(keyCode);
+        return NULL; // consume — prevent Apple Music from being woken
+    }
+    return event;
+}
+
+void wallify_update_media_key_tap(int target) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        mediaKeyTarget = target;
+
+        if (target == 0) {
+            // Remove the tap entirely
+            if (mediaKeyTap) {
+                CGEventTapEnable(mediaKeyTap, false);
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), mediaKeyTapSource, kCFRunLoopCommonModes);
+                CFRelease(mediaKeyTapSource);
+                CFRelease(mediaKeyTap);
+                mediaKeyTapSource = NULL;
+                mediaKeyTap = NULL;
+            }
+            return;
+        }
+
+        // Already installed — just update target, no need to reinstall
+        if (mediaKeyTap) return;
+
+        // Check for Accessibility permission — required for a session-level tap
+        if (!AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)@{
+            @"AXTrustedCheckOptionPrompt": @YES
+        })) {
+            NSLog(@"Wallify: Accessibility permission required for media key interception.");
+            return;
+        }
+
+        CGEventMask mask = CGEventMaskBit(NSEventTypeSystemDefined);
+        mediaKeyTap = CGEventTapCreate(
+            kCGSessionEventTap,
+            kCGHeadInsertEventTap,
+            kCGEventTapOptionDefault,
+            mask,
+            mediaKeyCallback,
+            NULL
+        );
+
+        if (!mediaKeyTap) {
+            NSLog(@"Wallify: Failed to create CGEventTap (check Accessibility permission).");
+            return;
+        }
+
+        mediaKeyTapSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mediaKeyTap, 0);
+        CFRunLoopAddSource(CFRunLoopGetMain(), mediaKeyTapSource, kCFRunLoopCommonModes);
+        CGEventTapEnable(mediaKeyTap, true);
+        NSLog(@"Wallify: Media key tap installed (target=%d).", target);
+    });
+}

@@ -139,6 +139,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSAppleEventsUsageDescription</key>
     <string>Wallify uses Apple Events to display track metadata and control music playback.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Wallify needs Accessibility access to intercept media keys (F7/F8/F9) and redirect them to Spotify or your chosen source instead of Apple Music.</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
 </dict>

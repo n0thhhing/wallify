@@ -205,6 +205,39 @@ pub fn togglePlayback() void {
     state.requestFrame();
 }
 
+/// Called from the CGEventTap in native.m when a hardware media key is pressed.
+/// keyCode: 16=play-pause, 19=next, 20=previous (NX_KEYTYPE constants).
+/// Routes the command based on setting_media_key_target, bypassing the normal
+/// active-source resolution so the user's explicit override is always honored.
+pub export fn wallify_media_key_event(keyCode: c_int) callconv(.c) void {
+    // Play/pause (keyCode 16) uses the full optimistic-clock toggle path
+    if (keyCode == 16) {
+        togglePlayback();
+        return;
+    }
+
+    const cmd: MediaRemoteCommand = switch (keyCode) {
+        19 => .next_track,
+        20 => .previous_track,
+        else => return,
+    };
+
+    switch (state.setting_media_key_target) {
+        .off => {}, // tap shouldn't be installed when off, but be safe
+        .active => triggerCommand(cmd),
+        .spotify => switch (cmd) {
+            .next_track => spotify.widget_spotify_control(.next_track),
+            .previous_track => spotify.widget_spotify_control(.previous_track),
+            else => {},
+        },
+        .spotifast => switch (cmd) {
+            .next_track => spotifast.widget_spotifast_control(.next_track),
+            .previous_track => spotifast.widget_spotifast_control(.previous_track),
+            else => {},
+        },
+    }
+}
+
 pub fn utf8Prefix(text: []const u8, max_len: usize) []const u8 {
     var len = @min(text.len, max_len);
     if (len < text.len) {

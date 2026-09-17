@@ -21,6 +21,10 @@ pub const WallifySettingsSnapshot = extern struct {
     margin_top: c_int,
     grid_x: c_int,
     grid_y: c_int,
+    hide_text: bool,
+    hide_progress: bool,
+    font_scale: c_int,
+    media_key_target: c_int,
 };
 
 pub extern fn wallify_show_settings_window() void;
@@ -63,6 +67,10 @@ pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) call
             .margin_top = state.widget_margin_top,
             .grid_x = state.widget_grid_x,
             .grid_y = state.widget_grid_y,
+            .hide_text = state.setting_hide_text,
+            .hide_progress = state.setting_hide_progress,
+            .font_scale = @intFromEnum(state.setting_font_scale),
+            .media_key_target = @intFromEnum(state.setting_media_key_target),
         };
     }
 }
@@ -78,6 +86,8 @@ pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) vo
             if (val) window.widget_debug_window_show() else window.widget_debug_window_hide();
         },
         5 => state.setting_native_glass = val,
+        6 => state.setting_hide_text = val,
+        7 => state.setting_hide_progress = val,
         else => {},
     }
     state.saveWidgetSettings();
@@ -108,6 +118,12 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
             else => .spotify,
         },
         16 => state.setting_transition = @enumFromInt(std.math.clamp(val, 0, 5)),
+        17 => state.setting_font_scale = @enumFromInt(std.math.clamp(val, 0, 2)),
+        18 => {
+            state.setting_media_key_target = @enumFromInt(std.math.clamp(val, 0, 3));
+            // Notify native layer to install/remove the CGEventTap accordingly
+            native.wallify_update_media_key_tap(@intFromEnum(state.setting_media_key_target));
+        },
         else => {},
     }
     state.saveWidgetSettings();
@@ -126,6 +142,11 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_speed = .normal;
     state.setting_source = .now_playing;
     state.setting_mode = .expanded;
+    state.setting_hide_text = false;
+    state.setting_hide_progress = false;
+    state.setting_font_scale = .normal;
+    state.setting_media_key_target = .off;
+    native.wallify_update_media_key_tap(0);
     state.panel_resize_after_compact = false;
     native.resize(false);
     state.saveWidgetSettings();

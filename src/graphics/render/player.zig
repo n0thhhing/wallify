@@ -45,7 +45,7 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
             .h = card.h - 84.0,
         }, .{ 0.0, 0.0, 0.0, 162.0 / 255.0 });
     } else {
-        drawProgressBar(canvas, elapsed);
+        if (!state.setting_hide_progress) drawProgressBar(canvas, elapsed);
         drawButtons(canvas);
     }
 

@@ -29,6 +29,10 @@ extern const char *wallify_settings_path(void);
 @property (nonatomic, strong) NSSegmentedControl *sourceSegment;
 @property (nonatomic, strong) NSSegmentedControl *idleSegment;
 @property (nonatomic, strong) NSPopUpButton *transitionPopup;
+@property (nonatomic, strong) NSButton *hideTextSwitch;
+@property (nonatomic, strong) NSButton *hideProgressSwitch;
+@property (nonatomic, strong) NSSegmentedControl *fontScaleSegment;
+@property (nonatomic, strong) NSSegmentedControl *mediaKeySegment;
 
 // Desktop & Advanced controls
 @property (nonatomic, strong) NSTextField *gridStatusLabel;
@@ -267,6 +271,27 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.transitionPopup.action = @selector(transitionChanged:);
     [view addSubview:self.transitionPopup];
     [view addSubview:makeSubtext(@"GPU Metal shader animation played when switching songs.", 20, 398, 480)];
+
+    [view addSubview:makeDivider(20, 412, 480)];
+
+    // Section 4: Visibility & Font
+    [view addSubview:makeHeaderLabel(@"VISIBILITY & FONT", 20, 424)];
+    self.hideTextSwitch = makeSwitch(@"Hide Track Title & Artist", 6, self, @selector(switchChanged:), 20, 442);
+    [view addSubview:self.hideTextSwitch];
+
+    self.hideProgressSwitch = makeSwitch(@"Hide Progress Bar", 7, self, @selector(switchChanged:), 220, 442);
+    [view addSubview:self.hideProgressSwitch];
+
+    self.fontScaleSegment = makeSegments(@[@"Small", @"Normal", @"Large"], 17, self, @selector(segmentChanged:), 20, 462, 320);
+    [view addSubview:self.fontScaleSegment];
+
+    [view addSubview:makeDivider(20, 490, 480)];
+
+    // Section 5: Media Key Redirect
+    [view addSubview:makeHeaderLabel(@"MEDIA KEY REDIRECT (F7 / F8 / F9)", 20, 502)];
+    [view addSubview:makeSubtext(@"Intercepts hardware play/pause and skip keys and routes them to the chosen app instead of Apple Music. Requires Accessibility permission.", 20, 520, 480)];
+    self.mediaKeySegment = makeSegments(@[@"Off", @"Active Source", @"Spotify", @"Spotifast"], 18, self, @selector(segmentChanged:), 20, 548, 440);
+    [view addSubview:self.mediaKeySegment];
 }
 
 - (void)buildDesktopTab:(WallifyFlippedView *)view {
@@ -444,13 +469,17 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.dimSwitch.state = s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
     self.debugSwitch.state = s.debug_hud ? NSControlStateValueOn : NSControlStateValueOff;
 
+    self.hideTextSwitch.state = s.hide_text ? NSControlStateValueOn : NSControlStateValueOff;
+    self.hideProgressSwitch.state = s.hide_progress ? NSControlStateValueOn : NSControlStateValueOff;
+
     self.frameSegment.selectedSegment = (s.frame_strength >= 0 && s.frame_strength <= 2) ? s.frame_strength : 1;
     self.intensitySegment.selectedSegment = (s.glow_intensity >= 0 && s.glow_intensity <= 2) ? s.glow_intensity : 1;
     self.speedSegment.selectedSegment = (s.animation_speed >= 0 && s.animation_speed <= 2) ? s.animation_speed : 1;
-
-    self.modeSegment.selectedSegment = (s.widget_mode >= 0 && s.widget_mode <= 1) ? s.widget_mode : 0;
+    self.modeSegment.selectedSegment = (s.widget_mode >= 0 && s.widget_mode <= 1) ? s.widget_mode : 1;
     self.sourceSegment.selectedSegment = (s.media_source >= 0 && s.media_source <= 3) ? s.media_source : 0;
     self.idleSegment.selectedSegment = (s.idle_style >= 0 && s.idle_style <= 2) ? s.idle_style : 0;
+    self.fontScaleSegment.selectedSegment = (s.font_scale >= 0 && s.font_scale <= 2) ? s.font_scale : 1;
+    self.mediaKeySegment.selectedSegment = (s.media_key_target >= 0 && s.media_key_target <= 3) ? s.media_key_target : 0;
 
     if (s.track_transition >= 0 && s.track_transition < self.transitionPopup.numberOfItems) {
         [self.transitionPopup selectItemAtIndex:s.track_transition];

@@ -152,6 +152,27 @@ pub const WidgetMode = enum(u8) {
     expanded = 1,
 };
 
+pub const FontScale = enum(u8) {
+    small = 0,
+    normal = 1,
+    large = 2,
+};
+
+/// Controls which source receives intercepted hardware media keys (F7/F8/F9).
+/// When set to anything other than .off, Wallify installs a CGEventTap that
+/// consumes the key event and routes it through its own command pipeline instead.
+pub const MediaKeyTarget = enum(u8) {
+    off = 0, // Don't intercept — macOS handles keys normally (Apple Music)
+    active = 1, // Route through Wallify's active source (respects Auto mode)
+    spotify = 2, // Always send to Spotify via AppleScript
+    spotifast = 3, // Always send to Spotifast via IPC
+};
+
+pub var setting_hide_text: bool = false;
+pub var setting_hide_progress: bool = false;
+pub var setting_font_scale: FontScale = .normal;
+pub var setting_media_key_target: MediaKeyTarget = .off;
+
 pub var setting_glow: bool = true;
 pub var setting_native_glass: bool = false;
 pub var setting_aurora: bool = true;

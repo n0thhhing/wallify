@@ -24,6 +24,10 @@ typedef struct {
     int margin_top;
     int grid_x;
     int grid_y;
+    bool hide_text;
+    bool hide_progress;
+    int font_scale;      // 0: small, 1: normal, 2: large
+    int media_key_target; // 0: off, 1: active, 2: spotify, 3: spotifast
 } WallifySettingsSnapshot;
 
 // Exported from Zig
