@@ -53,7 +53,7 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
 }
 
 fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
-    if (!state.setting_glow or !state.global_has_artwork or !assets.has_art or state.setting_native_glass) return;
+    if (!state.setting_glow or !state.global_has_artwork or !assets.has_art) return;
 
     const size = @as(f64, native.wallify_glow_extent(L.art_size_expanded)) * state.layout.art_size / L.art_size_expanded;
     const rect = gpu.Rect{

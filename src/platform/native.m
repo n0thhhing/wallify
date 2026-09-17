@@ -471,25 +471,15 @@ static void tuneGlassSublayers(CALayer *layer) {
     if (!layer) return;
     for (CALayer *sub in layer.sublayers) {
         if ([sub.name isEqualToString:@"backdrop"]) {
-            NSArray *filters = sub.filters;
-            if (filters) {
-                for (id f in filters) {
-                    NSString *desc = [NSString stringWithFormat:@"%@", f];
-                    if ([desc containsString:@"gaussianBlur"]) {
-                        [f setValue:@(13.0) forKey:@"inputRadius"];
-                    } else if ([desc containsString:@"colorSaturate"]) {
-                        [f setValue:@(1.8) forKey:@"inputAmount"];
-                    }
-                }
-                sub.filters = filters;
-            }
-            [sub setValue:@(0.5) forKey:@"scale"];
+            @try {
+                [sub setValue:@(16.0) forKeyPath:@"filters.gaussianBlur.inputRadius"];
+                [sub setValue:@(0.25) forKey:@"scale"];
+                [sub setValue:@(1.8) forKeyPath:@"filters.colorSaturate.inputAmount"];
+            } @catch (id _) {}
         } else if ([sub.name isEqualToString:@"fill"]) {
-            sub.opacity = 0.25f;
+            sub.opacity = 0.35f;
         } else if ([sub.name isEqualToString:@"tone"]) {
             sub.opacity = 0.0f; // Removes the frosted/milky lighten overlay
-        } else if ([sub.name isEqualToString:@"desktop tint"]) {
-            sub.opacity = 0.25f; // Pulls in the rich wallpaper color tone like native widgets
         }
         tuneGlassSublayers(sub);
     }
