@@ -94,7 +94,7 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         coverage *= 1.0f - smoothstep(-aa * 0.5f, aa * 0.5f, clip);
     }
 
-    float4 color = float4(c.r, c.g, c.b, 1.0f);
+    float4 color = float4(c.r, c.g, c.b, (c.kind == WALLIFY_GLASS) ? c.alpha : 1.0f);
     if (c.kind == WALLIFY_TEXTURE || c.kind == WALLIFY_GLOW || c.kind == WALLIFY_NEAREST || c.kind == WALLIFY_GLOW_SOURCE) {
         constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
         constexpr sampler pixelSampler(filter::nearest, address::clamp_to_edge);
@@ -395,5 +395,8 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         color = float4(blended_rgb, 1.0f);
     }
 
+    if (c.kind == WALLIFY_GLASS) {
+        return color * coverage;
+    }
     return color * (c.alpha * coverage);
 }

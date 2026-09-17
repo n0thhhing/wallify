@@ -181,6 +181,7 @@ bool wallify_create(int width, int height, int left, int top) {
     view.layer = surface;
     
     NSView *container = [[NSView alloc] initWithFrame:bounds];
+    container.wantsLayer = YES;
     view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [container addSubview:view];
     panel.contentView = container;
@@ -471,11 +472,15 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
         if (active) {
             if (!globalGlassView) {
                 globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-                globalGlassView.material = NSVisualEffectMaterialPopover;
+                globalGlassView.material = NSVisualEffectMaterialHUDWindow;
                 globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
                 globalGlassView.state = NSVisualEffectStateActive;
+                globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
                 globalGlassView.wantsLayer = YES;
                 globalGlassView.layer.masksToBounds = YES;
+                globalGlassView.layer.cornerCurve = kCACornerCurveContinuous;
+                globalGlassView.layer.borderWidth = 1.0;
+                globalGlassView.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.12].CGColor;
                 
                 NSView *container = panel.contentView;
                 [container addSubview:globalGlassView positioned:NSWindowBelow relativeTo:nil];
