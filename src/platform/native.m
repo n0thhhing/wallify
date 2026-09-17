@@ -467,33 +467,14 @@ bool wallify_panel_offsets(double *out_x, double *out_y) {
 
 static NSVisualEffectView *globalGlassView = nil;
 
-static void tuneGlassSublayers(CALayer *layer) {
-    if (!layer) return;
-    for (CALayer *sub in layer.sublayers) {
-        if ([sub.name isEqualToString:@"backdrop"]) {
-            @try {
-                [sub setValue:@(16.0) forKeyPath:@"filters.gaussianBlur.inputRadius"];
-                [sub setValue:@(0.25) forKey:@"scale"];
-                [sub setValue:@(1.8) forKeyPath:@"filters.colorSaturate.inputAmount"];
-            } @catch (id _) {}
-        } else if ([sub.name isEqualToString:@"fill"]) {
-            sub.opacity = 0.35f;
-        } else if ([sub.name isEqualToString:@"tone"]) {
-            sub.opacity = 0.0f; // Removes the frosted/milky lighten overlay
-        }
-        tuneGlassSublayers(sub);
-    }
-}
-
 void wallify_update_glass_rect(double x, double y, double w, double h, double radius, bool active) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (active) {
             if (!globalGlassView) {
                 globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-                globalGlassView.material = NSVisualEffectMaterialHUDWindow;
+                globalGlassView.material = NSVisualEffectMaterialUnderWindowBackground;
                 globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
                 globalGlassView.state = NSVisualEffectStateActive;
-                globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
                 globalGlassView.wantsLayer = YES;
                 globalGlassView.layer.masksToBounds = YES;
                 globalGlassView.layer.cornerCurve = kCACornerCurveContinuous;
@@ -508,7 +489,6 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
             double flippedY = atomic_load(&surfaceHeight) - y - h;
             globalGlassView.frame = NSMakeRect(x, flippedY, w, h);
             globalGlassView.layer.cornerRadius = radius;
-            tuneGlassSublayers(globalGlassView.layer);
         } else {
             if (globalGlassView) {
                 globalGlassView.hidden = YES;
@@ -516,6 +496,7 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
         }
     });
 }
+
 
 // ─── Hardware Media Key Interception ──────────────────────────────────────────
 // macOS routes F7/F8/F9 (and Touch Bar equivalents) as NSSystemDefined events
