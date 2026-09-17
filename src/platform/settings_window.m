@@ -121,7 +121,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.window.tabbingMode = NSWindowTabbingModeDisallowed;
 
     WallifyFlippedView *root = [[WallifyFlippedView alloc] initWithFrame:frame];
-    root.material = NSVisualEffectMaterialWindowBackground;
+    root.material = NSVisualEffectMaterialPopover;
     root.blendingMode = NSVisualEffectBlendingModeBehindWindow;
     root.state = NSVisualEffectStateActive;
     self.window.contentView = root;
