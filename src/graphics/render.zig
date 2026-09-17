@@ -53,16 +53,14 @@ pub fn drawUIFrame() void {
     // Frosted acrylic glass shell with GPU specular bevel and subtle artwork ambient diffusion
     const ambient_intensity: f32 = if (state.global_has_artwork and assets.has_art and state.setting_glow) 0.12 else 0.0;
     native.wallify_update_glass_rect(card.x, card.y, card.w, card.h, card.radius, state.setting_native_glass);
-    if (!state.setting_native_glass) {
-        canvas.glass(
-            card,
-            cardBackgroundColor(),
-            @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
-            @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
-            @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
-            ambient_intensity,
-        );
-    }
+    canvas.glass(
+        card,
+        cardBackgroundColor(),
+        @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
+        @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
+        @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
+        ambient_intensity,
+    );
 
     // Dynamic fluid Aurora wave layer (Apple Music style)
     if (state.aurora_mix > 0.001 and state.global_has_artwork and assets.has_art) {
@@ -83,7 +81,7 @@ pub fn drawUIFrame() void {
     // Optional border frame outline
     canvas.opacity = 1.0;
     const frame_strength = state.setting_frame.multiplier();
-    if (frame_strength > 0.0 and !state.setting_native_glass) {
+    if (frame_strength > 0.0) {
         canvas.stroke(card, 0.8, .{ 1.0, 1.0, 1.0, @floatCast(0.12 * frame_strength) });
     }
 
