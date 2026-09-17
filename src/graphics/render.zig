@@ -46,6 +46,7 @@ pub fn drawUIFrame() void {
 
     // Frosted acrylic glass shell with GPU specular bevel and subtle artwork ambient diffusion
     const ambient_intensity: f32 = if (state.global_has_artwork and assets.has_art and state.setting_glow) 0.12 else 0.0;
+    native.wallify_update_glass_rect(card.x, card.y, card.w, card.h, card.radius, state.setting_native_glass);
     canvas.glass(
         card,
         card_background_color,

@@ -15,6 +15,7 @@ extern const char *wallify_settings_path(void);
 @property (nonatomic, strong) NSTabView *tabView;
 
 // Appearance controls
+@property (nonatomic, strong) NSButton *nativeGlassSwitch;
 @property (nonatomic, strong) NSButton *glowSwitch;
 @property (nonatomic, strong) NSButton *auroraSwitch;
 @property (nonatomic, strong) NSSegmentedControl *intensitySegment;
@@ -185,37 +186,41 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     // Section 1: Lighting & Glow
     [view addSubview:makeHeaderLabel(@"LIGHTING & ATMOSPHERE", 20, 16)];
 
-    self.glowSwitch = makeSwitch(@"Radiant Artwork Glow", 0, self, @selector(switchChanged:), 20, 38);
+    self.nativeGlassSwitch = makeSwitch(@"Native macOS Frosted Glass", 4, self, @selector(switchChanged:), 20, 38);
+    [view addSubview:self.nativeGlassSwitch];
+    [view addSubview:makeSubtext(@"Uses true OS-level vibrancy blurring underneath the widget.", 44, 62, 450)];
+
+    self.glowSwitch = makeSwitch(@"Radiant Artwork Glow", 0, self, @selector(switchChanged:), 20, 84);
     [view addSubview:self.glowSwitch];
-    [view addSubview:makeSubtext(@"Casts an ambient atmospheric glow matching current album art colors.", 44, 62, 450)];
+    [view addSubview:makeSubtext(@"Casts an ambient atmospheric glow matching current album art colors.", 44, 108, 450)];
 
-    self.auroraSwitch = makeSwitch(@"Dynamic Aurora Background", 1, self, @selector(switchChanged:), 20, 84);
+    self.auroraSwitch = makeSwitch(@"Dynamic Aurora Background", 1, self, @selector(switchChanged:), 20, 130);
     [view addSubview:self.auroraSwitch];
-    [view addSubview:makeSubtext(@"Multi-stop animated color gradient shifting smoothly behind the widget.", 44, 108, 450)];
+    [view addSubview:makeSubtext(@"Multi-stop animated color gradient shifting smoothly behind the widget.", 44, 154, 450)];
 
-    [view addSubview:makeItemLabel(@"Glow Intensity", 20, 132)];
-    self.intensitySegment = makeSegments(@[@"Low", @"Normal", @"High"], 11, self, @selector(segmentChanged:), 20, 154, 320);
+    [view addSubview:makeItemLabel(@"Glow Intensity", 20, 178)];
+    self.intensitySegment = makeSegments(@[@"Low", @"Normal", @"High"], 11, self, @selector(segmentChanged:), 20, 200, 320);
     [view addSubview:self.intensitySegment];
 
-    [view addSubview:makeDivider(20, 192, 480)];
+    [view addSubview:makeDivider(20, 238, 480)];
 
     // Section 2: Motion & Glass Frame
-    [view addSubview:makeHeaderLabel(@"MOTION & GLASS BORDER", 20, 204)];
+    [view addSubview:makeHeaderLabel(@"MOTION & GLASS BORDER", 20, 250)];
 
-    self.animationsSwitch = makeSwitch(@"Fluid UI Animations", 2, self, @selector(switchChanged:), 20, 226);
+    self.animationsSwitch = makeSwitch(@"Fluid UI Animations", 2, self, @selector(switchChanged:), 20, 272);
     [view addSubview:self.animationsSwitch];
-    [view addSubview:makeSubtext(@"Spring physics for resizing, marquee titles, and pet reactions.", 44, 250, 450)];
+    [view addSubview:makeSubtext(@"Spring physics for resizing, marquee titles, and pet reactions.", 44, 296, 450)];
 
-    self.dimSwitch = makeSwitch(@"Dim Artwork When Paused", 3, self, @selector(switchChanged:), 20, 272);
+    self.dimSwitch = makeSwitch(@"Dim Artwork When Paused", 3, self, @selector(switchChanged:), 20, 318);
     [view addSubview:self.dimSwitch];
-    [view addSubview:makeSubtext(@"Subtly reduces artwork brightness when playback is paused.", 44, 296, 450)];
+    [view addSubview:makeSubtext(@"Subtly reduces artwork brightness when playback is paused.", 44, 342, 450)];
 
-    [view addSubview:makeItemLabel(@"Glass Border Accent", 20, 320)];
-    self.frameSegment = makeSegments(@[@"Off", @"Subtle", @"Strong"], 10, self, @selector(segmentChanged:), 20, 342, 320);
+    [view addSubview:makeItemLabel(@"Glass Border Accent", 20, 366)];
+    self.frameSegment = makeSegments(@[@"Off", @"Subtle", @"Strong"], 10, self, @selector(segmentChanged:), 20, 388, 320);
     [view addSubview:self.frameSegment];
 
-    [view addSubview:makeItemLabel(@"Animation Pacing", 20, 376)];
-    self.speedSegment = makeSegments(@[@"Slow", @"Normal", @"Fast"], 12, self, @selector(segmentChanged:), 20, 398, 320);
+    [view addSubview:makeItemLabel(@"Animation Pacing", 20, 422)];
+    self.speedSegment = makeSegments(@[@"Slow", @"Normal", @"Fast"], 12, self, @selector(segmentChanged:), 20, 444, 320);
     [view addSubview:self.speedSegment];
 }
 
@@ -432,6 +437,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     WallifySettingsSnapshot s;
     wallify_settings_get_snapshot(&s);
 
+    self.nativeGlassSwitch.state = s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
     self.glowSwitch.state = s.glow ? NSControlStateValueOn : NSControlStateValueOff;
     self.auroraSwitch.state = s.aurora ? NSControlStateValueOn : NSControlStateValueOff;
     self.animationsSwitch.state = s.animations ? NSControlStateValueOn : NSControlStateValueOff;
@@ -501,4 +507,11 @@ bool wallify_has_settings_flag(void) {
         }
     }
     return false;
+}
+void wallify_refresh_settings_ui(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (sharedSettingsController && sharedSettingsController.window.isVisible) {
+            [sharedSettingsController refreshUIFromState];
+        }
+    });
 }

@@ -148,6 +148,8 @@ pub fn parseConfigContent(content: []const u8) void {
 
         if (std.ascii.eqlIgnoreCase(key, "artwork_glow")) {
             if (parseBool(val)) |b| state.setting_glow = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "native_glass")) {
+            if (parseBool(val)) |b| state.setting_native_glass = b;
         } else if (std.ascii.eqlIgnoreCase(key, "aurora")) {
             if (parseBool(val)) |b| state.setting_aurora = b;
         } else if (std.ascii.eqlIgnoreCase(key, "animations")) {
@@ -224,6 +226,7 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\[Appearance]
         \\# Ambient glow radiating from album artwork colors [true, false]
         \\artwork_glow = {s}
+        \\native_glass = {s}
         \\
         \\# Multi-stop dynamic aurora gradient behind the widget [true, false]
         \\aurora = {s}
@@ -272,6 +275,7 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
     ,
         .{
             if (state.setting_glow) "true" else "false",
+            if (state.setting_native_glass) "true" else "false",
             if (state.setting_aurora) "true" else "false",
             if (state.setting_animations) "true" else "false",
             if (state.setting_dim) "true" else "false",
@@ -300,6 +304,7 @@ pub fn saveWidgetSettings() void {
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
     defer _ = std.posix.system.close(fd);
     _ = std.posix.system.write(fd, text.ptr, text.len);
+    native.wallify_refresh_settings_ui();
 }
 
 test "parseConfigContent handles human-readable names, comments, and sections" {

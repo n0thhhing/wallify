@@ -179,7 +179,10 @@ bool wallify_create(int width, int height, int left, int top) {
     surface.contentsScale = NSScreen.mainScreen.backingScaleFactor;
     view.wantsLayer = YES;
     view.layer = surface;
-    panel.contentView = view;
+    
+    NSView *container = [[NSView alloc] initWithFrame:bounds];
+    [container addSubview:view];
+    panel.contentView = container;
     movePanel(left, top);
     [panel orderFrontRegardless];
 
@@ -439,3 +442,32 @@ bool wallify_panel_offsets(double *out_x, double *out_y) {
 }
 
 #import "settings_window.m"
+
+static NSVisualEffectView *globalGlassView = nil;
+
+void wallify_update_glass_rect(double x, double y, double w, double h, double radius, bool active) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (active) {
+            if (!globalGlassView) {
+                globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
+                globalGlassView.material = NSVisualEffectMaterialUnderWindowBackground;
+                globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+                globalGlassView.state = NSVisualEffectStateActive;
+                globalGlassView.wantsLayer = YES;
+                globalGlassView.layer.masksToBounds = YES;
+                
+                NSView *container = panel.contentView;
+                [container addSubview:globalGlassView positioned:NSWindowBelow relativeTo:nil];
+            }
+            globalGlassView.hidden = NO;
+            // Flipped coords: Metal draws from top-left, AppKit from bottom-left
+            double flippedY = atomic_load(&surfaceHeight) - y - h;
+            globalGlassView.frame = NSMakeRect(x, flippedY, w, h);
+            globalGlassView.layer.cornerRadius = radius;
+        } else {
+            if (globalGlassView) {
+                globalGlassView.hidden = YES;
+            }
+        }
+    });
+}

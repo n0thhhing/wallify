@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 typedef struct {
+    bool native_glass;
     bool glow;
     bool aurora;
     bool animations;

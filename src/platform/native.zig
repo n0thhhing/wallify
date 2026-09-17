@@ -34,3 +34,6 @@ pub extern fn wallify_has_settings_flag() bool;
 
 pub extern fn wallify_panel_window_number() isize;
 pub extern fn wallify_panel_offsets(out_x: *f64, out_y: *f64) bool;
+pub extern "c" fn wallify_refresh_settings_ui() void;
+
+pub extern "c" fn wallify_update_glass_rect(x: f64, y: f64, w: f64, h: f64, radius: f64, active: bool) void;

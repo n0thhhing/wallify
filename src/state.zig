@@ -152,6 +152,7 @@ pub const WidgetMode = enum(u8) {
 };
 
 pub var setting_glow: bool = true;
+pub var setting_native_glass: bool = false;
 pub var setting_aurora: bool = true;
 pub var setting_animations: bool = true;
 pub var setting_dim: bool = true;
