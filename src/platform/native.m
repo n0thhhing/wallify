@@ -181,6 +181,7 @@ bool wallify_create(int width, int height, int left, int top) {
     view.layer = surface;
     
     NSView *container = [[NSView alloc] initWithFrame:bounds];
+    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [container addSubview:view];
     panel.contentView = container;
     movePanel(left, top);
