@@ -413,11 +413,31 @@ void wallify_prepare(void) {
     @autoreleasepool {
         NSBundle *bundle = NSBundle.mainBundle;
         if ([bundle.bundlePath.pathExtension isEqualToString:@"app"]) {
-            NSString *support = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"Wallify"];
-            [[NSFileManager defaultManager] createDirectoryAtPath:support withIntermediateDirectories:YES attributes:nil error:nil];
-            settingsPath = [support stringByAppendingPathComponent:@"widget-settings.conf"];
-            if (![[NSFileManager defaultManager] fileExistsAtPath:settingsPath])
-                [[NSFileManager defaultManager] copyItemAtPath:[bundle.resourcePath stringByAppendingPathComponent:@"widget-settings.conf"] toPath:settingsPath error:nil];
+            NSFileManager *fm = [NSFileManager defaultManager];
+
+            // XDG path: ~/.config/Wallify/widget-settings.conf
+            NSString *home = NSHomeDirectory();
+            NSString *xdgDir  = [home stringByAppendingPathComponent:@".config/Wallify"];
+            NSString *xdgPath = [xdgDir stringByAppendingPathComponent:@"widget-settings.conf"];
+
+            // AppSupport path: ~/Library/Application Support/Wallify/widget-settings.conf
+            NSString *support     = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"Wallify"];
+            NSString *supportPath = [support stringByAppendingPathComponent:@"widget-settings.conf"];
+
+            if ([fm fileExistsAtPath:xdgPath]) {
+                // XDG config exists — use it as the canonical path.
+                // We still ensure Application Support dir exists so other
+                // runtime artifacts (textures, logs) have somewhere to land.
+                [fm createDirectoryAtPath:support withIntermediateDirectories:YES attributes:nil error:nil];
+                settingsPath = xdgPath;
+            } else {
+                // Fall back to Application Support, seeding from bundle if fresh install.
+                [fm createDirectoryAtPath:support withIntermediateDirectories:YES attributes:nil error:nil];
+                if (![fm fileExistsAtPath:supportPath])
+                    [fm copyItemAtPath:[bundle.resourcePath stringByAppendingPathComponent:@"widget-settings.conf"] toPath:supportPath error:nil];
+                settingsPath = supportPath;
+            }
+
             [[NSFileManager defaultManager] changeCurrentDirectoryPath:bundle.resourcePath];
         } else settingsPath = @"widget-settings.conf";
     }
