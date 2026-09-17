@@ -4,6 +4,7 @@ const window = @import("window.zig");
 const hitbox = @import("hitbox.zig");
 const media = @import("../media/controller.zig");
 const spotify = @import("../media/spotify.zig");
+const spotifast = @import("../media/spotifast.zig");
 const menu = @import("menu.zig");
 
 const POINTER_CLICK: c_int = 1;
@@ -18,6 +19,14 @@ const COMPACT_MODE_THRESHOLD: f64 = 0.5;
 const ART_HIT_RADIUS: f64 = 14.0;
 const SEEK_HIT_RADIUS: f64 = 3.0;
 const PANEL_DRAG_TOP_MIN: i32 = state.Layout.margin_top_min;
+
+fn openIdlePlayer() void {
+    if (state.setting_source == .spotifast) {
+        spotifast.widget_open_spotifast();
+    } else {
+        spotify.widget_open_spotify();
+    }
+}
 
 pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     const is_click = kind == POINTER_CLICK;
@@ -140,7 +149,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
             const mouse = window.widget_mouse_location();
             const idle_click = state.spotifyIdle() and @abs(mouse.x - state.widget_drag_start_mouse_x) < CLICK_TOLERANCE and @abs(mouse.y - state.widget_drag_start_mouse_y) < CLICK_TOLERANCE;
             if (idle_click) {
-                if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else spotify.widget_open_spotify();
+                if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else openIdlePlayer();
             }
 
             const snap_target = live_snap;
@@ -165,7 +174,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     if (state.spotifyIdle()) {
         if (is_release) {
-            if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else spotify.widget_open_spotify();
+            if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else openIdlePlayer();
         }
         return;
     }

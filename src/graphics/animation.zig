@@ -6,6 +6,7 @@ const icon_transition = @import("icon_transition.zig");
 const window = @import("../ui/window.zig");
 const menu = @import("../ui/menu.zig");
 const spotify = @import("../media/spotify.zig");
+const spotifast = @import("../media/spotifast.zig");
 const text_cache = @import("text_cache.zig");
 
 const FRAME_TIME_LIMIT: f64 = 0.1;
@@ -59,7 +60,7 @@ pub fn animationLoop() void {
             .play_pause => media.togglePlayback(),
             .previous_track => media.triggerCommand(.previous_track),
             .next_track => media.triggerCommand(.next_track),
-            .open_spotify => spotify.widget_open_spotify(),
+            .open_spotify => if (state.setting_source == .spotifast) spotifast.widget_open_spotifast() else spotify.widget_open_spotify(),
             .toggle_glow => state.setting_glow = !state.setting_glow,
             .toggle_aurora => state.setting_aurora = !state.setting_aurora,
             .toggle_animations => state.setting_animations = !state.setting_animations,
@@ -99,6 +100,7 @@ pub fn animationLoop() void {
             },
             .source_now_playing => state.setting_source = .now_playing,
             .source_spotify => state.setting_source = .spotify,
+            .source_spotifast => state.setting_source = .spotifast,
             .mode_compact => {
                 state.panel_resize_after_compact = true;
                 state.setting_mode = .compact;
@@ -149,6 +151,8 @@ pub fn animationLoop() void {
             needs_draw = true;
         } else state.mode_mix = target_mode;
         if (state.panel_resize_after_compact and state.mode_mix <= 0.001) {
+            // Defer shrinking the physical NSWindow until the card has fully contracted,
+            // preventing the terminal window border from visibly clipping the expanding/contracting panel mid-animation.
             state.panel_resize_after_compact = false;
             state.mode_mix = 0;
             resizePanel(true);
@@ -160,6 +164,7 @@ pub fn animationLoop() void {
             needs_draw = true;
         }
         if (state.panel_snap_active) {
+            // Cubic ease-out snap glide. Settles the panel into its target desktop slot over PANEL_SNAP_DURATION.
             state.panel_snap_elapsed += dt;
             const t = @min(1.0, state.panel_snap_elapsed / PANEL_SNAP_DURATION);
             const eased = 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
@@ -176,6 +181,8 @@ pub fn animationLoop() void {
             }
         }
         if (!state.spotifyIdle() and state.mode_mix < MARQUEE_MODE_THRESHOLD and state.global_title_len > 0) {
+            // Compact tiles lack horizontal clearance for full track titles.
+            // If the text width exceeds the viewport, we auto-scroll back and forth (marquee effect).
             const title_width = text_cache.width(state.global_title[0..state.global_title_len], MARQUEE_FONT_SIZE, true);
             if (title_width > MARQUEE_VIEWPORT_WIDTH and state.setting_animations) {
                 const travel = title_width - MARQUEE_VIEWPORT_WIDTH;
@@ -213,6 +220,8 @@ pub fn animationLoop() void {
         previous_time = now;
         const seek_target: f64 = if (state.global_is_dragging) 1 else 0;
         if (@abs(state.seek_expansion - seek_target) > SEEK_EXPANSION_EPSILON or @abs(state.seek_velocity) > SEEK_VELOCITY_EPSILON) {
+            // Critically-damped harmonic oscillator for the interactive seek thumb.
+            // Provides an organic, bouncy response when the user hovers/drags the progress bar.
             const step = @min(dt, 1.0 / TARGET_FPS);
             state.seek_velocity += (SEEK_K * (seek_target - state.seek_expansion) - SEEK_DAMPING * state.seek_velocity) * step;
             state.seek_expansion += state.seek_velocity * step;

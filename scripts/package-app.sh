@@ -22,6 +22,7 @@ DO_BUILD=false
 DO_INSTALL=false
 DO_DMG=false
 DO_RUN=false
+DO_KICKSTART=false
 OPTIMIZE="${OPTIMIZE:-ReleaseFast}"
 
 show_help() {
@@ -34,7 +35,8 @@ show_help() {
     echo "  -O, --optimize <mode>   Optimization level: ReleaseFast (default), Debug, ReleaseSafe, ReleaseSmall"
     echo "  -i, --install           Install application to /Applications/${APP_NAME}.app"
     echo "  -d, --dmg               Create a redistributable DMG installer at zig-out/${APP_NAME}.dmg"
-    echo "  -r, --run               Relaunch the app immediately after packaging"
+    echo "  -r, --run               Relaunch the app immediately after packaging via 'open'"
+    echo "  -k, --kickstart         Relaunch the app via launchctl (used for background widget mode)"
     echo "  -h, --help              Show this help message"
     echo ""
 }
@@ -46,6 +48,7 @@ while [[ $# -gt 0 ]]; do
         -i|--install) DO_INSTALL=true; shift ;;
         -d|--dmg) DO_DMG=true; shift ;;
         -r|--run) DO_RUN=true; shift ;;
+        -k|--kickstart) DO_KICKSTART=true; shift ;;
         -h|--help) show_help; exit 0 ;;
         *) echo -e "${RED}Unknown option: $1${RESET}"; show_help; exit 1 ;;
     esac
@@ -62,6 +65,10 @@ if [[ "$DO_BUILD" == true ]] || [[ ! -f "zig-out/bin/wallify" ]] || [[ ! -f "zig
             export DEVELOPER_DIR="/Library/Developer/CommandLineTools"
         fi
     fi
+    if ! command -v zig &> /dev/null; then
+        echo -e "${RED}Error: 'zig' command not found in PATH.${RESET}" >&2
+        exit 1
+    fi
     zig build -Doptimize="${OPTIMIZE}"
 fi
 
@@ -77,27 +84,22 @@ done
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" \
          "$APP_DIR/Contents/Frameworks" \
-         "$APP_DIR/Contents/Resources/assets" \
-         "$APP_DIR/Contents/Resources/zig-out/lib"
+         "$APP_DIR/Contents/Resources/assets"
 
 # 3. Copy binaries & libraries
 cp zig-out/bin/wallify "$APP_DIR/Contents/MacOS/Wallify"
 chmod +x "$APP_DIR/Contents/MacOS/Wallify"
 
-# Place dynamic libraries in Frameworks and legacy Resources path
+# Place dynamic libraries in Frameworks
 cp zig-out/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Frameworks/"
-cp zig-out/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Resources/zig-out/lib/"
 
 # 4. Copy Metal shaders & assets
 cp zig-out/bin/default.metallib "$APP_DIR/Contents/Resources/default.metallib"
 if [[ -f assets/spotify_icon.png ]]; then
     cp assets/spotify_icon.png "$APP_DIR/Contents/Resources/assets/"
 fi
-if [[ -d assets/cat ]]; then
-    cp -R assets/cat "$APP_DIR/Contents/Resources/assets/"
-fi
-if [[ -f widget-settings.conf ]]; then
-    cp widget-settings.conf "$APP_DIR/Contents/Resources/"
+if [[ -f config/widget-settings.conf ]]; then
+    cp config/widget-settings.conf "$APP_DIR/Contents/Resources/widget-settings.conf"
 fi
 
 # 5. Ensure AppIcon.icns exists
@@ -154,7 +156,7 @@ fi
 codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libmetadata_fetcher.dylib"
 codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/MacOS/Wallify"
 # Sign top-level bundle
-codesign --force --deep --sign - "${SIGN_ARGS[@]}" "$APP_DIR"
+codesign --deep "${SIGN_ARGS[@]}" "$APP_DIR"
 
 # Verify signature
 codesign --verify --deep --strict "$APP_DIR"
@@ -195,6 +197,8 @@ if [[ "$DO_RUN" == true ]]; then
     sleep 0.2
     open "$APP_DIR"
     echo -e "  ${GREEN}✓${RESET} ${APP_NAME} running."
+elif [[ "$DO_KICKSTART" == true ]]; then
+    ./scripts/relaunch.sh
 fi
 
 APP_SIZE=$(du -sh "$APP_DIR" | cut -f1)

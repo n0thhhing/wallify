@@ -44,7 +44,9 @@ pub fn width(text: []const u8, size: f64, bold: bool) f64 {
     return @max(0, entries[idx].width - 8.0 / density);
 }
 
-// Font masks are cached at a stable size; layout morphs scale quads, not glyph bitmaps.
+// Rasterize with CoreText and cache as Metal textures.
+// During morph animations, we just scale the textured quads instead of re-rasterizing
+// at every intermediate size, which would completely thrash the CPU/GPU.
 pub fn draw(canvas: *gpu.Canvas, text: []const u8, x: f64, y: f64, viewport: f64, font: f64, scale: f64, bold: bool, color: gpu.Color, offset: f64, right: bool, ellipsis: bool) void {
     if (text.len == 0 or viewport <= 0) return;
     const idx = get(text, font, bold) orelse return;

@@ -106,12 +106,8 @@ pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usiz
             \\if application "Spotify" is running then
             \\  tell application "Spotify"
             \\      try
-            \\          set tName to name of current track
-            \\          set tArtist to artist of current track
-            \\          set tState to player state as string
-            \\          set tPos to player position as string
-            \\          set tDur to ((duration of current track) / 1000.0) as string
-            \\          set tArt to artwork url of current track
+            \\          set {tName, tArtist, tState, tPos, tDur, tArt} to {name of current track, artist of current track, player state as string, player position as string, duration of current track, artwork url of current track}
+            \\          set tDur to (tDur / 1000.0) as string
             \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
             \\      on error
             \\          return "NO_TRACK"

@@ -4,8 +4,8 @@ pub const cat_height = 52;
 pub const banana_width = 98;
 pub const banana_frame_height = 114;
 pub const banana_frames = 45;
-pub const cat_data = @embedFile("cat_pixels.bin");
-pub const banana_data = @embedFile("banana_pixels");
+pub const cat_data = @embedFile("../assets/bin/cat_pixels.bin");
+pub const banana_data = @embedFile("../assets/bin/banana_pixels.bin");
 pub const Region = struct { x: usize, y: usize = 0, w: usize, h: usize };
 pub const cat_regions = [_]Region{
     .{ .x = 0, .w = 110, .h = 52 },
@@ -18,6 +18,9 @@ pub fn catFrame(time: f64) Region {
     return cat_regions[@as(usize, @intFromFloat(@mod(time * 3, cat_regions.len)))];
 }
 // Decode and premultiply once when uploading the sprite atlas.
+// Using standard formats like PNG means linking bulky C libraries like stb_image.
+// A custom RLE format lets us just @embedFile the raw pixels directly, keeping the binary small
+// and compile times fast.
 pub fn decode(data: []const u8, output: []u32) !void {
     var source: usize = 0;
     var dest: usize = 0;

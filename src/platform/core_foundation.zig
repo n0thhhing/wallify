@@ -34,3 +34,5 @@ pub extern "c" fn CFNotificationCenterAddObserver(center: Ref, observer: Ref, ca
 pub fn string(bytes: []const u8) Ref {
     return CFStringCreateWithBytes(null, bytes.ptr, @intCast(bytes.len), 0x08000100, 0);
 }
+pub extern "c" var kCFBooleanTrue: Ref;
+pub extern "c" fn CFNumberCreate(allocator: Ref, theType: isize, valuePtr: *const anyopaque) Ref;

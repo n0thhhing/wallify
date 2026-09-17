@@ -24,6 +24,7 @@ pub const ContextMenuAction = enum(c_int) {
     restore_defaults = 40,
     source_now_playing = 50,
     source_spotify = 51,
+    source_spotifast = 52,
     mode_compact = 60,
     mode_expanded = 61,
     transition_default = 70,
@@ -121,7 +122,7 @@ pub const ContextMenuCtx = struct {
             if (self.playing != 0) "Pause" else "Play",
             "Previous Track",
             "Next Track",
-            "Open Spotify",
+            if (self.source == .spotifast) "Open Spotifast" else "Open Spotify",
         };
 
         const choose_sel = macos.sel_registerName("choose:");
@@ -143,7 +144,7 @@ pub const ContextMenuCtx = struct {
         const source_submenu = autorelease(macos.send(macos.Ref, macos.send(macos.Ref, menu_cls, "alloc", .{}), "initWithTitle:", .{source_title}));
         macos.send(void, source_submenu, "setAutoenablesItems:", .{false});
 
-        const sources = [_][]const u8{ "Now Playing", "Spotify" };
+        const sources = [_][]const u8{ "Now Playing", "Spotify", "Spotifast" };
         for (sources, 0..) |src_name, i| {
             const s = macos.string(src_name);
             defer macos.CFRelease(s);

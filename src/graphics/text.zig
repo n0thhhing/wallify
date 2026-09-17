@@ -47,6 +47,8 @@ pub export fn widget_text(pixels: [*]u32, width: usize, height: usize, utf8: [*]
 
     var line = macos.CTLineCreateWithAttributedString(attr);
 
+    // Let CoreText handle the ellipsis truncation so we don't accidentally split
+    // multi-byte emoji or break ligatures by trying to slice the raw string.
     if (macos.CTLineGetTypographicBounds(line, null, null, null) > max_width) {
         const dots = macos.string("…");
         defer macos.CFRelease(dots);

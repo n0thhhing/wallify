@@ -22,6 +22,7 @@ OPTIMIZE="ReleaseFast"
 DO_TEST=false
 DO_FOREGROUND=false
 DO_CLEAN=false
+DO_RELAUNCH=false
 DO_INSTALL=false
 DO_DMG=false
 DO_KILL_ONLY=false
@@ -38,8 +39,9 @@ ${BOLD}OPTIONS:${RESET}
   -r, --release          Build in ReleaseFast mode (default, optimized)
   -f, --foreground, -l   Run in foreground; stream logs/stdout directly to terminal
   -t, --test             Run test suite before building & launching
-  -c, --clean            Clean build cache (.zig-cache & zig-out) before build
+  -C, --clean            Deep clean build cache & temporary artwork files before build
   -k, --kill             Terminate any currently running ${APP_NAME} instances and exit
+  -R, --relaunch         Kickstart the LaunchAgent instead of opening the app directly
   -s, --settings         Open the Settings window on launch
   -i, --install          Package and install to /Applications/${APP_NAME}.app
       --dmg              Build a redistributable DMG disk image
@@ -48,6 +50,7 @@ ${BOLD}OPTIONS:${RESET}
 ${BOLD}EXAMPLES:${RESET}
   ./run                  # Quick rebuild, package, and launch in background
   ./run -f               # Rebuild and run in foreground to watch logs
+  ./run -R               # Rebuild and kickstart the background LaunchAgent
   ./run -d -f            # Debug build running in foreground
   ./run -t               # Run tests first, then build and launch
   ./run -k               # Stop running Wallify widget"
@@ -60,8 +63,9 @@ while [[ $# -gt 0 ]]; do
         -r|--release) OPTIMIZE="ReleaseFast"; shift ;;
         -f|--foreground|-l|--logs) DO_FOREGROUND=true; shift ;;
         -t|--test) DO_TEST=true; shift ;;
-        -c|--clean) DO_CLEAN=true; shift ;;
+        -c|-C|--clean) DO_CLEAN=true; shift ;;
         -k|--kill) DO_KILL_ONLY=true; shift ;;
+        -R|--relaunch) DO_RELAUNCH=true; shift ;;
         -s|--settings) DO_SETTINGS=true; shift ;;
         -i|--install) DO_INSTALL=true; shift ;;
         --dmg) DO_DMG=true; shift ;;
@@ -97,9 +101,7 @@ fi
 
 # 2. Optional: Clean build artifacts
 if [[ "$DO_CLEAN" == true ]]; then
-    echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Cleaning build cache...${RESET}"
-    rm -rf .zig-cache zig-out
-    echo -e "  ${GREEN}✓${RESET} Build cache cleared."
+    ./scripts/clean.sh
 fi
 
 # 3. Optional: Run tests
@@ -154,11 +156,17 @@ if [[ "$DO_FOREGROUND" == true ]]; then
     echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Running ${APP_NAME} in foreground...${RESET} ${DIM}(Ctrl+C to quit)${RESET}"
     
     trap 'echo ""; echo -e "${YELLOW}Stopping ${APP_NAME}...${RESET}"; exit 0' INT TERM
-    exec "$EXEC_PATH" "${APP_ARGS[@]}"
+    if [[ ${#APP_ARGS[@]} -gt 0 ]]; then
+        exec "$EXEC_PATH" "${APP_ARGS[@]}"
+    else
+        exec "$EXEC_PATH"
+    fi
+elif [[ "$DO_RELAUNCH" == true ]]; then
+    ./scripts/relaunch.sh
 else
     echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME}...${RESET}"
     if [[ ${#APP_ARGS[@]} -gt 0 ]]; then
-        open "$TARGET_APP" --args "${APP_ARGS[@]}"
+        open "$TARGET_APP" --args ${APP_ARGS[@]:-}
     else
         open "$TARGET_APP"
     fi

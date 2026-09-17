@@ -17,6 +17,11 @@ pub fn extractColor() void {
     assets.artwork_dirty.store(true, .release);
 }
 
+pub fn clearArtwork() void {
+    assets.clearArtwork();
+    assets.artwork_dirty.store(false, .release);
+}
+
 pub fn drawUIFrame() void {
     const started = window.widget_monotonic_time();
     defer native.wallify_profile_scene(window.widget_monotonic_time() - started);

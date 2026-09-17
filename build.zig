@@ -5,7 +5,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Decode source PNGs once per asset change; outputs live only in Zig's cache.
-    const banana_pixels = decodeCat(b, "assets/cat/banana-cat.png", "banana.rgba", "98", "5130", "1.0");
 
     // MediaRemote bridge loaded by the Perl metadata helper.
     const dylib = b.addLibrary(.{
@@ -41,7 +40,6 @@ pub fn build(b: *std.Build) void {
     mod.linkFramework("Metal", .{});
     mod.linkFramework("MetalPerformanceShaders", .{});
     mod.linkFramework("QuartzCore", .{});
-    mod.addAnonymousImport("banana_pixels", .{ .root_source_file = banana_pixels });
 
     const metal_c = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metal", "-fmodules-cache-path=/tmp/wallify-metal-modules", "-c" });
     metal_c.addArg("-include");
@@ -77,17 +75,6 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
     });
     test_step.dependOn(&b.addRunArtifact(test_artifact).step);
-    const preview = b.addExecutable(.{
-        .name = "preview-cat",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/preview_cat.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
-    });
-    const preview_step = b.step("preview-cat", "Render cat samples to /tmp/wallify-poses.ppm");
-    preview_step.dependOn(&b.addRunArtifact(preview).step);
 }
 
 fn linkMacos(module: *std.Build.Module) void {
@@ -96,13 +83,4 @@ fn linkMacos(module: *std.Build.Module) void {
     module.linkFramework("CoreText", .{});
     module.linkFramework("AppKit", .{});
     module.linkFramework("CoreGraphics", .{});
-}
-
-fn decodeCat(b: *std.Build, source: []const u8, output: []const u8, width: []const u8, height: []const u8, scale: []const u8) std.Build.LazyPath {
-    const decode = b.addSystemCommand(&.{ "swift", "-module-cache-path", "/tmp/wallify-swift-module-cache" });
-    decode.addFileArg(b.path("tools/decode-cat.swift"));
-    decode.addFileArg(b.path(source));
-    const pixels = decode.addOutputFileArg(output);
-    decode.addArgs(&.{ width, height, scale });
-    return pixels;
 }

@@ -109,13 +109,13 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         float top_light = max(0.0f, 1.0f - in.uv.y * 1.4f);
         color.rgb *= (1.0f + 0.08f * top_light);
 
-        // Specular inner rim bevel highlight (catches ambient light along curved edges)
-        float rim = smoothstep(-2.5f, -0.5f, distance) * (1.0f - smoothstep(-0.5f, 0.5f, distance));
-        color.rgb += float3(1.0f, 1.0f, 1.0f) * (rim * (0.08f + 0.14f * top_light));
+        // Crisp 1px (0.5pt) inner rim exactly like macOS window borders
+        float rim_dist = abs(distance + 0.5f);
+        float rim_mask = 1.0f - smoothstep(0.0f, 0.8f, rim_dist);
 
-        // Top-edge light reflection
-        float top_edge = smoothstep(-1.8f, -0.6f, distance) * smoothstep(0.0f, 1.2f, in.point.y - c.dy);
-        color.rgb += float3(1.0f, 1.0f, 1.0f) * (top_edge * 0.15f * top_light);
+        // macOS Dark Mode rim is brighter at the top (ambient light from above) and very faint at the bottom
+        float rim_alpha = mix(0.06f, 0.35f, 1.0f - in.uv.y);
+        color.rgb = mix(color.rgb, float3(1.0f, 1.0f, 1.0f), rim_mask * rim_alpha);
 
         // Micro-frosted grain prevents 8-bit banding and mimics etched glass
         float grain = (fract(sin(dot(in.point, float2(12.9898f, 78.233f))) * 43758.5453f) - 0.5f) * 0.012f;

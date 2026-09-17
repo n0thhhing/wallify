@@ -143,6 +143,7 @@ pub const TransitionStyle = enum(u8) {
 pub const MediaSource = enum(u8) {
     now_playing = 0,
     spotify = 1,
+    spotifast = 2,
 };
 
 pub const WidgetMode = enum(u8) {
@@ -170,7 +171,9 @@ pub var pointer_y: f64 = Layout.compact_panel_height / 2.0;
 pub fn isPlaceholderTitle(title: []const u8) bool {
     return std.mem.eql(u8, title, "Not Playing") or
         std.mem.eql(u8, title, "Spotify is Closed") or
+        std.mem.eql(u8, title, "Spotifast is Closed") or
         std.mem.eql(u8, title, "Spotify") or
+        std.mem.eql(u8, title, "Spotifast") or
         std.mem.eql(u8, title, "No Track Playing");
 }
 
@@ -256,6 +259,11 @@ test "spotifyIdle correctly triggers for closed app or empty titles" {
     const closed_title = "Spotify is Closed";
     @memcpy(global_title[0..closed_title.len], closed_title);
     global_title_len = closed_title.len;
+    try std.testing.expect(spotifyIdle());
+
+    const spotifast_closed_title = "Spotifast is Closed";
+    @memcpy(global_title[0..spotifast_closed_title.len], spotifast_closed_title);
+    global_title_len = spotifast_closed_title.len;
     try std.testing.expect(spotifyIdle());
 
     const active_title = "Starboy";

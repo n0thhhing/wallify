@@ -1,4 +1,0 @@
-{
-  "name": "zig-kitty-widget",
-  "description": "Antigravity plugin for developing Zig 0.16 terminal widgets with Kitty graphics, SGR mouse tracking, and macOS MediaRemote integration."
-}

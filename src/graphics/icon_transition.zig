@@ -4,8 +4,8 @@ const SWAP_PROGRESS: f64 = 0.5;
 const SWAP_DURATION: f64 = 0.18;
 const EXPANSION_DURATION: f64 = 0.48;
 
-// Measured from the supplied recording: a brief contraction, a visible
-// half-size replacement, then a longer ease-out expansion. No empty frame.
+// Hardcoded piecewise curve for the play/pause icon morph based on the native widget:
+// 90ms fast quadratic scale down to 50%, instant swap, then 240ms cubic ease-out back up.
 pub fn scale(mix: f64, playing: bool) f64 {
     const progress = if (playing) mix else 1 - mix;
     if (progress < SWAP_PROGRESS) {

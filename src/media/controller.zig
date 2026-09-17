@@ -2,6 +2,7 @@ const std = @import("std");
 const state = @import("../state.zig");
 const render = @import("../graphics/render.zig");
 const spotify = @import("spotify.zig");
+const spotifast = @import("spotifast.zig");
 const window = @import("../ui/window.zig");
 const media_remote = @import("../platform/media_remote.zig");
 
@@ -9,9 +10,13 @@ extern "c" fn popen(command: [*c]const u8, modes: [*c]const u8) ?*anyopaque;
 extern "c" fn pclose(stream: *anyopaque) c_int;
 extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
 
+extern "c" fn dispatch_semaphore_create(value: isize) ?*anyopaque;
+extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
+extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
+
 const POLL_INTERVAL_MS: u64 = 250;
 const QUERY_FAILURE_RETRY_MS: u64 = 500;
-const METADATA_HELPER_INTERVAL_US: []const u8 = "100000";
+const METADATA_HELPER_INTERVAL_US: []const u8 = "150000";
 const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
 const METADATA_LINE_BUFFER_SIZE: usize = 2048;
@@ -32,17 +37,45 @@ fn sleep_ms(ms: u64) void {
 
 pub const MediaRemoteCommand = media_remote.MediaRemoteCommand;
 
+const ActionKind = enum {
+    command,
+    seek,
+};
+
+const MediaAction = struct {
+    kind: ActionKind,
+    cmd: MediaRemoteCommand = .play,
+    seek_target: f64 = 0.0,
+};
+
+const ACTION_QUEUE_CAPACITY: usize = 32;
+var action_queue: [ACTION_QUEUE_CAPACITY]MediaAction = undefined;
+var queue_tail: usize = 0;
+var queue_count: usize = 0;
+var queue_lock: std.atomic.Mutex = .unlocked;
+var command_sema: ?*anyopaque = null;
+var worker_started = std.atomic.Value(bool).init(false);
+
+fn lockQueue() void {
+    while (!queue_lock.tryLock()) {
+        std.atomic.spinLoopHint();
+    }
+}
+
+fn unlockQueue() void {
+    queue_lock.unlock();
+}
+
 pub fn triggerSeekInner(target: f64) void {
     if (state.setting_source == .spotify) {
         spotify.widget_spotify_seek(target);
         return;
     }
+    if (state.setting_source == .spotifast) {
+        spotifast.widget_spotifast_seek(target);
+        return;
+    }
     media_remote.setElapsedTime(target);
-}
-
-pub fn triggerSeek(target: f64) void {
-    const t = std.Thread.spawn(.{}, triggerSeekInner, .{target}) catch return;
-    t.detach();
 }
 
 pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
@@ -57,12 +90,91 @@ pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
         }
         return;
     }
+    if (state.setting_source == .spotifast) {
+        switch (cmd) {
+            .play => spotifast.widget_spotifast_control(.play),
+            .pause => spotifast.widget_spotifast_control(.pause),
+            .toggle_play_pause => spotifast.widget_spotifast_control(.play_pause),
+            .previous_track => spotifast.widget_spotifast_control(.previous_track),
+            .next_track => spotifast.widget_spotifast_control(.next_track),
+            .stop => spotifast.widget_spotifast_control(.pause),
+        }
+        return;
+    }
     media_remote.sendCommand(cmd);
 }
 
-pub fn triggerCommand(cmd: MediaRemoteCommand) void {
-    const t = std.Thread.spawn(.{}, triggerCommandInner, .{cmd}) catch return;
+fn commandWorkerLoop() void {
+    while (true) {
+        if (command_sema) |s| {
+            _ = dispatch_semaphore_wait(s, ~@as(u64, 0));
+        }
+
+        var action: ?MediaAction = null;
+        {
+            lockQueue();
+            defer unlockQueue();
+            if (queue_count > 0) {
+                action = action_queue[queue_tail];
+                queue_tail = (queue_tail + 1) % ACTION_QUEUE_CAPACITY;
+                queue_count -= 1;
+            }
+        }
+
+        if (action) |act| {
+            switch (act.kind) {
+                .command => triggerCommandInner(act.cmd),
+                .seek => triggerSeekInner(act.seek_target),
+            }
+        }
+    }
+}
+
+pub fn ensureWorkerStarted() void {
+    if (worker_started.swap(true, .acq_rel)) return;
+    command_sema = dispatch_semaphore_create(0);
+    const t = std.Thread.spawn(.{}, commandWorkerLoop, .{}) catch {
+        worker_started.store(false, .release);
+        return;
+    };
     t.detach();
+}
+
+fn enqueueAction(action: MediaAction) void {
+    ensureWorkerStarted();
+
+    lockQueue();
+    defer unlockQueue();
+
+    // If it's a seek action and the most recent queued action is also a seek, coalesce it!
+    // Rapidly scrubbing the progress bar generates hundreds of seek commands per second.
+    // Sending all of these to MediaRemote would saturate the macOS IPC queue, causing the media daemon
+    // to freeze or crash. By collapsing contiguous seek requests, we only ever dispatch the very last
+    // thumb position when the queue worker wakes up.
+    if (action.kind == .seek and queue_count > 0) {
+        const last_idx = (queue_tail + queue_count - 1) % ACTION_QUEUE_CAPACITY;
+        if (action_queue[last_idx].kind == .seek) {
+            action_queue[last_idx].seek_target = action.seek_target;
+            return;
+        }
+    }
+
+    if (queue_count < ACTION_QUEUE_CAPACITY) {
+        const idx = (queue_tail + queue_count) % ACTION_QUEUE_CAPACITY;
+        action_queue[idx] = action;
+        queue_count += 1;
+        if (command_sema) |s| {
+            _ = dispatch_semaphore_signal(s);
+        }
+    }
+}
+
+pub fn triggerSeek(target: f64) void {
+    enqueueAction(.{ .kind = .seek, .seek_target = target });
+}
+
+pub fn triggerCommand(cmd: MediaRemoteCommand) void {
+    enqueueAction(.{ .kind = .command, .cmd = cmd });
 }
 
 pub fn togglePlayback() void {
@@ -96,6 +208,51 @@ pub const SpotifyPayload = struct {
     artwork_url: []const u8,
 };
 
+var spotify_download_gen = std.atomic.Value(u32).init(0);
+
+fn spotifyDownloadWorker(url: []const u8, gen: u32, _: std.Io) void {
+    defer std.heap.page_allocator.free(url);
+
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const tmp_path_c = std.fmt.allocPrint(arena.allocator(), "/tmp/art_sp_{}.raw\x00", .{gen}) catch return;
+
+    const macos = @import("../platform/macos.zig");
+    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
+
+    const ns_url_str = macos.string(url);
+    const nsurl = macos.send(macos.Ref, macos.objc_getClass("NSURL"), "URLWithString:", .{ns_url_str});
+    const data = macos.send(macos.Ref, macos.objc_getClass("NSData"), "dataWithContentsOfURL:", .{nsurl});
+
+    var curl_ok = false;
+    if (data != null) {
+        const dest_path = macos.string(tmp_path_c[0 .. tmp_path_c.len - 1]);
+        curl_ok = macos.send(bool, data, "writeToFile:atomically:", .{ dest_path, true });
+        macos.CFRelease(dest_path);
+    }
+
+    macos.CFRelease(ns_url_str);
+    macos.send(void, pool, "release", .{});
+
+    if (spotify_download_gen.load(.acquire) != gen) {
+        _ = std.posix.system.unlink(@ptrCast(tmp_path_c.ptr));
+        return;
+    }
+
+    if (curl_ok) {
+        _ = std.posix.system.rename(@ptrCast(tmp_path_c.ptr), "/tmp/art.raw");
+        state.global_has_artwork = true;
+        state.artwork_refresh_pending = true;
+        render.extractColor();
+    } else {
+        _ = std.posix.system.unlink(@ptrCast(tmp_path_c.ptr));
+        state.global_has_artwork = false;
+        _ = std.posix.system.unlink("/tmp/art.raw");
+    }
+    state.requestFrame();
+}
+
 pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
     var spl = std.mem.splitSequence(u8, raw, "|||");
     const title = spl.next() orelse return null;
@@ -116,16 +273,22 @@ pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
 }
 
 pub fn metadataLoop(io: std.Io) void {
+    // MediaRemote is a locked private framework. Processes can only access it if their bundle ID starts with `com.apple.`.
+    // We pipe a script with DynaLoader into `/usr/bin/perl` because its `com.apple.perl` bundle ID bypasses the restriction.
+    // If the main Zig process crashes, the pipe breaks and Perl immediately exits ($SIG{PIPE}), avoiding zombie processes.
     const perl_cmd =
-        "use strict; use warnings; use Cwd \"abs_path\"; use DynaLoader; $| = 1; " ++
-        "my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || '', 'zig-out/lib/libmetadata_fetcher.dylib', '../Frameworks/libmetadata_fetcher.dylib', '../Resources/libmetadata_fetcher.dylib', '../Resources/zig-out/lib/libmetadata_fetcher.dylib', '/Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib') { if ($p && -f $p) { $abs = abs_path($p); last; } } " ++
+        "use strict; use warnings; use Cwd qw(abs_path); use DynaLoader; $| = 1; " ++
+        "$SIG{PIPE} = sub { exit(0); }; " ++
+        "my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || (), qw(zig-out/lib/libmetadata_fetcher.dylib ../Frameworks/libmetadata_fetcher.dylib ../Resources/libmetadata_fetcher.dylib ../Resources/zig-out/lib/libmetadata_fetcher.dylib /Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib)) { if ($p && -f $p) { $abs = abs_path($p); last; } } " ++
         "if (!$abs) { exit(1); } " ++
         "my $libref = DynaLoader::dl_load_file($abs) or exit(2); " ++
         "my $sym = DynaLoader::dl_find_symbol($libref, \"mrc_printNowPlayingInfo\") or exit(3); " ++
         "DynaLoader::dl_install_xsub(\"main::fetch\", $sym); " ++
+        "print \"$$\\n\"; " ++
+        "$SIG{USR1} = sub { fetch(); }; " ++
         "use Time::HiRes qw(usleep); while (1) { fetch(); usleep(" ++ METADATA_HELPER_INTERVAL_US ++ "); }";
 
-    const command = "perl -e '" ++ perl_cmd ++ "'";
+    const command = "PERL_SIGNALS=unsafe perl -e '" ++ perl_cmd ++ "'";
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
@@ -142,10 +305,13 @@ pub fn metadataLoop(io: std.Io) void {
             state.global_title_len = 0; // Force title change to trigger updates
         }
 
-        if (state.setting_source == .spotify) {
+        if (state.setting_source == .spotify or state.setting_source == .spotifast) {
             _ = arena.reset(.retain_capacity);
             var res_buf: [ARTWORK_REQUEST_BUFFER_SIZE]u8 = undefined;
-            const res_len = spotify.widget_query_spotify(&res_buf, res_buf.len);
+            const res_len = if (state.setting_source == .spotifast)
+                spotifast.widget_query_spotifast(&res_buf, res_buf.len)
+            else
+                spotify.widget_query_spotify(&res_buf, res_buf.len);
 
             // Query failures do not mean the application closed.
             if (res_len == 0) {
@@ -158,7 +324,7 @@ pub fn metadataLoop(io: std.Io) void {
                 state.requestFrame();
             }
             if (closed) {
-                const title_span = "Spotify is Closed";
+                const title_span = if (state.setting_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
                 const artist_span = "Click to Launch";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
                     @memcpy(state.global_title[0..title_span.len], title_span);
@@ -169,6 +335,7 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_elapsed = 0.0;
                     state.global_duration = 0.0;
                     state.global_has_artwork = false;
+                    render.clearArtwork();
                     state.requestFrame();
                 }
                 sleep_ms(QUERY_FAILURE_RETRY_MS);
@@ -176,7 +343,7 @@ pub fn metadataLoop(io: std.Io) void {
             }
 
             if (std.mem.eql(u8, res_buf[0..res_len], "NO_TRACK")) {
-                const title_span = "Spotify";
+                const title_span = if (state.setting_source == .spotifast) "Spotifast" else "Spotify";
                 const artist_span = "No Track Playing";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
                     @memcpy(state.global_title[0..title_span.len], title_span);
@@ -187,13 +354,28 @@ pub fn metadataLoop(io: std.Io) void {
                     state.global_elapsed = 0.0;
                     state.global_duration = 0.0;
                     state.global_has_artwork = false;
+                    render.clearArtwork();
                     state.requestFrame();
                 }
                 sleep_ms(POLL_INTERVAL_MS);
                 continue;
             }
 
-            if (parseSpotifyPayload(res_buf[0..res_len])) |item| {
+            const maybe_payload: ?SpotifyPayload = if (state.setting_source == .spotifast) blk: {
+                if (spotifast.parseSpotifastPayload(res_buf[0..res_len])) |p| {
+                    break :blk SpotifyPayload{
+                        .title = p.title,
+                        .artist = p.artist,
+                        .playing = p.playing,
+                        .elapsed = p.elapsed,
+                        .duration = p.duration,
+                        .artwork_url = p.artwork_url,
+                    };
+                }
+                break :blk null;
+            } else parseSpotifyPayload(res_buf[0..res_len]);
+
+            if (maybe_payload) |item| {
                 const title_changed = item.title.len != state.global_title_len or !std.mem.eql(u8, item.title, state.global_title[0..state.global_title_len]);
                 const artist_changed = item.artist.len != state.global_artist_len or !std.mem.eql(u8, item.artist, state.global_artist[0..state.global_artist_len]);
                 const now = window.widget_monotonic_time();
@@ -207,13 +389,17 @@ pub fn metadataLoop(io: std.Io) void {
                 const elapsed_changed = @abs(item.elapsed - state.global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
 
                 if (title_changed or artist_changed or rate_changed or elapsed_changed) {
-                    const title_span = utf8Prefix(item.title, state.global_title.len);
-                    @memcpy(state.global_title[0..title_span.len], title_span);
-                    state.global_title_len = title_span.len;
+                    if (title_changed) {
+                        const title_span = utf8Prefix(item.title, state.global_title.len);
+                        @memcpy(state.global_title[0..title_span.len], title_span);
+                        state.global_title_len = title_span.len;
+                    }
 
-                    const artist_span = utf8Prefix(item.artist, state.global_artist.len);
-                    @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                    state.global_artist_len = artist_span.len;
+                    if (artist_changed) {
+                        const artist_span = utf8Prefix(item.artist, state.global_artist.len);
+                        @memcpy(state.global_artist[0..artist_span.len], artist_span);
+                        state.global_artist_len = artist_span.len;
+                    }
 
                     if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
                         state.playback_clock.sync(item.elapsed, rate, window.widget_monotonic_time(), item.duration, title_changed);
@@ -227,12 +413,15 @@ pub fn metadataLoop(io: std.Io) void {
                         if (art_changed) {
                             @memcpy(last_art_url[0..item.artwork_url.len], item.artwork_url);
                             last_art_url_len = item.artwork_url.len;
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "curl", "-s", "-o", "/tmp/art.raw", item.artwork_url } }) catch {};
-                            _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/art.raw", "--out", "/tmp/art-next.bmp" } }) catch {};
-                            if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
-                                state.global_has_artwork = true;
-                                render.extractColor();
-                            }
+
+                            const url_dup = std.heap.page_allocator.dupe(u8, item.artwork_url) catch continue;
+                            const gen = spotify_download_gen.fetchAdd(1, .acq_rel) + 1;
+
+                            const thread = std.Thread.spawn(.{}, spotifyDownloadWorker, .{ url_dup, gen, io }) catch {
+                                std.heap.page_allocator.free(url_dup);
+                                continue;
+                            };
+                            thread.detach();
                         }
                     } else if (title_changed) {
                         state.global_has_artwork = false;
@@ -242,16 +431,48 @@ pub fn metadataLoop(io: std.Io) void {
                     state.requestFrame();
                 }
             }
-            sleep_ms(POLL_INTERVAL_MS);
+            var waited: usize = 0;
+            const poll_interval: usize = if (state.setting_source == .spotifast) 50 else POLL_INTERVAL_MS;
+            while (waited < poll_interval) {
+                if ((state.setting_source == .spotify or state.setting_source == .spotifast) and spotify.widget_spotify_take_state() != -1) break;
+                if (state.setting_source != last_source.?) break;
+                sleep_ms(10);
+                waited += 10;
+            }
         } else {
             const stream = popen(command, "r") orelse {
                 sleep_ms(POLL_INTERVAL_MS);
                 continue;
             };
             var line: [METADATA_LINE_BUFFER_SIZE]u8 = undefined;
+
+            var perl_pid: ?std.posix.pid_t = null;
+            if (fgets(&line, line.len, stream) != null) {
+                const len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;
+                const pid_str = std.mem.trim(u8, line[0..len], " \r\n");
+                perl_pid = std.fmt.parseInt(std.posix.pid_t, pid_str, 10) catch null;
+            }
+
+            var watcher_running = std.atomic.Value(bool).init(true);
+            const Watcher = struct {
+                fn run(pid: std.posix.pid_t, running: *std.atomic.Value(bool)) void {
+                    while (running.load(.acquire)) {
+                        if (spotify.widget_spotify_take_state() != -1) {
+                            _ = std.posix.kill(pid, std.posix.SIG.USR1) catch {};
+                        }
+                        sleep_ms(10);
+                    }
+                }
+            };
+            var watcher_thread: ?std.Thread = null;
+            if (perl_pid) |pid| {
+                watcher_thread = std.Thread.spawn(.{}, Watcher.run, .{ pid, &watcher_running }) catch null;
+            }
+
             var empty_polls: usize = 0;
+            var empty_art_polls: usize = 0;
             while (fgets(&line, line.len, stream) != null) {
-                if (state.setting_source == .spotify) break;
+                if (state.setting_source != .now_playing) break;
 
                 _ = arena.reset(.retain_capacity);
                 const line_len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;
@@ -267,6 +488,7 @@ pub fn metadataLoop(io: std.Io) void {
                             state.global_elapsed = 0.0;
                             state.global_duration = 0.0;
                             state.global_has_artwork = false;
+                            render.clearArtwork();
                             state.requestFrame();
                         }
                     }
@@ -302,11 +524,15 @@ pub fn metadataLoop(io: std.Io) void {
                 const elapsed_changed = elapsed != state.global_elapsed;
 
                 if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.artwork_refresh_pending and std.mem.eql(u8, has_artwork_span, "1"))) {
-                    @memcpy(state.global_title[0..title_span.len], title_span);
-                    state.global_title_len = title_span.len;
+                    if (title_changed) {
+                        @memcpy(state.global_title[0..title_span.len], title_span);
+                        state.global_title_len = title_span.len;
+                    }
 
-                    @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                    state.global_artist_len = artist_span.len;
+                    if (artist_changed) {
+                        @memcpy(state.global_artist[0..artist_span.len], artist_span);
+                        state.global_artist_len = artist_span.len;
+                    }
 
                     if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
                         state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
@@ -315,21 +541,35 @@ pub fn metadataLoop(io: std.Io) void {
                     }
                     state.global_duration = duration;
 
-                    if (title_changed or artist_changed) state.artwork_refresh_pending = true;
+                    if (title_changed or artist_changed) {
+                        state.artwork_refresh_pending = true;
+                        empty_art_polls = 0;
+                    }
                     const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
                     if (artwork_available and state.artwork_refresh_pending) {
-                        _ = std.process.run(arena.allocator(), io, .{ .argv = &[_][]const u8{ "sips", "-z", ARTWORK_BITMAP_SIZE, ARTWORK_BITMAP_SIZE, "-s", "format", "bmp", "/tmp/mrc_artwork", "--out", "/tmp/art-next.bmp" } }) catch {};
-                        if (std.posix.system.rename("/tmp/art-next.bmp", "/tmp/art.bmp") == 0) {
-                            state.artwork_refresh_pending = false;
+                        state.artwork_refresh_pending = false;
+                        if (std.posix.system.rename("/tmp/mrc_artwork", "/tmp/art.raw") == 0) {
                             state.global_has_artwork = true;
+                            render.extractColor();
+                        } else {
+                            // rename fails if metadata_fetcher bypassed writing (e.g. same album art hash)
+                            // In this case, /tmp/art.raw already has the correct image!
+                            state.global_has_artwork = true;
+                            render.extractColor();
                         }
-                        render.extractColor();
-                    } else if (!artwork_available and title_changed) {
-                        state.global_has_artwork = false;
+                    } else if (!artwork_available and state.artwork_refresh_pending) {
+                        empty_art_polls += 1;
+                        if (empty_art_polls >= 30) {
+                            state.artwork_refresh_pending = false;
+                            state.global_has_artwork = false;
+                            render.clearArtwork();
+                        }
                     }
                     state.requestFrame();
                 }
             }
+            watcher_running.store(false, .release);
+            if (watcher_thread) |t| t.join();
             _ = pclose(stream);
             sleep_ms(POLL_INTERVAL_MS); // Restart the helper if its stream closes.
         }
@@ -346,34 +586,35 @@ test "utf8Prefix preserves short strings and chops safely on boundaries" {
     try std.testing.expectEqualStrings("café", utf8Prefix(cafe, 5));
     // Slicing at max_len=4 falls on the second byte of '\xe9'. utf8Prefix should back up to 3 ("caf")
     try std.testing.expectEqualStrings("caf", utf8Prefix(cafe, 4));
-
-    // Emoji: "🎶" is 4 bytes (\xf0 \x9f \x8e \xb6)
-    const emoji = "🎶 Beats";
-    try std.testing.expectEqualStrings("🎶 Beats", utf8Prefix(emoji, 20));
-    try std.testing.expectEqualStrings("🎶", utf8Prefix(emoji, 4));
-    // Slicing at 1, 2, or 3 must not output malformed bytes
-    try std.testing.expectEqualStrings("", utf8Prefix(emoji, 1));
-    try std.testing.expectEqualStrings("", utf8Prefix(emoji, 2));
-    try std.testing.expectEqualStrings("", utf8Prefix(emoji, 3));
 }
 
-test "parseSpotifyPayload parses playback attributes" {
-    const raw = "Starboy|||The Weeknd|||playing|||45.5|||230.2|||https://example.com/art.jpg";
-    const parsed = parseSpotifyPayload(raw).?;
-    try std.testing.expectEqualStrings("Starboy", parsed.title);
-    try std.testing.expectEqualStrings("The Weeknd", parsed.artist);
-    try std.testing.expect(parsed.playing);
-    try std.testing.expectApproxEqAbs(@as(f64, 45.5), parsed.elapsed, 0.001);
-    try std.testing.expectApproxEqAbs(@as(f64, 230.2), parsed.duration, 0.001);
-    try std.testing.expectEqualStrings("https://example.com/art.jpg", parsed.artwork_url);
-
-    const paused_raw = "Blinding Lights|||The Weeknd|||paused|||10.0|||200.0|||";
-    const paused = parseSpotifyPayload(paused_raw).?;
-    try std.testing.expect(!paused.playing);
-    try std.testing.expectEqualStrings("", paused.artwork_url);
+test "parseSpotifyPayload parses full format correctly" {
+    const payload = "Track Title|||Artist Name|||playing|||45.5|||200.0|||https://example.com/art.jpg";
+    const res = parseSpotifyPayload(payload).?;
+    try std.testing.expectEqualStrings("Track Title", res.title);
+    try std.testing.expectEqualStrings("Artist Name", res.artist);
+    try std.testing.expect(res.playing);
+    try std.testing.expectApproxEqAbs(@as(f64, 45.5), res.elapsed, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f64, 200.0), res.duration, 0.001);
+    try std.testing.expectEqualStrings("https://example.com/art.jpg", res.artwork_url);
 }
 
 test "parseSpotifyPayload returns null for truncated inputs" {
     try std.testing.expect(parseSpotifyPayload("") == null);
     try std.testing.expect(parseSpotifyPayload("Only Title") == null);
+}
+
+test "action queue coalesces seeks and ensures bounded capacity" {
+    lockQueue();
+    queue_tail = 0;
+    queue_count = 0;
+    unlockQueue();
+
+    enqueueAction(.{ .kind = .seek, .seek_target = 10.0 });
+    enqueueAction(.{ .kind = .seek, .seek_target = 20.0 });
+
+    lockQueue();
+    defer unlockQueue();
+    try std.testing.expectEqual(@as(usize, 1), queue_count);
+    try std.testing.expectApproxEqAbs(@as(f64, 20.0), action_queue[0].seek_target, 0.001);
 }

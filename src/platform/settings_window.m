@@ -237,9 +237,9 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     [view addSubview:makeHeaderLabel(@"AUDIO TELEMETRY", 20, 130)];
 
     [view addSubview:makeItemLabel(@"Media Source", 20, 150)];
-    self.sourceSegment = makeSegments(@[@"System Now Playing", @"Spotify Direct"], 13, self, @selector(segmentChanged:), 20, 172, 440);
+    self.sourceSegment = makeSegments(@[@"System Now Playing", @"Spotify Direct", @"Spotifast"], 13, self, @selector(segmentChanged:), 20, 172, 440);
     [view addSubview:self.sourceSegment];
-    [view addSubview:makeSubtext(@"Now Playing supports Music, Spotify, Podcasts, and Safari; Spotify uses AppleScript IPC.", 20, 202, 480)];
+    [view addSubview:makeSubtext(@"Now Playing supports all media; Spotify uses AppleScript; Spotifast connects via fast local IPC.", 20, 202, 480)];
 
     [view addSubview:makeDivider(20, 230, 480)];
 
@@ -411,7 +411,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.speedSegment.selectedSegment = (s.animation_speed >= 0 && s.animation_speed <= 2) ? s.animation_speed : 1;
 
     self.modeSegment.selectedSegment = (s.widget_mode >= 0 && s.widget_mode <= 1) ? s.widget_mode : 0;
-    self.sourceSegment.selectedSegment = (s.media_source >= 0 && s.media_source <= 1) ? s.media_source : 0;
+    self.sourceSegment.selectedSegment = (s.media_source >= 0 && s.media_source <= 2) ? s.media_source : 0;
     self.idleSegment.selectedSegment = (s.idle_style >= 0 && s.idle_style <= 2) ? s.idle_style : 0;
 
     if (s.track_transition >= 0 && s.track_transition < self.transitionPopup.numberOfItems) {
@@ -432,47 +432,41 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
 }
 
 - (void)closeSettingsWindow {
-    [self.window orderOut:nil];
+    if (self.window) {
+        [self.window orderOut:nil];
+    }
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
-    // Window is hidden via orderOut; no action needed
+    // Window hidden, controller stays ready for next open
 }
 
 @end
 
 void wallify_show_settings_window(void) {
-    void (^block)(void) = ^{
+    dispatch_async(dispatch_get_main_queue(), ^{
         [[WallifySettingsWindowController sharedController] showSettingsWindow];
-    };
-    if ([NSThread isMainThread]) {
-        block();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), block);
-    }
+    });
 }
 
 void wallify_close_settings_window(void) {
-    void (^block)(void) = ^{
+    dispatch_async(dispatch_get_main_queue(), ^{
         [[WallifySettingsWindowController sharedController] closeSettingsWindow];
-    };
-    if ([NSThread isMainThread]) {
-        block();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), block);
-    }
+    });
 }
 
 void wallify_settings_notify_position_changed(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        WallifySettingsWindowController *controller = [WallifySettingsWindowController sharedController];
-        if (controller.window.isVisible) [controller updateGridStatusLabel];
+        [[WallifySettingsWindowController sharedController] updateGridStatusLabel];
     });
 }
 
 bool wallify_has_settings_flag(void) {
-    for (NSString *arg in [[NSProcessInfo processInfo] arguments]) {
-        if ([arg isEqualToString:@"--settings"] || [arg isEqualToString:@"-s"]) return true;
+    NSArray *args = [[NSProcessInfo processInfo] arguments];
+    for (NSString *arg in args) {
+        if ([arg isEqualToString:@"--settings"] || [arg isEqualToString:@"-s"]) {
+            return true;
+        }
     }
     return false;
 }

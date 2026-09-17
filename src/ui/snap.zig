@@ -133,7 +133,9 @@ fn updateSnapDebug() void {
         const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ rect(24, 60, 340, 240), @as(usize, 1 | 2), @as(usize, 2), false });
         if (panel == null) return;
         snap_debug_panel = panel;
-        macos.send(void, panel, "setTitle:", .{macos.string("Wallify Snap Debug")});
+        const title = macos.string("Wallify Snap Debug");
+        defer macos.CFRelease(title);
+        macos.send(void, panel, "setTitle:", .{title});
         macos.send(void, panel, "setFloatingPanel:", .{true});
         macos.send(void, panel, "setLevel:", .{@as(isize, DEBUG_PANEL_LEVEL)});
         macos.send(void, panel, "setHidesOnDeactivate:", .{false});
@@ -184,7 +186,9 @@ fn updateSnapOutline(_: Ref) callconv(.c) void {
         const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ frame, @as(usize, 0), @as(usize, 2), false });
         if (panel == null) return;
         snap_outline = panel;
-        macos.send(void, panel, "setTitle:", .{macos.string("Wallify Snap Outline")});
+        const title = macos.string("Wallify Snap Outline");
+        defer macos.CFRelease(title);
+        macos.send(void, panel, "setTitle:", .{title});
         macos.send(void, panel, "setOpaque:", .{false});
         macos.send(void, panel, "setBackgroundColor:", .{macos.send(Ref, macos.objc_getClass("NSColor"), "clearColor", .{})});
         macos.send(void, panel, "setAlphaValue:", .{@as(f64, 1)});

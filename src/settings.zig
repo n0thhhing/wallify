@@ -2,8 +2,6 @@ const std = @import("std");
 const state = @import("state.zig");
 const native = @import("platform/native.zig");
 
-// --- Parsers & String Converters ---
-
 pub fn parseBool(raw: []const u8) ?bool {
     const s = std.mem.trim(u8, raw, " \t\r\n");
     if (std.ascii.eqlIgnoreCase(s, "true") or std.ascii.eqlIgnoreCase(s, "1") or std.ascii.eqlIgnoreCase(s, "yes") or std.ascii.eqlIgnoreCase(s, "on")) return true;
@@ -63,6 +61,7 @@ pub fn parseMediaSource(raw: []const u8) state.MediaSource {
     const s = std.mem.trim(u8, raw, " \t\r\n");
     if (std.ascii.eqlIgnoreCase(s, "now_playing") or std.ascii.eqlIgnoreCase(s, "system") or std.mem.eql(u8, s, "0")) return .now_playing;
     if (std.ascii.eqlIgnoreCase(s, "spotify") or std.mem.eql(u8, s, "1")) return .spotify;
+    if (std.ascii.eqlIgnoreCase(s, "spotifast") or std.ascii.eqlIgnoreCase(s, "fastpotify") or std.mem.eql(u8, s, "2")) return .spotifast;
     return .now_playing;
 }
 
@@ -70,6 +69,7 @@ pub fn mediaSourceName(v: state.MediaSource) []const u8 {
     return switch (v) {
         .now_playing => "now_playing",
         .spotify => "spotify",
+        .spotifast => "spotifast",
     };
 }
 
@@ -247,7 +247,7 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\# Form factor [compact, expanded]
         \\widget_mode = {s}
         \\
-        \\# Metadata telemetry source [now_playing, spotify]
+        \\# Metadata telemetry source [now_playing, spotify, spotifast]
         \\media_source = {s}
         \\
         \\# Mascot shown when player is inactive [cat, banana_cat, spotify]
@@ -360,4 +360,12 @@ test "parseConfigContent preserves backward compatibility with integer values" {
     try std.testing.expectEqual(state.WidgetMode.expanded, state.setting_mode);
     try std.testing.expectEqual(state.IdleStyle.pixel_cat, state.setting_idle_style);
     try std.testing.expectEqual(state.TransitionStyle.vinyl, state.setting_transition);
+}
+
+test "parseMediaSource handles spotifast and fastpotify" {
+    try std.testing.expectEqual(state.MediaSource.spotifast, parseMediaSource("spotifast"));
+    try std.testing.expectEqual(state.MediaSource.spotifast, parseMediaSource("Spotifast"));
+    try std.testing.expectEqual(state.MediaSource.spotifast, parseMediaSource("fastpotify"));
+    try std.testing.expectEqual(state.MediaSource.spotifast, parseMediaSource("2"));
+    try std.testing.expectEqualStrings("spotifast", mediaSourceName(.spotifast));
 }

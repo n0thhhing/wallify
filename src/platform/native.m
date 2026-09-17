@@ -4,6 +4,7 @@
 #import <QuartzCore/CATransaction.h>
 #include <stdatomic.h>
 #include <simd/simd.h>
+#include <unistd.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #include "gpu.h"
 #import "settings_window.h"
@@ -74,6 +75,18 @@ void wallify_profile_scene(double seconds) {
 + (instancetype)sharedTarget;
 - (void)statusOpenSettings:(id)sender;
 - (void)statusOpenSpotify:(id)sender;
+@end
+
+@interface WallifyAppDelegate : NSObject <NSApplicationDelegate>
+@end
+@implementation WallifyAppDelegate
+- (void)applicationWillTerminate:(NSNotification *)notification {
+    unlink("/tmp/art.raw");
+    unlink("/tmp/art.bmp");
+    unlink("/tmp/art-next.bmp");
+    unlink("/tmp/mrc_artwork");
+    unlink("/tmp/mrc_artwork_tmp");
+}
 @end
 
 @implementation WallifyStatusMenuTarget
@@ -151,6 +164,9 @@ bool wallify_create(int width, int height, int left, int top) {
     panel.hasShadow = NO;
     panel.hidesOnDeactivate = NO;
     panel.releasedWhenClosed = NO;
+    // Push the window behind normal apps but above the wallpaper.
+    // Joining all spaces + stationary makes it stick to the desktop like a native widget,
+    // ignoring Mission Control swipes and the Alt-Tab switcher.
     panel.level = NSNormalWindowLevel - 1;
     panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorStationary;
     WallifyView *view = [[WallifyView alloc] initWithFrame:bounds];
@@ -170,6 +186,9 @@ bool wallify_create(int width, int height, int left, int top) {
     statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
     statusItem.button.title = @"\u266b";
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Wallify"];
+
+    WallifyAppDelegate *delegate = [[WallifyAppDelegate alloc] init];
+    [NSApp setDelegate:delegate];
 
     NSMenuItem *header = [[NSMenuItem alloc] initWithTitle:@"Wallify" action:nil keyEquivalent:@""];
     [header setEnabled:NO];
@@ -262,8 +281,9 @@ static void presentLatest(void) {
         [command commit];
         [command waitUntilScheduled];
 
-        // Commit window geometry and its matching drawable together. Resizing
-        // earlier stretches the previous (expanded) frame into the compact tile.
+        // Disable implicit animations and commit the window geometry and drawable together.
+        // If we don't do this, CoreAnimation will stretch the old frame's pixels while resizing,
+        // causing a nasty visual flash.
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
         NSRect frame = panel.frame;
@@ -304,9 +324,9 @@ void wallify_load_texture(int textureID, const unsigned int *pixels, size_t widt
     }
 }
 
-// Bake transformed artwork into transparent padding before blurring. This
-// keeps the glow localized to the cover instead of smearing opaque edge colors
-// across the player. All work happens once per artwork update on the GPU.
+// Pad the artwork with transparent pixels before blurring.
+// If we blur the raw image directly, the hard edges smear strong colors everywhere.
+// Padding it first gives us a nice, soft falloff. Handled on the GPU via MPS.
 float wallify_glow_extent(float artSize) {
     return ceilf(artSize * fmaxf(WALLIFY_GLOW_SCALE_X, WALLIFY_GLOW_SCALE_Y) + 6 * WALLIFY_GLOW_BLUR);
 }

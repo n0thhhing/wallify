@@ -27,6 +27,7 @@ pub fn main() !void {
 
     render.drawUIFrame();
     _ = &input.wallify_pointer;
+    media.ensureWorkerStarted();
     const anim = try std.Thread.spawn(.{}, animation.animationLoop, .{});
     anim.detach();
     const metadata = try std.Thread.spawn(.{}, media.metadataLoop, .{io});

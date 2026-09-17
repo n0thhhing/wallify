@@ -69,3 +69,8 @@ pub const kCGBitmapByteOrder32Big: u32 = (4 << 12);
 pub const kCGBlendModePlusLighter: u32 = 21;
 pub const kCGPathFillStroke: u32 = 3;
 pub const kCGLineJoinRound: u32 = 1;
+
+// ImageIO bindings
+pub extern "c" fn CGImageSourceCreateThumbnailAtIndex(isrc: Ref, index: usize, options: Ref) Ref;
+pub extern "c" var kCGImageSourceCreateThumbnailFromImageAlways: Ref;
+pub extern "c" var kCGImageSourceThumbnailMaxPixelSize: Ref;

@@ -40,60 +40,106 @@ pub fn init() !void {
     initialized = true;
 }
 
-pub const Bitmap = struct {
-    data: []const u8,
-    w: usize,
-    h: usize,
-    stride: usize,
-    offset: usize,
-    top_down: bool,
-    pub fn parse(data: []const u8) !Bitmap {
-        if (data.len < 54 or !std.mem.eql(u8, data[0..2], "BM")) return error.InvalidBitmap;
-        const w = std.mem.readInt(i32, data[18..22], .little);
-        const h = std.mem.readInt(i32, data[22..26], .little);
-        const offset = std.mem.readInt(u32, data[10..14], .little);
-        if (w <= 0 or h == 0 or h == std.math.minInt(i32) or w > 4096 or @abs(h) > 4096 or std.mem.readInt(u16, data[28..30], .little) != 24 or std.mem.readInt(u32, data[30..34], .little) != 0) return error.InvalidBitmap;
-        const width: usize = @intCast(w);
-        const height: usize = @intCast(@abs(h));
-        const stride = (width * 3 + 3) & ~@as(usize, 3);
-        if (offset < 54 or offset > data.len or height > (data.len - offset) / stride) return error.InvalidBitmap;
-        return .{ .data = data, .w = width, .h = height, .stride = stride, .offset = offset, .top_down = h < 0 };
-    }
-    pub fn pixel(self: Bitmap, x: usize, y: usize) u32 {
-        const row = if (self.top_down) y else self.h - 1 - y;
-        const p = self.data[self.offset + row * self.stride + x * 3 ..][0..3];
-        return @as(u32, p[2]) | (@as(u32, p[1]) << 8) | (@as(u32, p[0]) << 16) | 0xff000000;
-    }
-};
+pub fn clearArtwork() void {
+    has_art = false;
+    art_hash = null;
+}
 
 pub fn refreshArtwork() void {
     if (!artwork_dirty.swap(false, .acq_rel)) return;
-    const fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/art.bmp", .{ .ACCMODE = .RDONLY }, 0) catch return;
-    defer _ = std.posix.system.close(fd);
+
+    // Use CoreGraphics to decode the raw JPEG/PNG directly in memory.
+    // This entirely eliminates the ~100ms stutter of spawning `sips` via posix fork/exec
+    // in the background, and saves us from shipping libjpeg/libpng.
+    const macos = @import("../platform/macos.zig");
+    const path = "/tmp/art.raw";
+
+    // Quick hash check on the raw file to avoid unnecessary CoreGraphics work
+    const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0) catch {
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
+    };
+
     var stat: std.posix.Stat = undefined;
-    if (std.posix.system.fstat(fd, &stat) != 0 or stat.size < 54 or stat.size > 64 * 1024 * 1024) return;
-    const data = std.heap.page_allocator.alloc(u8, @intCast(stat.size)) catch return;
-    defer std.heap.page_allocator.free(data);
-    var read: usize = 0;
-    while (read < data.len) {
-        const n = std.posix.read(fd, data[read..]) catch return;
-        if (n == 0) return;
-        read += n;
+    if (std.posix.system.fstat(fd, &stat) != 0 or stat.size == 0 or stat.size > 64 * 1024 * 1024) {
+        _ = std.posix.system.close(fd);
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
     }
-    const hash = std.hash.Wyhash.hash(0, data);
-    if (art_hash != null and art_hash.? == hash) return;
-    const bmp = Bitmap.parse(data) catch return;
-    const pixels = std.heap.page_allocator.alloc(u32, bmp.w * bmp.h) catch return;
+
+    _ = std.posix.system.close(fd);
+
+    const mtime_hash = @as(u64, @bitCast(stat.mtime().sec)) ^ @as(u64, @bitCast(stat.mtime().nsec));
+    if (art_hash != null and art_hash.? == mtime_hash) return;
+    const hash = mtime_hash;
+
+    const url = macos.CFURLCreateFromFileSystemRepresentation(null, path, path.len, 0);
+    if (url == null) {
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
+    }
+    defer macos.CFRelease(url);
+
+    const src = macos.CGImageSourceCreateWithURL(url, null);
+    if (src == null) {
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
+    }
+    defer macos.CFRelease(src);
+
+    const max_size: i32 = 180;
+    const size_num = macos.CFNumberCreate(null, 3, &max_size);
+    defer macos.CFRelease(size_num);
+
+    const keys = [_]macos.Ref{ macos.kCGImageSourceCreateThumbnailFromImageAlways, macos.kCGImageSourceThumbnailMaxPixelSize };
+    const values = [_]macos.Ref{ macos.kCFBooleanTrue, size_num };
+    const options = macos.CFDictionaryCreate(null, &keys, &values, 2, &macos.kCFTypeDictionaryKeyCallBacks, &macos.kCFTypeDictionaryValueCallBacks);
+    defer macos.CFRelease(options);
+
+    const img = macos.CGImageSourceCreateThumbnailAtIndex(src, 0, options);
+    if (img == null) {
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
+    }
+    defer macos.CGImageRelease(img);
+
+    const w = 180;
+    const h = 180;
+    const pixels = std.heap.page_allocator.alloc(u32, w * h) catch {
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
+    };
     defer std.heap.page_allocator.free(pixels);
+    @memset(pixels, 0);
+
+    const space = macos.CGColorSpaceCreateDeviceRGB();
+    defer macos.CGColorSpaceRelease(space);
+
+    const ctx = macos.CGBitmapContextCreate(@ptrCast(pixels.ptr), w, h, 8, w * 4, space, macos.kCGImageAlphaPremultipliedLast | macos.kCGBitmapByteOrder32Big);
+    if (ctx == null) {
+        clearArtwork();
+        state.global_has_artwork = false;
+        return;
+    }
+    defer macos.CGContextRelease(ctx);
+
+    macos.CGContextDrawImage(ctx, macos.rect(0, 0, w, h), img);
+
     var sums = [_]u64{ 0, 0, 0 };
-    for (0..bmp.h) |y| for (0..bmp.w) |x| {
-        const p = bmp.pixel(x, y);
-        pixels[y * bmp.w + x] = p;
+    for (0..h) |y| for (0..w) |x| {
+        const p = pixels[y * w + x];
         inline for (0..3) |c| sums[c] += (p >> (c * 8)) & 255;
     };
+
     native.wallify_swap_textures(@intFromEnum(Texture.artwork), @intFromEnum(Texture.previous_artwork));
     native.wallify_swap_textures(@intFromEnum(Texture.glow), @intFromEnum(Texture.previous_glow));
-    upload(.artwork, pixels, bmp.w, bmp.h);
+    upload(.artwork, pixels, w, h);
     native.wallify_blur_texture(@intFromEnum(Texture.artwork), @intFromEnum(Texture.glow), @as(f32, state.Layout.art_size_expanded));
     state.art_transition_until = if (has_art and state.setting_animations) state.animation_time + transition_duration else 0;
     has_art = true;
@@ -103,18 +149,4 @@ pub fn refreshArtwork() void {
     state.extracted_r = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[0])) / @as(f64, @floatFromInt(pixels.len)) * boost));
     state.extracted_g = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[1])) / @as(f64, @floatFromInt(pixels.len)) * boost));
     state.extracted_b = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[2])) / @as(f64, @floatFromInt(pixels.len)) * boost));
-}
-
-test "BMP decoder handles row padding and rejects truncated data" {
-    var data = [_]u8{0} ** 62;
-    @memcpy(data[0..2], "BM");
-    std.mem.writeInt(u32, data[10..14], 54, .little);
-    std.mem.writeInt(i32, data[18..22], 1, .little);
-    std.mem.writeInt(i32, data[22..26], 2, .little);
-    std.mem.writeInt(u16, data[28..30], 24, .little);
-    @memcpy(data[54..62], &[_]u8{ 255, 0, 0, 0, 0, 0, 255, 0 });
-    const bmp = try Bitmap.parse(&data);
-    try std.testing.expectEqual(@as(u32, 0xff0000ff), bmp.pixel(0, 0));
-    try std.testing.expectEqual(@as(u32, 0xffff0000), bmp.pixel(0, 1));
-    try std.testing.expectError(error.InvalidBitmap, Bitmap.parse(data[0..60]));
 }

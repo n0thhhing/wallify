@@ -12,6 +12,8 @@ var symbol_images: [4]macos.Ref = .{ null, null, null, null };
 var symbol_sizes: [4]macos.Size = .{ .{ .width = 0, .height = 0 }, .{ .width = 0, .height = 0 }, .{ .width = 0, .height = 0 }, .{ .width = 0, .height = 0 } };
 var symbol_once: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
 
+// Load play/pause/prev/next vectors straight from macOS SF Symbols.
+// Matches the native Control Center look exactly and saves us from shipping custom SVGs.
 pub fn initSymbols() void {
     const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
     defer macos.send(void, pool, "release", .{});
