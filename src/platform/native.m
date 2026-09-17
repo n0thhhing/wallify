@@ -451,7 +451,8 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
         if (active) {
             if (!globalGlassView) {
                 globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-                globalGlassView.material = NSVisualEffectMaterialPopover;
+                globalGlassView.material = NSVisualEffectMaterialUnderWindowBackground;
+                globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
                 globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
                 globalGlassView.state = NSVisualEffectStateActive;
                 globalGlassView.wantsLayer = YES;
