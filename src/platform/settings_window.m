@@ -2,17 +2,16 @@
 
 extern const char *wallify_settings_path(void);
 
-@interface WallifyFlippedView : NSView
+@interface WallifyFlippedView : NSVisualEffectView
 @end
 
 @implementation WallifyFlippedView
 - (BOOL)isFlipped { return YES; }
 @end
 
-@interface WallifySettingsWindowController : NSObject <NSWindowDelegate>
+@interface WallifySettingsWindowController : NSObject <NSWindowDelegate, NSToolbarDelegate>
 
 @property (nonatomic, strong) NSWindow *window;
-@property (nonatomic, strong) NSSegmentedControl *tabSwitcher;
 @property (nonatomic, strong) NSTabView *tabView;
 
 // Appearance controls
@@ -121,22 +120,20 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.window.tabbingMode = NSWindowTabbingModeDisallowed;
 
     WallifyFlippedView *root = [[WallifyFlippedView alloc] initWithFrame:frame];
+    root.material = NSVisualEffectMaterialWindowBackground;
+    root.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    root.state = NSVisualEffectStateActive;
     self.window.contentView = root;
 
-    // Segmented tab bar at top
-    self.tabSwitcher = [NSSegmentedControl segmentedControlWithLabels:@[@"Appearance", @"Behavior", @"Desktop & About"]
-                                                         trackingMode:NSSegmentSwitchTrackingSelectOne
-                                                               target:self
-                                                               action:@selector(tabSwitcherChanged:)];
-    self.tabSwitcher.frame = NSMakeRect(20, 14, 480, 28);
-    self.tabSwitcher.selectedSegment = 0;
-    self.tabSwitcher.segmentDistribution = NSSegmentDistributionFillEqually;
-    [root addSubview:self.tabSwitcher];
-
-    [root addSubview:makeDivider(0, 50, 520)];
+    NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"SettingsToolbar"];
+    toolbar.delegate = self;
+    toolbar.displayMode = NSToolbarDisplayModeIconAndLabel;
+    toolbar.allowsUserCustomization = NO;
+    toolbar.autosavesConfiguration = NO;
+    self.window.toolbar = toolbar;
 
     // Tab view container
-    self.tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(0, 52, 520, 480)];
+    self.tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(0, 0, 520, 500)];
     self.tabView.tabViewType = NSNoTabsNoBorder;
     [root addSubview:self.tabView];
 
@@ -338,8 +335,43 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     [view addSubview:makeSubtext(@"Zero runtime dependencies • Pure native performance", 20, 420, 480)];
 }
 
-- (void)tabSwitcherChanged:(NSSegmentedControl *)sender {
-    [self.tabView selectTabViewItemAtIndex:sender.selectedSegment];
+- (NSArray<NSToolbarItemIdentifier> *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar {
+    return @[@"appearance", @"behavior", @"desktop"];
+}
+
+- (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar {
+    return @[@"appearance", @"behavior", @"desktop"];
+}
+
+- (NSArray<NSToolbarItemIdentifier> *)toolbarSelectableItemIdentifiers:(NSToolbar *)toolbar {
+    return @[@"appearance", @"behavior", @"desktop"];
+}
+
+- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSToolbarItemIdentifier)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag {
+    NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:itemIdentifier];
+    if ([itemIdentifier isEqualToString:@"appearance"]) {
+        item.label = @"Appearance";
+        item.image = [NSImage imageWithSystemSymbolName:@"paintpalette" accessibilityDescription:nil];
+        item.target = self;
+        item.action = @selector(toolbarAction:);
+    } else if ([itemIdentifier isEqualToString:@"behavior"]) {
+        item.label = @"Behavior";
+        item.image = [NSImage imageWithSystemSymbolName:@"switch.2" accessibilityDescription:nil];
+        item.target = self;
+        item.action = @selector(toolbarAction:);
+    } else if ([itemIdentifier isEqualToString:@"desktop"]) {
+        item.label = @"Desktop & About";
+        item.image = [NSImage imageWithSystemSymbolName:@"macwindow" accessibilityDescription:nil];
+        item.target = self;
+        item.action = @selector(toolbarAction:);
+    }
+    return item;
+}
+
+- (void)toolbarAction:(NSToolbarItem *)sender {
+    if ([sender.itemIdentifier isEqualToString:@"appearance"]) [self.tabView selectTabViewItemAtIndex:0];
+    else if ([sender.itemIdentifier isEqualToString:@"behavior"]) [self.tabView selectTabViewItemAtIndex:1];
+    else if ([sender.itemIdentifier isEqualToString:@"desktop"]) [self.tabView selectTabViewItemAtIndex:2];
 }
 
 - (void)switchChanged:(NSButton *)sender {
