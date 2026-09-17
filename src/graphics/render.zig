@@ -10,7 +10,13 @@ const player = @import("render/player.zig");
 pub const idle_renderer = idle;
 pub const player_renderer = player;
 
-const card_background_color: gpu.Color = .{ 28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 1.0 };
+// When native glass is active, drop opacity so the NSVisualEffectView blur shines through
+inline fn cardBackgroundColor() gpu.Color {
+    return if (state.setting_native_glass)
+        .{ 28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 0.05 }
+    else
+        .{ 28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 1.0 };
+}
 
 // Metadata updates invalidate the artwork cache; rendering never polls the file.
 pub fn extractColor() void {
@@ -49,7 +55,7 @@ pub fn drawUIFrame() void {
     native.wallify_update_glass_rect(card.x, card.y, card.w, card.h, card.radius, state.setting_native_glass);
     canvas.glass(
         card,
-        card_background_color,
+        cardBackgroundColor(),
         @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
         @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
         @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
