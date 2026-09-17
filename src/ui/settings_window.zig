@@ -4,6 +4,7 @@ const window = @import("window.zig");
 const native = @import("../platform/native.zig");
 
 pub const WallifySettingsSnapshot = extern struct {
+    native_glass: bool,
     glow: bool,
     aurora: bool,
     animations: bool,
@@ -39,8 +40,9 @@ pub fn notify_position_changed() void {
 }
 
 pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) callconv(.c) void {
-    if (out) |s| {
-        s.* = .{
+    if (out) |ptr| {
+        ptr.* = .{
+            .native_glass = state.setting_native_glass,
             .glow = state.setting_glow,
             .aurora = state.setting_aurora,
             .animations = state.setting_animations,
@@ -75,6 +77,7 @@ pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) vo
             state.setting_debug = val;
             if (val) window.widget_debug_window_show() else window.widget_debug_window_hide();
         },
+        5 => state.setting_native_glass = val,
         else => {},
     }
     state.saveWidgetSettings();

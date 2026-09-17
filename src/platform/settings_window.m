@@ -186,7 +186,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     // Section 1: Lighting & Glow
     [view addSubview:makeHeaderLabel(@"LIGHTING & ATMOSPHERE", 20, 16)];
 
-    self.nativeGlassSwitch = makeSwitch(@"Native macOS Frosted Glass", 4, self, @selector(switchChanged:), 20, 38);
+    self.nativeGlassSwitch = makeSwitch(@"Native macOS Frosted Glass", 5, self, @selector(switchChanged:), 20, 38);
     [view addSubview:self.nativeGlassSwitch];
     [view addSubview:makeSubtext(@"Uses true OS-level vibrancy blurring underneath the widget.", 44, 62, 450)];
 
