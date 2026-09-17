@@ -129,7 +129,12 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
             float dist_from_art = length(in.point - float2(c.dx + 82.0f, c.dy + 82.0f));
             float diffusion = exp(-dist_from_art * 0.006f) * c.parameter;
             color.rgb += float3(c.sx, c.sy, c.sw) * diffusion;
+            color.a = max(color.a, diffusion * 0.15f);
         }
+
+        // CRITICAL: Premultiply RGB by Alpha! CoreAnimation expects premultiplied alpha.
+        // If color.a is 0.0, color.rgb MUST be 0.0, otherwise it results in additive blending.
+        color.rgb *= color.a;
     } else if (c.kind == WALLIFY_SHADOW) {
         float shadow_dist = roundedDistance(in.point - float2(c.sx, c.sy), float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
         float blur = max(0.5f, c.parameter);
