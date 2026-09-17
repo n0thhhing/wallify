@@ -116,6 +116,9 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         // macOS Dark Mode rim is brighter at the top (ambient light from above) and very faint at the bottom
         float rim_alpha = mix(0.06f, 0.35f, 1.0f - in.uv.y);
         color.rgb = mix(color.rgb, float3(1.0f, 1.0f, 1.0f), rim_mask * rim_alpha);
+        
+        // Ensure the rim and grain remain visible even if the base color is completely transparent (for Native Glass)
+        color.a = max(color.a, (rim_mask * rim_alpha));
 
         // Micro-frosted grain prevents 8-bit banding and mimics etched glass
         float grain = (fract(sin(dot(in.point, float2(12.9898f, 78.233f))) * 43758.5453f) - 0.5f) * 0.012f;

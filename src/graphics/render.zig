@@ -13,7 +13,7 @@ pub const player_renderer = player;
 // When native glass is active, drop opacity so the NSVisualEffectView blur shines through
 inline fn cardBackgroundColor() gpu.Color {
     return if (state.setting_native_glass)
-        .{ 28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 0.05 }
+        .{ 28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 0.0 }
     else
         .{ 28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 1.0 };
 }
