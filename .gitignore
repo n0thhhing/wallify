@@ -10,6 +10,7 @@ zig-out/
 *.sock
 zls.json
 
-.agents/
+.agents/*
+!.agents/rules/
 widget-settings.conf
 config/widget-settings.conf
