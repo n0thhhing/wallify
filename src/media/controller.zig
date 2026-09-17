@@ -67,11 +67,12 @@ fn unlockQueue() void {
 }
 
 pub fn triggerSeekInner(target: f64) void {
-    if (state.setting_source == .spotify) {
+    const active = getActiveSource();
+    if (active == .spotify) {
         spotify.widget_spotify_seek(target);
         return;
     }
-    if (state.setting_source == .spotifast) {
+    if (active == .spotifast) {
         spotifast.widget_spotifast_seek(target);
         return;
     }
@@ -79,7 +80,8 @@ pub fn triggerSeekInner(target: f64) void {
 }
 
 pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
-    if (state.setting_source == .spotify) {
+    const active = getActiveSource();
+    if (active == .spotify) {
         switch (cmd) {
             .play => spotify.widget_spotify_control(.play),
             .pause => spotify.widget_spotify_control(.pause),
@@ -90,7 +92,7 @@ pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
         }
         return;
     }
-    if (state.setting_source == .spotifast) {
+    if (active == .spotifast) {
         switch (cmd) {
             .play => spotifast.widget_spotifast_control(.play),
             .pause => spotifast.widget_spotifast_control(.pause),
@@ -102,6 +104,18 @@ pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
         return;
     }
     media_remote.sendCommand(cmd);
+}
+
+fn getActiveSource() state.MediaSource {
+    const s = state.setting_source;
+    if (s != .auto) return s;
+
+    var tmp_buf: [32]u8 = undefined;
+    const tmp_len = spotifast.widget_query_spotifast(&tmp_buf, tmp_buf.len);
+    if (tmp_len > 0 and !std.mem.eql(u8, tmp_buf[0..tmp_len], "CLOSED")) {
+        return .spotifast;
+    }
+    return .now_playing;
 }
 
 fn commandWorkerLoop() void {
@@ -301,18 +315,19 @@ pub fn metadataLoop(io: std.Io) void {
     var last_source: ?state.MediaSource = null;
 
     while (true) {
-        if (last_source == null or state.setting_source != last_source.?) {
-            last_source = state.setting_source;
+        const active_source = getActiveSource();
+        if (last_source == null or active_source != last_source.?) {
+            last_source = active_source;
             state.spotify_closed.store(false, .release);
             last_art_url_len = 0; // Force Spotify art re-download
             state.artwork_refresh_pending = true; // Force Now Playing art reload
             state.global_title_len = 0; // Force title change to trigger updates
         }
 
-        if (state.setting_source == .spotify or state.setting_source == .spotifast) {
+        if (active_source == .spotify or active_source == .spotifast) {
             _ = arena.reset(.retain_capacity);
             var res_buf: [ARTWORK_REQUEST_BUFFER_SIZE]u8 = undefined;
-            const res_len = if (state.setting_source == .spotifast)
+            const res_len = if (active_source == .spotifast)
                 spotifast.widget_query_spotifast(&res_buf, res_buf.len)
             else
                 spotify.widget_query_spotify(&res_buf, res_buf.len);
@@ -328,7 +343,7 @@ pub fn metadataLoop(io: std.Io) void {
                 state.requestFrame();
             }
             if (closed) {
-                const title_span = if (state.setting_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
+                const title_span = if (active_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
                 const artist_span = "Click to Launch";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
                     @memcpy(state.global_title[0..title_span.len], title_span);
@@ -347,7 +362,7 @@ pub fn metadataLoop(io: std.Io) void {
             }
 
             if (std.mem.eql(u8, res_buf[0..res_len], "NO_TRACK")) {
-                const title_span = if (state.setting_source == .spotifast) "Spotifast" else "Spotify";
+                const title_span = if (active_source == .spotifast) "Spotifast" else "Spotify";
                 const artist_span = "No Track Playing";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
                     @memcpy(state.global_title[0..title_span.len], title_span);
@@ -365,7 +380,7 @@ pub fn metadataLoop(io: std.Io) void {
                 continue;
             }
 
-            const maybe_payload: ?SpotifyPayload = if (state.setting_source == .spotifast) blk: {
+            const maybe_payload: ?SpotifyPayload = if (active_source == .spotifast) blk: {
                 if (spotifast.parseSpotifastPayload(res_buf[0..res_len])) |p| {
                     break :blk SpotifyPayload{
                         .title = p.title,
@@ -436,10 +451,10 @@ pub fn metadataLoop(io: std.Io) void {
                 }
             }
             var waited: usize = 0;
-            const poll_interval: usize = if (state.setting_source == .spotifast) 50 else POLL_INTERVAL_MS;
+            const poll_interval: usize = if (active_source == .spotifast) 50 else POLL_INTERVAL_MS;
             while (waited < poll_interval) {
-                if ((state.setting_source == .spotify or state.setting_source == .spotifast) and spotify.widget_spotify_take_state() != -1) break;
-                if (state.setting_source != last_source.?) break;
+                if ((active_source == .spotify or active_source == .spotifast) and spotify.widget_spotify_take_state() != -1) break;
+                if (getActiveSource() != last_source.?) break;
                 sleep_ms(10);
                 waited += 10;
             }
@@ -479,7 +494,7 @@ pub fn metadataLoop(io: std.Io) void {
             var empty_polls: usize = 0;
             var empty_art_polls: usize = 0;
             while (fgets(&line, line.len, stream) != null) {
-                if (state.setting_source != .now_playing) break;
+                if (getActiveSource() != .now_playing) break;
 
                 _ = arena.reset(.retain_capacity);
                 const line_len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;

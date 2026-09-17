@@ -62,12 +62,14 @@ pub fn parseMediaSource(raw: []const u8) state.MediaSource {
     if (std.ascii.eqlIgnoreCase(s, "now_playing") or std.ascii.eqlIgnoreCase(s, "system") or std.mem.eql(u8, s, "0")) return .now_playing;
     if (std.ascii.eqlIgnoreCase(s, "spotify") or std.mem.eql(u8, s, "1")) return .spotify;
     if (std.ascii.eqlIgnoreCase(s, "spotifast") or std.ascii.eqlIgnoreCase(s, "fastpotify") or std.mem.eql(u8, s, "2")) return .spotifast;
+    if (std.ascii.eqlIgnoreCase(s, "auto") or std.mem.eql(u8, s, "3")) return .auto;
     return .now_playing;
 }
 
 pub fn mediaSourceName(v: state.MediaSource) []const u8 {
     return switch (v) {
         .now_playing => "now_playing",
+        .auto => "auto",
         .spotify => "spotify",
         .spotifast => "spotifast",
     };

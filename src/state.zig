@@ -144,6 +144,7 @@ pub const MediaSource = enum(u8) {
     now_playing = 0,
     spotify = 1,
     spotifast = 2,
+    auto = 3,
 };
 
 pub const WidgetMode = enum(u8) {

@@ -449,7 +449,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.speedSegment.selectedSegment = (s.animation_speed >= 0 && s.animation_speed <= 2) ? s.animation_speed : 1;
 
     self.modeSegment.selectedSegment = (s.widget_mode >= 0 && s.widget_mode <= 1) ? s.widget_mode : 0;
-    self.sourceSegment.selectedSegment = (s.media_source >= 0 && s.media_source <= 2) ? s.media_source : 0;
+    self.sourceSegment.selectedSegment = (s.media_source >= 0 && s.media_source <= 3) ? s.media_source : 0;
     self.idleSegment.selectedSegment = (s.idle_style >= 0 && s.idle_style <= 2) ? s.idle_style : 0;
 
     if (s.track_transition >= 0 && s.track_transition < self.transitionPopup.numberOfItems) {
