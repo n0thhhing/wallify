@@ -239,7 +239,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     [view addSubview:makeHeaderLabel(@"AUDIO TELEMETRY", 20, 130)];
 
     [view addSubview:makeItemLabel(@"Media Source", 20, 150)];
-    self.sourceSegment = makeSegments(@[@"System Now Playing", @"Spotify Direct", @"Spotifast"], 13, self, @selector(segmentChanged:), 20, 172, 440);
+    self.sourceSegment = makeSegments(@[@"System Now Playing", @"Spotify Direct", @"Spotifast", @"Auto"], 13, self, @selector(segmentChanged:), 20, 172, 440);
     [view addSubview:self.sourceSegment];
     [view addSubview:makeSubtext(@"Now Playing supports all media; Spotify uses AppleScript; Spotifast connects via fast local IPC.", 20, 202, 480)];
 

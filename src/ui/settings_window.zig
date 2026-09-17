@@ -89,7 +89,7 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
         10 => state.setting_frame = @enumFromInt(std.math.clamp(val, 0, 2)),
         11 => state.setting_intensity = @enumFromInt(std.math.clamp(val, 0, 2)),
         12 => state.setting_speed = @enumFromInt(std.math.clamp(val, 0, 2)),
-        13 => state.setting_source = @enumFromInt(std.math.clamp(val, 0, 2)),
+        13 => state.setting_source = @enumFromInt(std.math.clamp(val, 0, 3)),
         14 => {
             const new_mode: state.WidgetMode = @enumFromInt(std.math.clamp(val, 0, 1));
             if (state.setting_mode != new_mode) {
