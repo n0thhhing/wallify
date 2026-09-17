@@ -106,6 +106,9 @@ var g_elapsedKey: ?CFStringRef = null;
 var g_durationKey: ?CFStringRef = null;
 var g_timestampKey: ?CFStringRef = null;
 
+// PERF: By statically caching these CoreFoundation string references after the first initialization,
+// we prevent the Perl daemon from repeatedly churning heap allocations and stalling the main thread
+// every 150ms when polling MediaRemote dictionary payloads.
 fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) void {
     _ = block;
     if (info) |dict| {

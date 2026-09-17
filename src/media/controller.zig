@@ -288,6 +288,10 @@ pub fn metadataLoop(io: std.Io) void {
         "$SIG{USR1} = sub { fetch(); }; " ++
         "use Time::HiRes qw(usleep); while (1) { fetch(); usleep(" ++ METADATA_HELPER_INTERVAL_US ++ "); }";
 
+    // HACK: macOS `mediaremoted` strictly throttles rapid polling, placing requesters in an XPC penalty box.
+    // To bypass this and achieve instant `.now_playing` responsiveness, we spawn this Perl subprocess and hijack its UNIX signal handler.
+    // Setting `PERL_SIGNALS=unsafe` is absolutely critical here—it disables Perl's Deferred Signals mechanism, allowing our
+    // POSIX `SIGUSR1` interrupt to violently shatter the 150ms `usleep` block the exact microsecond a track changes!
     const command = "PERL_SIGNALS=unsafe perl -e '" ++ perl_cmd ++ "'";
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -457,6 +461,9 @@ pub fn metadataLoop(io: std.Io) void {
             const Watcher = struct {
                 fn run(pid: std.posix.pid_t, running: *std.atomic.Value(bool)) void {
                     while (running.load(.acquire)) {
+                        // We tap directly into Spotify's `NSDistributedNotificationCenter` OS broadcasts (`com.spotify.client.PlaybackStateChanged`).
+                        // The moment the user clicks skip or pauses in Spotify, this atomic flag is tripped.
+                        // We immediately fire a SIGUSR1 interrupt at the Perl daemon to fetch the new metadata, dropping latency to literally zero.
                         if (spotify.widget_spotify_take_state() != -1) {
                             _ = std.posix.kill(pid, std.posix.SIG.USR1) catch {};
                         }

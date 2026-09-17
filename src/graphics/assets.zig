@@ -54,7 +54,9 @@ pub fn refreshArtwork() void {
     const macos = @import("../platform/macos.zig");
     const path = "/tmp/art.raw";
 
-    // Quick hash check on the raw file to avoid unnecessary CoreGraphics work
+    // PERF: Apple Music high-res artwork files can exceed 2MB.
+    // Instead of loading the entire raw blob into memory and hashing it with Wyhash 60 times a second,
+    // we bypass the disk entirely and instantly verify the inode's nanosecond modification timestamp (`mtime`) using `fstat`.
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0) catch {
         clearArtwork();
         state.global_has_artwork = false;
