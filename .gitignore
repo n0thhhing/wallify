@@ -3,36 +3,13 @@
 .zig-local-cache/
 zig-out/
 
-# Compiled binaries & executables
-preview_frame
-dump_windows
-test_fs
-test_send1
-# Scratch experiments & temporary test scripts
-out
-*.diff
-scratch_out/
-dump_windows.zig
-test_fs.zig
-test_grid.zig
-test_send1.zig
-test_trigger.zig
-test_alpha.swift
-test_panel.swift
-list_widgets.swift
-get_kitty_size.swift
-measure.py
-measure.swift
-scratch.zig
-scratch_generic.zig
-macos_restored.zig
-pump.m
-main_zig_edits.json
-screenshot.png
-
 # macOS system files & logs
 .DS_Store
 *.log
 *.tmp
 *.sock
 zls.json
+
+.agents/
+widget-settings.conf
+config/widget-settings.conf
