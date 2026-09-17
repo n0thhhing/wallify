@@ -470,8 +470,14 @@ static NSVisualEffectView *globalGlassView = nil;
 static void tuneGlassSublayers(CALayer *layer) {
     if (!layer) return;
     for (CALayer *sub in layer.sublayers) {
-        if ([sub.name isEqualToString:@"fill"]) {
-            sub.opacity = 0.55f;
+        if ([sub.name isEqualToString:@"backdrop"]) {
+            @try {
+                [sub setValue:@(16.0) forKeyPath:@"filters.gaussianBlur.inputRadius"];
+                [sub setValue:@(0.25) forKey:@"scale"];
+                [sub setValue:@(1.8) forKeyPath:@"filters.colorSaturate.inputAmount"];
+            } @catch (id _) {}
+        } else if ([sub.name isEqualToString:@"fill"]) {
+            sub.opacity = 0.35f;
         } else if ([sub.name isEqualToString:@"tone"]) {
             sub.opacity = 0.0f; // Removes the frosted/milky lighten overlay
         }
