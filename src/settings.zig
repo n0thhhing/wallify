@@ -174,6 +174,26 @@ pub fn parseConfigContent(content: []const u8) void {
             state.setting_idle_style = parseIdleStyle(val);
         } else if (std.ascii.eqlIgnoreCase(key, "track_transition")) {
             state.setting_transition = parseTransitionStyle(val);
+        } else if (std.ascii.eqlIgnoreCase(key, "hide_text")) {
+            if (parseBool(val)) |b| state.setting_hide_text = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "hide_progress")) {
+            if (parseBool(val)) |b| state.setting_hide_progress = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "font_scale")) {
+            state.setting_font_scale = if (std.ascii.eqlIgnoreCase(val, "small"))
+                .small
+            else if (std.ascii.eqlIgnoreCase(val, "large"))
+                .large
+            else
+                .normal;
+        } else if (std.ascii.eqlIgnoreCase(key, "media_key_target")) {
+            state.setting_media_key_target = if (std.ascii.eqlIgnoreCase(val, "active"))
+                .active
+            else if (std.ascii.eqlIgnoreCase(val, "spotify"))
+                .spotify
+            else if (std.ascii.eqlIgnoreCase(val, "spotifast"))
+                .spotifast
+            else
+                .off;
         } else if (std.ascii.eqlIgnoreCase(key, "widget_grid_x")) {
             if (std.fmt.parseInt(u8, val, 10)) |num| {
                 state.widget_grid_x = @min(state.Layout.grid_max, num);
@@ -261,6 +281,18 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\# Artwork transition on track changes [cinematic, ripple, flip, vinyl, glitch, default]
         \\track_transition = {s}
         \\
+        \\# Hide track title and artist text [true, false]
+        \\hide_text = {s}
+        \\
+        \\# Hide progress/scrubber bar [true, false]
+        \\hide_progress = {s}
+        \\
+        \\# Font size scale [small, normal, large]
+        \\font_scale = {s}
+        \\
+        \\# Hardware media key redirect [off, active, spotify, spotifast]
+        \\media_key_target = {s}
+        \\
         \\[Position]
         \\# Screen coordinates in points (from top-left of display below menu bar)
         \\widget_margin_left = {d}
@@ -288,6 +320,19 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
             mediaSourceName(state.setting_source),
             idleStyleName(state.setting_idle_style),
             transitionStyleName(state.setting_transition),
+            if (state.setting_hide_text) "true" else "false",
+            if (state.setting_hide_progress) "true" else "false",
+            switch (state.setting_font_scale) {
+                .small => "small",
+                .normal => "normal",
+                .large => "large",
+            },
+            switch (state.setting_media_key_target) {
+                .off => "off",
+                .active => "active",
+                .spotify => "spotify",
+                .spotifast => "spotifast",
+            },
             state.widget_margin_left,
             state.widget_margin_top,
             state.widget_grid_x,
