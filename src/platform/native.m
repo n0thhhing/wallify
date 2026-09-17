@@ -471,9 +471,9 @@ static void tuneGlassSublayers(CALayer *layer) {
     if (!layer) return;
     for (CALayer *sub in layer.sublayers) {
         if ([sub.name isEqualToString:@"fill"]) {
-            sub.opacity = 0.35f;
+            sub.opacity = 0.55f;
         } else if ([sub.name isEqualToString:@"tone"]) {
-            sub.opacity = 0.15f;
+            sub.opacity = 0.0f; // Removes the frosted/milky lighten overlay
         }
         tuneGlassSublayers(sub);
     }

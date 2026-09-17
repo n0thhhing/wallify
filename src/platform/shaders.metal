@@ -105,35 +105,33 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     } else if (c.kind == WALLIFY_GRADIENT) {
         coverage *= mix(c.parameter, 1.0f, smoothstep(0.0f, 1.0f, in.uv.y));
     } else if (c.kind == WALLIFY_GLASS) {
-        // Directional overhead ambient light gradient
-        float top_light = max(0.0f, 1.0f - in.uv.y * 1.4f);
-        color.rgb *= (1.0f + 0.08f * top_light);
-
         // Crisp 1px (0.5pt) inner rim exactly like macOS window borders
         float rim_dist = abs(distance + 0.5f);
         float rim_mask = 1.0f - smoothstep(0.0f, 0.8f, rim_dist);
+        float rim_alpha = mix(0.03f, 0.20f, 1.0f - in.uv.y);
 
-        // macOS Dark Mode rim is brighter at the top (ambient light from above) and very faint at the bottom
-        float rim_alpha = mix(0.06f, 0.35f, 1.0f - in.uv.y);
-        color.rgb = mix(color.rgb, float3(1.0f, 1.0f, 1.0f), rim_mask * rim_alpha);
-        
-        // Ensure the rim and grain remain visible even if the base color is completely transparent (for Native Glass)
-        color.a = max(color.a, (rim_mask * rim_alpha));
+        if (c.alpha > 0.0f) {
+            // Software Acrylic Glass Mode: full charcoal base, overhead light, grain, and diffusion
+            float top_light = max(0.0f, 1.0f - in.uv.y * 1.4f);
+            float3 base_rgb = float3(c.r, c.g, c.b) * (1.0f + 0.08f * top_light);
+            color.rgb = mix(base_rgb, float3(1.0f, 1.0f, 1.0f), rim_mask * rim_alpha);
+            float grain = (fract(sin(dot(in.point, float2(12.9898f, 78.233f))) * 43758.5453f) - 0.5f) * 0.012f;
+            color.rgb += grain;
+            color.a = max(c.alpha, rim_mask * rim_alpha);
 
-        // Micro-frosted grain prevents 8-bit banding and mimics etched glass
-        float grain = (fract(sin(dot(in.point, float2(12.9898f, 78.233f))) * 43758.5453f) - 0.5f) * 0.012f;
-        color.rgb += grain;
-
-        // Ambient artwork color diffusion: bleeds artwork dominant colors across the card
-        if (c.parameter > 0.0f) {
-            float dist_from_art = length(in.point - float2(c.dx + 82.0f, c.dy + 82.0f));
-            float diffusion = exp(-dist_from_art * 0.006f) * c.parameter;
-            color.rgb += float3(c.sx, c.sy, c.sw) * diffusion;
-            color.a = max(color.a, diffusion * 0.15f);
+            if (c.parameter > 0.0f) {
+                float dist_from_art = length(in.point - float2(c.dx + 82.0f, c.dy + 82.0f));
+                float diffusion = exp(-dist_from_art * 0.006f) * c.parameter;
+                color.rgb += float3(c.sx, c.sy, c.sw) * diffusion;
+            }
+        } else {
+            // Native macOS Frosted Glass Mode: 100% transparent interior so the pure
+            // NSVisualEffectView shows through without any cloudy/milky haze or fake grain
+            color.rgb = float3(1.0f, 1.0f, 1.0f);
+            color.a = rim_mask * rim_alpha;
         }
 
-        // CRITICAL: Premultiply RGB by Alpha! CoreAnimation expects premultiplied alpha.
-        // If color.a is 0.0, color.rgb MUST be 0.0, otherwise it results in additive blending.
+        // Premultiply RGB by Alpha for clean CoreAnimation compositing
         color.rgb *= color.a;
     } else if (c.kind == WALLIFY_SHADOW) {
         float shadow_dist = roundedDistance(in.point - float2(c.sx, c.sy), float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
