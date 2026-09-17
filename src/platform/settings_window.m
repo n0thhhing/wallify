@@ -116,7 +116,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
 }
 
 - (void)createWindow {
-    NSRect frame = NSMakeRect(0, 0, 520, 580);
+    NSRect frame = NSMakeRect(0, 0, 520, 680);
     NSUInteger style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
     self.window = [[NSWindow alloc] initWithContentRect:frame styleMask:style backing:NSBackingStoreBuffered defer:NO];
     self.window.title = @"Wallify Settings";
@@ -138,12 +138,14 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     self.window.toolbar = toolbar;
 
     // Tab view container
-    self.tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(0, 0, 520, 500)];
+    self.tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(0, 0, 520, 600)];
     self.tabView.tabViewType = NSNoTabsNoBorder;
     [root addSubview:self.tabView];
 
     // Build Tab 1: Appearance
     NSTabViewItem *itemAppearance = [[NSTabViewItem alloc] initWithIdentifier:@"appearance"];
+    itemAppearance.label = @"Appearance";
+    itemAppearance.image = [NSImage imageWithSystemSymbolName:@"paintpalette" accessibilityDescription:nil];
     WallifyFlippedView *viewAppearance = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 520, 480)];
     [self buildAppearanceTab:viewAppearance];
     itemAppearance.view = viewAppearance;
@@ -151,7 +153,7 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
 
     // Build Tab 2: Behavior
     NSTabViewItem *itemBehavior = [[NSTabViewItem alloc] initWithIdentifier:@"behavior"];
-    WallifyFlippedView *viewBehavior = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 520, 480)];
+    WallifyFlippedView *viewBehavior = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 520, 580)];
     [self buildBehaviorTab:viewBehavior];
     itemBehavior.view = viewBehavior;
     [self.tabView addTabViewItem:itemBehavior];
@@ -164,20 +166,20 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
     [self.tabView addTabViewItem:itemDesktop];
 
     // Divider above bottom bar
-    [root addSubview:makeDivider(0, 532, 520)];
+    [root addSubview:makeDivider(0, 632, 520)];
 
     // Bottom bar
-    NSTextField *versionLabel = makeSubtext(@"Wallify v2.1 • Metal 3 Desktop Widget", 20, 545, 220);
+    NSTextField *versionLabel = makeSubtext(@"Wallify v2.1 • Metal 3 Desktop Widget", 20, 645, 220);
     [root addSubview:versionLabel];
 
-    NSButton *restoreBtn = [[NSButton alloc] initWithFrame:NSMakeRect(240, 542, 160, 26)];
+    NSButton *restoreBtn = [[NSButton alloc] initWithFrame:NSMakeRect(240, 642, 160, 26)];
     restoreBtn.title = @"Restore Defaults…";
     restoreBtn.bezelStyle = NSBezelStyleRounded;
     restoreBtn.target = self;
     restoreBtn.action = @selector(restoreDefaultsClicked:);
     [root addSubview:restoreBtn];
 
-    NSButton *doneBtn = [[NSButton alloc] initWithFrame:NSMakeRect(410, 542, 90, 26)];
+    NSButton *doneBtn = [[NSButton alloc] initWithFrame:NSMakeRect(410, 642, 90, 26)];
     doneBtn.title = @"Done";
     doneBtn.bezelStyle = NSBezelStyleRounded;
     doneBtn.keyEquivalent = @"\r";
