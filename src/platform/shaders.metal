@@ -105,34 +105,38 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     } else if (c.kind == WALLIFY_GRADIENT) {
         coverage *= mix(c.parameter, 1.0f, smoothstep(0.0f, 1.0f, in.uv.y));
     } else if (c.kind == WALLIFY_GLASS) {
-        // Crisp 1px (0.5pt) inner rim exactly like macOS window borders
-        float rim_dist = abs(distance + 0.5f);
-        float rim_mask = 1.0f - smoothstep(0.0f, 0.8f, rim_dist);
-        float rim_alpha = mix(0.03f, 0.20f, 1.0f - in.uv.y);
+        /*
+         * Software fallback only.
+         *
+         * Native macOS 26 Liquid Glass is rendered by
+         * NSGlassEffectView and never reaches this path.
+         */
+        float top_light = max(0.0f, 1.0f - in.uv.y);
+        float3 base_rgb = float3(c.r, c.g, c.b);
+        base_rgb *= 1.0f + 0.035f * top_light;
 
-        if (c.alpha > 0.0f) {
-            // Software Acrylic Glass Mode: full charcoal base, overhead light, grain, and diffusion
-            float top_light = max(0.0f, 1.0f - in.uv.y * 1.4f);
-            float3 base_rgb = float3(c.r, c.g, c.b) * (1.0f + 0.08f * top_light);
-            color.rgb = mix(base_rgb, float3(1.0f, 1.0f, 1.0f), rim_mask * rim_alpha);
-            float grain = (fract(sin(dot(in.point, float2(12.9898f, 78.233f))) * 43758.5453f) - 0.5f) * 0.012f;
-            color.rgb += grain;
-            color.a = max(c.alpha, rim_mask * rim_alpha);
+        /*
+         * Extremely subtle edge definition.
+         * This is intentionally nowhere near the native-glass path.
+         */
+        float edge = 1.0f - smoothstep(
+            0.0f, 1.25f, abs(distance + 0.25f)
+        );
+        float edge_alpha = edge * 0.055f;
 
-            if (c.parameter > 0.0f) {
-                float dist_from_art = length(in.point - float2(c.dx + 82.0f, c.dy + 82.0f));
-                float diffusion = exp(-dist_from_art * 0.006f) * c.parameter;
-                color.rgb += float3(c.sx, c.sy, c.sw) * diffusion;
-            }
-        } else {
-            // Native macOS Frosted Glass Mode: 100% transparent interior so the pure
-            // NSVisualEffectView shows through without any cloudy/milky haze or fake grain
-            color.rgb = float3(1.0f, 1.0f, 1.0f);
-            color.a = rim_mask * rim_alpha;
+        color.rgb = base_rgb;
+        color.rgb += float3(1.0f) * edge_alpha;
+
+        /*
+         * Very subtle artwork color diffusion.
+         */
+        if (c.parameter > 0.0f) {
+            float2 center = float2(c.dx + c.dw * 0.5f, c.dy + c.dh * 0.5f);
+            float d = length(in.point - center);
+            float diffusion = exp(-d * 0.008f) * c.parameter;
+            color.rgb += float3(c.sx, c.sy, c.sw) * diffusion * 0.20f;
         }
-
-        // Premultiply RGB by Alpha for clean CoreAnimation compositing
-        color.rgb *= color.a;
+        color.a = c.alpha;
     } else if (c.kind == WALLIFY_SHADOW) {
         float shadow_dist = roundedDistance(in.point - float2(c.sx, c.sy), float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
         float blur = max(0.5f, c.parameter);

@@ -111,6 +111,10 @@ static void movePanel(int left, int top) {
     [panel setFrameOrigin:NSMakePoint(screen.origin.x + left, NSMaxY(screen) - top - panel.frame.size.height)];
 }
 
+static NSGlassEffectView *globalGlassView = nil;
+static NSView *globalGlassContentView = nil;
+static WallifyView *globalMetalView = nil;
+
 bool wallify_create(int width, int height, int left, int top) {
     profiling = getenv("WALLIFY_PROFILE") != NULL;
     device = MTLCreateSystemDefaultDevice();
@@ -170,6 +174,7 @@ bool wallify_create(int width, int height, int left, int top) {
     panel.level = NSNormalWindowLevel - 1;
     panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorStationary;
     WallifyView *view = [[WallifyView alloc] initWithFrame:bounds];
+    globalMetalView = view;
     surface = [CAMetalLayer layer];
     surface.device = device;
     surface.pixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -465,55 +470,123 @@ bool wallify_panel_offsets(double *out_x, double *out_y) {
 
 #import "settings_window.m"
 
-static NSVisualEffectView *globalGlassView = nil;
 
-static void tuneGlassSublayers(CALayer *layer) {
-    if (!layer) return;
-    for (CALayer *sub in layer.sublayers) {
-        if ([sub.name isEqualToString:@"backdrop"]) {
-            @try {
-                [sub setValue:@(16.0) forKeyPath:@"filters.gaussianBlur.inputRadius"];
-                [sub setValue:@(0.25) forKey:@"scale"];
-                [sub setValue:@(1.8) forKeyPath:@"filters.colorSaturate.inputAmount"];
-            } @catch (id _) {}
-        } else if ([sub.name isEqualToString:@"fill"]) {
-            sub.opacity = 0.35f;
-        } else if ([sub.name isEqualToString:@"tone"]) {
-            sub.opacity = 0.0f; // Removes the frosted/milky lighten overlay
-        }
-        tuneGlassSublayers(sub);
-    }
-}
-
-void wallify_update_glass_rect(double x, double y, double w, double h, double radius, bool active) {
+void wallify_update_glass_rect(
+    double x, double y, double w, double h, double radius,
+    float tint_r, float tint_g, float tint_b, bool active
+) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (active) {
-            if (!globalGlassView) {
-                globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-                globalGlassView.material = NSVisualEffectMaterialHUDWindow;
-                globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-                globalGlassView.state = NSVisualEffectStateActive;
-                globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
+        if (!panel || !globalMetalView) return;
+        NSView *container = panel.contentView;
+        if (!container) return;
+
+        if (@available(macOS 26.0, *)) {
+            if (active) {
+                if (!globalGlassView) {
+                    /*
+                     * Real macOS 26 Liquid Glass.
+                     *
+                     * IMPORTANT:
+                     * The Metal view is CONTENT of the glass view.
+                     * Do not put NSGlassEffectView behind it as a sibling.
+                     */
+                    globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
+                    globalGlassView.style = NSGlassEffectViewStyleRegular;
+                    if (@available(macOS 27.0, *)) {
+                        globalGlassView.effectIsInteractive = YES;
+                    }
+
+                    /*
+                     * Wrapper lets us keep Wallify's existing
+                     * panel-space Metal coordinates while the actual
+                     * glass remains inset from the 180pt widget tile.
+                     */
+                    globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
+                    globalGlassContentView.clipsToBounds = YES;
+                    globalGlassView.contentView = globalGlassContentView;
+
+                    [container addSubview:globalGlassView];
+
+                    /*
+                     * Moving the Metal view here makes it actual
+                     * glass content instead of a sibling underneath it.
+                     */
+                    [globalMetalView removeFromSuperview];
+                    [globalGlassContentView addSubview:globalMetalView];
+                }
+                globalGlassView.hidden = NO;
+
+                /*
+                 * AppKit uses bottom-left coordinates.
+                 * Wallify's renderer uses top-left coordinates.
+                 */
+                double flippedY = atomic_load(&surfaceHeight) - y - h;
+                NSRect glassFrame = NSMakeRect(x, flippedY, w, h);
+                globalGlassView.frame = glassFrame;
+                globalGlassView.cornerRadius = radius;
+
+                /*
+                 * Keep the tint extremely subtle.
+                 * The underlying artwork should provide most of the color.
+                 */
+                globalGlassView.tintColor = [NSColor colorWithSRGBRed:tint_r green:tint_g blue:tint_b alpha:0.055];
+
+                /*
+                 * Content view occupies the glass bounds.
+                 */
+                globalGlassContentView.frame = globalGlassView.bounds;
+
+                /*
+                 * Keep Metal in panel coordinates.
+                 *
+                 * The wrapper clips it to the glass shape, while
+                 * the Metal viewport remains the original 180/540pt
+                 * panel size. This means we don't have to rewrite
+                 * every renderer coordinate.
+                 */
+                globalMetalView.frame = NSMakeRect(
+                    -x,
+                    -flippedY,
+                    atomic_load(&surfaceWidth),
+                    atomic_load(&surfaceHeight)
+                );
+
+                /*
+                 * No hand-drawn CALayer border.
+                 * NSGlassEffectView supplies the optical edge,
+                 * highlight and depth treatment itself.
+                 */
                 globalGlassView.wantsLayer = YES;
-                globalGlassView.layer.masksToBounds = YES;
                 globalGlassView.layer.cornerCurve = kCACornerCurveContinuous;
-                globalGlassView.layer.borderWidth = 1.0;
-                globalGlassView.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.12].CGColor;
-                
-                NSView *container = panel.contentView;
-                [container addSubview:globalGlassView positioned:NSWindowBelow relativeTo:nil];
+
+            } else {
+                if (globalGlassView) {
+                    globalGlassView.hidden = YES;
+                }
+                /*
+                 * Restore Metal to the normal hierarchy when
+                 * native glass is disabled.
+                 */
+                [globalMetalView removeFromSuperview];
+                [container addSubview:globalMetalView];
+                globalMetalView.frame = container.bounds;
             }
-            globalGlassView.hidden = NO;
-            // Flipped coords: Metal draws from top-left, AppKit from bottom-left
-            double flippedY = atomic_load(&surfaceHeight) - y - h;
-            globalGlassView.frame = NSMakeRect(x, flippedY, w, h);
-            globalGlassView.layer.cornerRadius = radius;
-            tuneGlassSublayers(globalGlassView.layer);
-        } else {
-            if (globalGlassView) {
-                globalGlassView.hidden = YES;
-            }
+            return;
         }
+
+        /*
+         * macOS < 26 fallback.
+         *
+         * Keep the old renderer-based glass path alive, but don't
+         * try to emulate Liquid Glass on systems that don't provide
+         * NSGlassEffectView.
+         */
+        if (globalGlassView) {
+            globalGlassView.hidden = YES;
+        }
+        [globalMetalView removeFromSuperview];
+        [container addSubview:globalMetalView];
+        globalMetalView.frame = container.bounds;
     });
 }
 
