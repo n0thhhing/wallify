@@ -547,19 +547,29 @@ void wallify_update_glass_rect(
                 globalGlassView.hidden = NO;
 
                 /*
-                 * AppKit uses bottom-left coordinates.
-                 * Wallify's renderer uses top-left coordinates.
+                 * NSVisualEffectView becomes an opaque gray box if you set masksToBounds=YES
+                 * on its own layer, because it breaks the CoreAnimation backdrop filter.
+                 * Instead, we put it inside a transparent container that does the clipping.
                  */
                 double flippedY = atomic_load(&surfaceHeight) - y - h;
                 NSRect glassFrame = NSMakeRect(x, flippedY, w, h);
-                globalGlassView.frame = glassFrame;
-                globalGlassView.wantsLayer = YES;
-                globalGlassView.layer.cornerRadius = radius;
-                globalGlassView.layer.masksToBounds = YES;
 
-                /*
-                 * Content view occupies the glass bounds.
-                 */
+                if (!globalGlassView.superview.superview) {
+                    NSView *clipView = [[NSView alloc] initWithFrame:glassFrame];
+                    clipView.wantsLayer = YES;
+                    clipView.layer.masksToBounds = YES;
+                    
+                    globalGlassView.frame = clipView.bounds;
+                    globalGlassView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+                    [clipView addSubview:globalGlassView];
+                    [container addSubview:clipView];
+                }
+
+                NSView *clipView = globalGlassView.superview;
+                clipView.frame = glassFrame;
+                clipView.layer.cornerRadius = radius;
+                clipView.layer.cornerCurve = kCACornerCurveContinuous;
+                
                 globalGlassContentView.frame = globalGlassView.bounds;
 
                 /*
@@ -577,8 +587,7 @@ void wallify_update_glass_rect(
                     atomic_load(&surfaceHeight)
                 );
 
-                globalGlassView.wantsLayer = YES;
-                globalGlassView.layer.cornerCurve = kCACornerCurveContinuous;
+
 
                 /*
                  * Directional specular rim — overlaid ABOVE Metal content.
