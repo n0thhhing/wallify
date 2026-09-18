@@ -74,6 +74,285 @@ static NSView *globalRimView = nil;
 static CAGradientLayer *globalRimGradient = nil;
 static CAShapeLayer *globalRimShape = nil;
 
+// ─── Glass Debugger ───────────────────────────────────────────────────────────
+#import <objc/runtime.h>
+
+// Current debugger-controlled values
+static int    gdb_style             = 0;
+static int    gdb_variant           = 4;
+static int    gdb_adaptive          = 0;
+static int    gdb_subdued           = 0;
+static int    gdb_interaction       = 1;
+static double gdb_blur_radius       = 5.0;
+static double gdb_refraction        = -60.0;
+static double gdb_tint_alpha        = 0.0;
+static bool   gdb_use_concentric    = true;  // which class is active
+
+// CAFilter swizzle for blur / refraction
+static void (*orig_cafilter_setval)(id, SEL, id, NSString *) = NULL;
+static void swz_cafilter_setval(id self, SEL cmd, id val, NSString *key) {
+    @try {
+        if ([[self performSelector:@selector(type)] isEqualToString:@"glassBackground"]) {
+            if ([key isEqualToString:@"inputBlurRadius"] ||
+                [key isEqualToString:@"inputBlurFillBlurRadius"]) {
+                orig_cafilter_setval(self, cmd, @(gdb_blur_radius), key);
+                return;
+            }
+            if ([key isEqualToString:@"inputInnerRefractionAmount"]) {
+                orig_cafilter_setval(self, cmd, @(gdb_refraction), key);
+                return;
+            }
+        }
+    } @catch(id e) {}
+    orig_cafilter_setval(self, cmd, val, key);
+}
+
+static void gdb_install_filter_swizzle(void) {
+    static dispatch_once_t tok;
+    dispatch_once(&tok, ^{
+        Class cls = NSClassFromString(@"CAFilter");
+        if (!cls) return;
+        Method m = class_getInstanceMethod(cls, @selector(setValue:forKey:));
+        if (!m) return;
+        orig_cafilter_setval = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)swz_cafilter_setval);
+    });
+}
+
+// Apply all current settings to globalGlassView
+static void gdb_apply_all(void) {
+    if (!globalGlassView) return;
+    @try { [globalGlassView setValue:@(gdb_style)       forKey:@"style"]; }              @catch(id e){}
+    @try { [globalGlassView setValue:@(gdb_variant)     forKey:@"_variant"]; }            @catch(id e){}
+    @try { [globalGlassView setValue:@(gdb_adaptive)    forKey:@"_adaptiveAppearance"]; } @catch(id e){}
+    @try { [globalGlassView setValue:@(gdb_subdued)     forKey:@"_subduedState"]; }       @catch(id e){}
+    @try { [globalGlassView setValue:@(gdb_interaction) forKey:@"_interactionState"]; }   @catch(id e){}
+    if (gdb_tint_alpha > 0.001) {
+        globalGlassContentView.layer.backgroundColor =
+            [NSColor colorWithWhite:0.0 alpha:gdb_tint_alpha].CGColor;
+    } else {
+        globalGlassContentView.layer.backgroundColor = nil;
+    }
+    [globalGlassView setNeedsLayout:YES];
+    [globalGlassView setNeedsDisplay:YES];
+}
+
+@interface WallifyGlassDebugger : NSObject
+@property (nonatomic, strong) NSWindow *panel;
+@property (nonatomic, strong) NSArray<NSTextField *> *valueLabels;
++ (instancetype)shared;
+- (void)show;
+@end
+
+@implementation WallifyGlassDebugger {
+    NSMutableArray<NSTextField *> *_valueLabels;
+}
+
++ (instancetype)shared {
+    static WallifyGlassDebugger *inst = nil;
+    static dispatch_once_t tok;
+    dispatch_once(&tok, ^{ inst = [WallifyGlassDebugger new]; });
+    return inst;
+}
+
+- (NSString *)currentValuesString {
+    return [NSString stringWithFormat:
+        @"style=%d variant=%d adaptive=%d subdued=%d interaction=%d blur=%.1f refraction=%.1f tint=%.2f class=%@",
+        gdb_style, gdb_variant, gdb_adaptive, gdb_subdued, gdb_interaction,
+        gdb_blur_radius, gdb_refraction, gdb_tint_alpha,
+        gdb_use_concentric ? @"Concentric" : @"Base"];
+}
+
+- (void)updateLabel:(int)idx value:(double)v {
+    if (idx < (int)_valueLabels.count) {
+        _valueLabels[idx].stringValue = [NSString stringWithFormat:@"%.2g", v];
+    }
+}
+
+- (void)sliderChanged:(NSSlider *)slider {
+    int tag = (int)slider.tag;
+    double v = slider.doubleValue;
+
+    switch (tag) {
+        case 1: gdb_style       = (int)v; [self updateLabel:0 value:v]; break;
+        case 2: gdb_variant     = (int)v; [self updateLabel:1 value:v]; break;
+        case 3: gdb_adaptive    = (int)v; [self updateLabel:2 value:v]; break;
+        case 4: gdb_subdued     = (int)v; [self updateLabel:3 value:v]; break;
+        case 5: gdb_interaction = (int)v; [self updateLabel:4 value:v]; break;
+        case 6: gdb_blur_radius = v;      [self updateLabel:5 value:v]; break;
+        case 7: gdb_refraction  = v;      [self updateLabel:6 value:v]; break;
+        case 8: gdb_tint_alpha  = v;      [self updateLabel:7 value:v]; break;
+        default: break;
+    }
+    gdb_apply_all();
+}
+
+- (void)classSwitched:(NSSegmentedControl *)seg {
+    gdb_use_concentric = (seg.selectedSegment == 0);
+    NSLog(@"[GlassDebugger] Class switch requested — will take effect on next native_glass enable/disable cycle");
+    // Show a brief note in the copy label area
+}
+
+- (void)copyValues:(id)sender {
+    NSString *s = [self currentValuesString];
+    [[NSPasteboard generalPasteboard] clearContents];
+    [[NSPasteboard generalPasteboard] setString:s forType:NSPasteboardTypeString];
+    NSLog(@"[GlassDebugger] Copied: %@", s);
+}
+
+- (void)dumpKVC:(id)sender {
+    if (!globalGlassView) {
+        NSLog(@"[GlassDebugger] No globalGlassView yet — enable Native Glass first.");
+        return;
+    }
+    NSLog(@"[GlassDebugger] ── Glass view: %@ ──", NSStringFromClass([globalGlassView class]));
+    NSArray<NSString *> *keys = @[
+        @"style", @"_variant", @"_adaptiveAppearance", @"_subduedState",
+        @"_interactionState", @"cornerRadius", @"concentricMinimumCornerRadius",
+        @"_cornerRadiusAnimation", @"_backdropOverlayColor", @"_backdropTintColor",
+        @"_chromaEnabled", @"_rimEnabled", @"_highlightEnabled",
+        @"_specularEnabled", @"_distortionEnabled", @"_saturation",
+        @"_colorTint", @"_noiseLevel", @"_blurRadius",
+        @"_tintColor", @"_usesDarkOverlay"
+    ];
+    for (NSString *key in keys) {
+        @try {
+            id val = [globalGlassView valueForKey:key];
+            NSLog(@"[GlassDebugger]   %-42s = %@", key.UTF8String, val);
+        } @catch(NSException *e) {
+            NSLog(@"[GlassDebugger]   %-42s → (not readable: %@)", key.UTF8String, e.reason);
+        }
+    }
+    // Dump CAFilter chain on the glass layer
+    NSLog(@"[GlassDebugger] ── CALayer filters ──");
+    for (id filt in globalGlassView.layer.filters) {
+        NSLog(@"[GlassDebugger]   filter: %@  keys: %@", filt, [filt respondsToSelector:@selector(allKeys)] ? [(NSDictionary *)filt allKeys] : @"?");
+    }
+    for (id filt in globalGlassView.layer.backgroundFilters) {
+        NSLog(@"[GlassDebugger]   bgFilter: %@", filt);
+        @try { NSLog(@"[GlassDebugger]     type: %@", [filt performSelector:@selector(type)]); } @catch(id e) {}
+    }
+}
+
+- (void)show {
+    if (_panel) { [_panel makeKeyAndOrderFront:nil]; return; }
+
+    // Param definitions: {label, tag, min, max, isInt, defaultVal, tickCount}
+    // tickCount == 0 → continuous
+    typedef struct { const char *label; int tag; double min; double max; BOOL isInt; double def; int ticks; } Param;
+    Param params[] = {
+        { "Style (0–5)",              1,    0,   5,   YES,   0,   6 },
+        { "Variant (0–9)",            2,    0,   9,   YES,   4,  10 },
+        { "Adaptive Appearance (0–2)",3,    0,   2,   YES,   0,   3 },
+        { "Subdued State (0–3)",      4,    0,   3,   YES,   0,   4 },
+        { "Interaction State (0–3)",  5,    0,   3,   YES,   1,   4 },
+        { "Blur Radius (0–40)",       6,    0,  40,   NO,    5,   0 },
+        { "Refraction (−150 to 150)", 7, -150, 150,   NO,  -60,   0 },
+        { "Tint Alpha (0–1)",         8,    0,   1,   NO,    0,   0 },
+    };
+    int N = (int)(sizeof(params)/sizeof(params[0]));
+
+    CGFloat panelW  = 340;
+    CGFloat rowH    = 54;
+    CGFloat topPad  = 14;
+    CGFloat botPad  = 80; // space for bottom buttons
+    CGFloat panelH  = topPad + N * rowH + botPad + 40;
+
+    _panel = [[NSWindow alloc]
+        initWithContentRect:NSMakeRect(60, 200, panelW, panelH)
+                  styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskResizable |
+                            NSWindowStyleMaskUtilityWindow | NSWindowStyleMaskHUDWindow
+                    backing:NSBackingStoreBuffered
+                      defer:NO];
+    _panel.title = @"🔬 Glass Debugger";
+    _panel.level = NSFloatingWindowLevel;
+    _panel.releasedWhenClosed = NO;
+
+    NSView *cv = _panel.contentView;
+    _valueLabels = [NSMutableArray array];
+
+    for (int i = 0; i < N; i++) {
+        Param p = params[i];
+        CGFloat y = panelH - topPad - (i + 1) * rowH;
+
+        // Row label
+        NSTextField *lbl = [NSTextField labelWithString:@(p.label)];
+        lbl.frame = NSMakeRect(14, y + 30, panelW - 28, 16);
+        lbl.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightMedium];
+        lbl.textColor = [NSColor secondaryLabelColor];
+        [cv addSubview:lbl];
+
+        // Value readout (right-aligned)
+        NSTextField *valLbl = [NSTextField labelWithString:[NSString stringWithFormat:@"%.2g", p.def]];
+        valLbl.frame = NSMakeRect(panelW - 60, y + 30, 44, 16);
+        valLbl.alignment = NSTextAlignmentRight;
+        valLbl.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightBold];
+        valLbl.textColor = [NSColor systemYellowColor];
+        [cv addSubview:valLbl];
+        [_valueLabels addObject:valLbl];
+
+        // Slider
+        NSSlider *sl = [NSSlider sliderWithTarget:self action:@selector(sliderChanged:)];
+        sl.frame = NSMakeRect(14, y + 8, panelW - 28, 20);
+        sl.minValue = p.min;
+        sl.maxValue = p.max;
+        sl.tag = p.tag;
+        if (p.isInt) {
+            sl.numberOfTickMarks = p.ticks;
+            sl.allowsTickMarkValuesOnly = YES;
+            sl.intValue = (int)p.def;
+        } else {
+            sl.allowsTickMarkValuesOnly = NO;
+            sl.doubleValue = p.def;
+        }
+        [cv addSubview:sl];
+    }
+
+    // ── Class switcher ──
+    CGFloat btnY = botPad - 30;
+    NSTextField *clsLbl = [NSTextField labelWithString:@"Glass Class:"];
+    clsLbl.frame = NSMakeRect(14, btnY + 22, 100, 16);
+    clsLbl.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightMedium];
+    clsLbl.textColor = [NSColor secondaryLabelColor];
+    [cv addSubview:clsLbl];
+
+    NSSegmentedControl *classSeg = [NSSegmentedControl
+        segmentedControlWithLabels:@[@"Concentric", @"Base"]
+                      trackingMode:NSSegmentSwitchTrackingSelectOne
+                            target:self
+                            action:@selector(classSwitched:)];
+    classSeg.frame = NSMakeRect(14, btnY, 200, 24);
+    classSeg.selectedSegment = 0;
+    [cv addSubview:classSeg];
+
+    // ── Dump KVC button ──
+    NSButton *dumpBtn = [NSButton buttonWithTitle:@"Dump KVC" target:self action:@selector(dumpKVC:)];
+    dumpBtn.frame = NSMakeRect(14, 14, 100, 28);
+    dumpBtn.bezelStyle = NSBezelStyleRounded;
+    [cv addSubview:dumpBtn];
+
+    // ── Copy values button ──
+    NSButton *copyBtn = [NSButton buttonWithTitle:@"Copy Values" target:self action:@selector(copyValues:)];
+    copyBtn.frame = NSMakeRect(124, 14, 100, 28);
+    copyBtn.bezelStyle = NSBezelStyleRounded;
+    [cv addSubview:copyBtn];
+
+    // ── Apply button ──
+    NSButton *applyBtn = [NSButton buttonWithTitle:@"Apply All" target:self action:@selector(applyAll:)];
+    applyBtn.frame = NSMakeRect(234, 14, 92, 28);
+    applyBtn.bezelStyle = NSBezelStyleRounded;
+    [cv addSubview:applyBtn];
+
+    [_panel makeKeyAndOrderFront:nil];
+}
+
+- (void)applyAll:(id)sender {
+    gdb_apply_all();
+}
+
+@end
+// ─── End Glass Debugger ───────────────────────────────────────────────────────
+
 @interface WallifyPanel : NSPanel
 @end
 @implementation WallifyPanel
@@ -506,6 +785,14 @@ void wallify_update_glass_rect(
         NSView *container = panel.contentView;
         if (!container) return;
 
+        // ── Glass Debugger: install swizzle + show panel on first activation ──
+        static bool gdb_inited = false;
+        if (!gdb_inited && active) {
+            gdb_inited = true;
+            gdb_install_filter_swizzle();
+            [[WallifyGlassDebugger shared] show];
+        }
+
         if (@available(macOS 26.0, *)) {
             if (active) {
                 if (!globalGlassView) {
@@ -516,7 +803,9 @@ void wallify_update_glass_rect(
                      * rather than a base NSGlassEffectView. This triggers the CASDFGlassDisplacementEffect
                      * and CASDFGlassHighlightEffect pipeline, generating the physically-based rim lighting natively.
                      */
-                    Class ConcentricGlassClass = NSClassFromString(@"NSContainerConcentricGlassEffectView");
+                    Class ConcentricGlassClass = gdb_use_concentric
+                        ? NSClassFromString(@"NSContainerConcentricGlassEffectView")
+                        : nil;
                     if (ConcentricGlassClass) {
                         globalGlassView = [[ConcentricGlassClass alloc] initWithFrame:NSZeroRect];
                         @try {
@@ -525,14 +814,15 @@ void wallify_update_glass_rect(
                     } else {
                         globalGlassView = [[WallifyGlassView alloc] initWithFrame:NSZeroRect];
                     }
-                    
-                    [globalGlassView setValue:@0 forKey:@"style"];
-                    [globalGlassView setValue:@4 forKey:@"_variant"];
+
+                    // Use debugger-controlled initial values
+                    [globalGlassView setValue:@(gdb_style)   forKey:@"style"];
+                    [globalGlassView setValue:@(gdb_variant) forKey:@"_variant"];
                     // globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
                     @try {
                         // [globalGlassView setValue:@0 forKey:@"_adaptiveAppearance"]; // Don't let system override our dark mode force
-                        [globalGlassView setValue:@0 forKey:@"_subduedState"];       // Ensure it's not subdued (greyed out)
-                        [globalGlassView setValue:@1 forKey:@"_interactionState"];   // Force interactive/active look
+                        [globalGlassView setValue:@(gdb_subdued)     forKey:@"_subduedState"];     // Debugger-controlled
+                        [globalGlassView setValue:@(gdb_interaction) forKey:@"_interactionState"]; // Debugger-controlled
                     } @catch (NSException *e) {}
 
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
