@@ -524,17 +524,11 @@ void wallify_update_glass_rect(
                     globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
                     globalGlassView.state = NSVisualEffectStateActive;
 
-                    /*
-                     * Wrapper lets us keep Wallify's existing
-                     * panel-space Metal coordinates while the actual
-                     * glass remains inset from the 180pt widget tile.
-                     */
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
                     globalGlassContentView.clipsToBounds = YES;
                     
                     /* NSVisualEffectView has no 'contentView' property, we add it as a subview */
                     [globalGlassView addSubview:globalGlassContentView];
-
                     [container addSubview:globalGlassView];
 
                     /*
@@ -546,30 +540,23 @@ void wallify_update_glass_rect(
                 }
                 globalGlassView.hidden = NO;
 
-                /*
-                 * NSVisualEffectView becomes an opaque gray box if you set masksToBounds=YES
-                 * on its own layer, because it breaks the CoreAnimation backdrop filter.
-                 * Instead, we put it inside a transparent container that does the clipping.
-                 */
                 double flippedY = atomic_load(&surfaceHeight) - y - h;
                 NSRect glassFrame = NSMakeRect(x, flippedY, w, h);
 
-                if (!globalGlassView.superview.superview) {
-                    NSView *clipView = [[NSView alloc] initWithFrame:glassFrame];
-                    clipView.wantsLayer = YES;
-                    clipView.layer.masksToBounds = YES;
-                    
-                    globalGlassView.frame = clipView.bounds;
-                    globalGlassView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-                    [clipView addSubview:globalGlassView];
-                    [container addSubview:clipView];
-                }
-
-                NSView *clipView = globalGlassView.superview;
-                clipView.frame = glassFrame;
-                clipView.layer.cornerRadius = radius;
-                clipView.layer.cornerCurve = kCACornerCurveContinuous;
+                globalGlassView.frame = glassFrame;
                 
+                /*
+                 * Use NSVisualEffectView's native maskImage instead of layer.masksToBounds
+                 * to clip corners without breaking the CoreAnimation backdrop layer.
+                 */
+                NSImage *mask = [[NSImage alloc] initWithSize:glassFrame.size];
+                [mask lockFocus];
+                [[NSColor blackColor] set];
+                NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:NSMakeRect(0, 0, w, h) xRadius:radius yRadius:radius];
+                [path fill];
+                [mask unlockFocus];
+                globalGlassView.maskImage = mask;
+
                 globalGlassContentView.frame = globalGlassView.bounds;
 
                 /*
