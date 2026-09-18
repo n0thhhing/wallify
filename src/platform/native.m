@@ -90,6 +90,7 @@ static int    gdb_interaction       = 1;
 static double gdb_blur_radius       = 5.0;
 static double gdb_refraction        = -60.0;
 static double gdb_tint_alpha        = 0.0;
+static int    gdb_material          = 0;
 static bool   gdb_use_concentric    = true;  // which class is active
 
 // Last-known rect params — saved every time wallify_update_glass_rect fires so
@@ -213,9 +214,9 @@ static void gdb_apply_all(void) {
 
 - (NSString *)currentValuesString {
     return [NSString stringWithFormat:
-        @"style=%d variant=%d adaptive=%d subdued=%d interaction=%d blur=%.1f refraction=%.1f tint=%.2f class=%@",
+        @"style=%d variant=%d adaptive=%d subdued=%d interaction=%d blur=%.1f refraction=%.1f tint=%.2f material=%d class=%@",
         gdb_style, gdb_variant, gdb_adaptive, gdb_subdued, gdb_interaction,
-        gdb_blur_radius, gdb_refraction, gdb_tint_alpha,
+        gdb_blur_radius, gdb_refraction, gdb_tint_alpha, gdb_material,
         gdb_use_concentric ? @"Concentric" : @"Base"];
 }
 
@@ -252,6 +253,7 @@ static void gdb_apply_all(void) {
         case 6: gdb_blur_radius = v;      break;
         case 7: gdb_refraction  = v;      break;
         case 8: gdb_tint_alpha  = v;      break;
+        case 9: gdb_material    = (int)v; break;
         default: break;
     }
 
@@ -332,6 +334,7 @@ static void gdb_apply_all(void) {
         { "Blur Radius (0–40)",       6,    0,  40,   NO,   5,   0 },
         { "Refraction (−150–150)",    7, -150, 150,   NO, -60,   0 },
         { "Tint Alpha (0–1)",         8,    0,   1,   NO,   0,   0 },
+        { "Material (0–38)",          9,    0,  38,  YES,   0,  39 },
     };
     int N = (int)(sizeof(params)/sizeof(params[0]));
 
@@ -917,15 +920,22 @@ void wallify_update_glass_rect(
                     // Use debugger-controlled initial values
                     [globalGlassView setValue:@(gdb_style)   forKey:@"style"];
                     [globalGlassView setValue:@(gdb_variant) forKey:@"_variant"];
-                    // globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
+                    @try { [globalGlassView setValue:@(gdb_adaptive) forKey:@"_adaptiveAppearance"]; } @catch(id e){}
+                    @try { [(NSVisualEffectView *)globalGlassView setMaterial:(NSVisualEffectMaterial)gdb_material]; } @catch(id e){}
                     @try {
-                        // [globalGlassView setValue:@0 forKey:@"_adaptiveAppearance"]; // Don't let system override our dark mode force
                         [globalGlassView setValue:@(gdb_subdued)     forKey:@"_subduedState"];     // Debugger-controlled
                         [globalGlassView setValue:@(gdb_interaction) forKey:@"_interactionState"]; // Debugger-controlled
                     } @catch (NSException *e) {}
 
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
                     globalGlassContentView.clipsToBounds = YES;
+                    globalGlassContentView.wantsLayer = YES;
+                    if (gdb_tint_alpha > 0.001) {
+                        globalGlassContentView.layer.backgroundColor =
+                            [NSColor colorWithCalibratedRed:gdb_last_tint_r green:gdb_last_tint_g blue:gdb_last_tint_b alpha:gdb_tint_alpha].CGColor;
+                    } else {
+                        globalGlassContentView.layer.backgroundColor = nil;
+                    }
                     
                     /* NSVisualEffectView has no 'contentView' property, we add it as a subview */
                     [globalGlassView addSubview:globalGlassContentView];
