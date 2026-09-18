@@ -66,10 +66,35 @@ void wallify_profile_scene(double seconds) {
 - (void)rightMouseUp:(NSEvent *)e { [self pointer:e kind:3]; }
 @end
 
+// Globals moved to top
+static NSVisualEffectView *globalGlassView = nil;
+static NSView *globalGlassContentView = nil;
+static WallifyView *globalMetalView = nil;
+static NSView *globalRimView = nil;
+static CAGradientLayer *globalRimGradient = nil;
+static CAShapeLayer *globalRimShape = nil;
+
 @interface WallifyPanel : NSPanel
 @end
 @implementation WallifyPanel
 - (BOOL)canBecomeKeyWindow { return NO; }
+/*
+ * Route all mouse events directly to the Metal view, bypassing the
+ * NSGlassEffectView hit-test chain entirely. This ensures clicks,
+ * drags and releases all land on WallifyView consistently.
+ */
+- (void)sendEvent:(NSEvent *)event {
+    if (!globalMetalView) { [super sendEvent:event]; return; }
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown:    [globalMetalView mouseDown:event];    return;
+        case NSEventTypeLeftMouseUp:      [globalMetalView mouseUp:event];      return;
+        case NSEventTypeLeftMouseDragged: [globalMetalView mouseDragged:event]; return;
+        case NSEventTypeMouseMoved:       [globalMetalView mouseMoved:event];   return;
+        case NSEventTypeMouseExited:      [globalMetalView mouseExited:event];  return;
+        case NSEventTypeRightMouseUp:     [globalMetalView rightMouseUp:event]; return;
+        default: [super sendEvent:event]; return;
+    }
+}
 @end
 
 @interface WallifyStatusMenuTarget : NSObject
@@ -112,12 +137,6 @@ static void movePanel(int left, int top) {
     [panel setFrameOrigin:NSMakePoint(screen.origin.x + left, NSMaxY(screen) - top - panel.frame.size.height)];
 }
 
-static NSGlassEffectView *globalGlassView = nil;
-static NSView *globalGlassContentView = nil;
-static WallifyView *globalMetalView = nil;
-static NSView *globalRimView = nil;
-static CAGradientLayer *globalRimGradient = nil;
-static CAShapeLayer *globalRimShape = nil;
 
 bool wallify_create(int width, int height, int left, int top) {
     profiling = getenv("WALLIFY_PROFILE") != NULL;
@@ -490,15 +509,19 @@ void wallify_update_glass_rect(
                     /*
                      * Real macOS 26 Liquid Glass.
                      *
+                     * NSGlassEffectView turns out to be the Context Menu / Popover glass.
+                     * For Widgets, Apple uses a richer, darker material (historically HUDWindow,
+                     * or a specific Desktop Widget material). We'll use NSVisualEffectView
+                     * with NSVisualEffectMaterialHUDWindow.
+                     *
                      * IMPORTANT:
                      * The Metal view is CONTENT of the glass view.
-                     * Do not put NSGlassEffectView behind it as a sibling.
+                     * Do not put NSVisualEffectView behind it as a sibling.
                      */
-                    globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
-                    globalGlassView.style = NSGlassEffectViewStyleRegular;
-                    if (@available(macOS 27.0, *)) {
-                        globalGlassView.effectIsInteractive = YES;
-                    }
+                    globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
+                    globalGlassView.material = NSVisualEffectMaterialHUDWindow;
+                    globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+                    globalGlassView.state = NSVisualEffectStateActive;
 
                     /*
                      * Wrapper lets us keep Wallify's existing
@@ -507,7 +530,9 @@ void wallify_update_glass_rect(
                      */
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
                     globalGlassContentView.clipsToBounds = YES;
-                    globalGlassView.contentView = globalGlassContentView;
+                    
+                    /* NSVisualEffectView has no 'contentView' property, we add it as a subview */
+                    [globalGlassView addSubview:globalGlassContentView];
 
                     [container addSubview:globalGlassView];
 
@@ -527,13 +552,9 @@ void wallify_update_glass_rect(
                 double flippedY = atomic_load(&surfaceHeight) - y - h;
                 NSRect glassFrame = NSMakeRect(x, flippedY, w, h);
                 globalGlassView.frame = glassFrame;
-                globalGlassView.cornerRadius = radius;
-
-                /*
-                 * Keep the tint extremely subtle.
-                 * The underlying artwork should provide most of the color.
-                 */
-                globalGlassView.tintColor = [NSColor colorWithSRGBRed:tint_r green:tint_g blue:tint_b alpha:0.055];
+                globalGlassView.wantsLayer = YES;
+                globalGlassView.layer.cornerRadius = radius;
+                globalGlassView.layer.masksToBounds = YES;
 
                 /*
                  * Content view occupies the glass bounds.
