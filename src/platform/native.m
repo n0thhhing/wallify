@@ -115,6 +115,7 @@ static void movePanel(int left, int top) {
 static NSGlassEffectView *globalGlassView = nil;
 static NSView *globalGlassContentView = nil;
 static WallifyView *globalMetalView = nil;
+static NSView *globalRimView = nil;
 static CAGradientLayer *globalRimGradient = nil;
 static CAShapeLayer *globalRimShape = nil;
 
@@ -558,51 +559,53 @@ void wallify_update_glass_rect(
                 globalGlassView.layer.cornerCurve = kCACornerCurveContinuous;
 
                 /*
-                 * Directional specular rim — matches native macOS 26 widget rim 1:1.
+                 * Directional specular rim — overlaid ABOVE Metal content.
                  *
-                 * The rim is a CAGradientLayer masked by a hairline CAShapeLayer
-                 * stroke. The gradient runs top-left (bright) → bottom-right
-                 * (dark then faint bright return), exactly like Apple's own
-                 * Liquid Glass widget border rendering.
+                 * The rim is a transparent NSView whose backing layer is a
+                 * CAGradientLayer masked by a hairline CAShapeLayer stroke.
                  *
-                 * This is placed as a sublayer of the glass view's layer so it
-                 * composites ABOVE the Metal content, giving the correct depth
-                 * order: wallpaper → glass blur → Metal content → optical rim.
+                 * It is added to globalGlassContentView AFTER globalMetalView
+                 * so it is Z-ordered on top of the Metal content:
+                 *   wallpaper → NSGlassEffectView blur → Metal → rim overlay
+                 *
+                 * The gradient runs top-left bright → bottom-right dark/return,
+                 * matching Apple's physically-based widget rim lighting exactly.
                  */
-                if (!globalRimGradient) {
+                if (!globalRimView) {
                     globalRimGradient = [CAGradientLayer layer];
                     globalRimGradient.type = kCAGradientLayerAxial;
-                    globalRimGradient.startPoint = CGPointMake(0.0, 0.0);
-                    globalRimGradient.endPoint   = CGPointMake(1.0, 1.0);
+                    globalRimGradient.startPoint = CGPointMake(0.0, 1.0); /* top-left (flipped coords) */
+                    globalRimGradient.endPoint   = CGPointMake(1.0, 0.0); /* bottom-right */
                     globalRimGradient.colors = @[
-                        /* top-left: bright specular highlight */
-                        (id)[NSColor colorWithWhite:1.0 alpha:0.38].CGColor,
-                        /* upper-right: moderate highlight */
-                        (id)[NSColor colorWithWhite:1.0 alpha:0.18].CGColor,
-                        /* lower-left: subtle dark edge (physically accurate shadow) */
-                        (id)[NSColor colorWithWhite:0.0 alpha:0.12].CGColor,
-                        /* bottom-right: very faint return highlight */
-                        (id)[NSColor colorWithWhite:1.0 alpha:0.06].CGColor,
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.40].CGColor,  /* top-left: bright specular */
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.18].CGColor,  /* mid: fading highlight    */
+                        (id)[NSColor colorWithWhite:0.0 alpha:0.10].CGColor,  /* lower: shadow edge        */
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.05].CGColor,  /* bottom-right: return glow */
                     ];
-                    /* Distribute stops: 0% top-bright, 45% mid-bright, 70% dark, 100% return */
-                    globalRimGradient.locations = @[@0.0, @0.45, @0.70, @1.0];
+                    globalRimGradient.locations = @[@0.0, @0.42, @0.68, @1.0];
 
-                    /* Hairline stroke shape — 1.0pt matches Apple's native widget rim */
                     globalRimShape = [CAShapeLayer layer];
                     globalRimShape.fillColor   = [NSColor clearColor].CGColor;
                     globalRimShape.strokeColor = [NSColor whiteColor].CGColor;
                     globalRimShape.lineWidth   = 1.0;
-
                     globalRimGradient.mask = globalRimShape;
-                    [globalGlassView.layer addSublayer:globalRimGradient];
+
+                    globalRimView = [[NSView alloc] initWithFrame:NSZeroRect];
+                    globalRimView.wantsLayer = YES;
+                    globalRimView.layer = globalRimGradient;
+                    globalRimView.autoresizingMask = NSViewNotSizable;
+
+                    /* Add on top of Metal inside the glass content view */
+                    [globalGlassContentView addSubview:globalRimView positioned:NSWindowAbove relativeTo:globalMetalView];
                 }
 
-                /* Update rim frame + path each time the card rect changes */
-                globalRimGradient.frame = globalGlassView.bounds;
+                /* Size the rim overlay to exactly the glass card bounds (content-view local coords) */
+                globalRimView.frame = globalGlassView.bounds;
+                globalRimGradient.frame = globalRimView.bounds;
 
                 CGFloat rimInset  = 0.5;
                 CGFloat rimRadius = MAX(0.0, radius - rimInset);
-                CGRect  rimRect   = CGRectInset(globalGlassView.bounds, rimInset, rimInset);
+                CGRect  rimRect   = CGRectInset(globalRimView.bounds, rimInset, rimInset);
                 CGPathRef rimPath = CGPathCreateWithRoundedRect(rimRect, rimRadius, rimRadius, NULL);
                 globalRimShape.frame = globalRimGradient.bounds;
                 globalRimShape.path  = rimPath;
