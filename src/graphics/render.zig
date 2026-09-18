@@ -75,8 +75,9 @@ pub fn drawUIFrame() void {
         );
     }
 
-    // Dynamic fluid Aurora wave layer (Apple Music style)
-    if (state.aurora_mix > 0.001 and state.global_has_artwork and assets.has_art) {
+    // Dynamic fluid Aurora wave layer (Apple Music style) — skipped in native glass mode
+    // because it adds a semi-opaque tinted overlay that obscures the Liquid Glass material
+    if (!state.setting_native_glass and state.aurora_mix > 0.001 and state.global_has_artwork and assets.has_art) {
         const pri = [3]f32{
             @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
             @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
