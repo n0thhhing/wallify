@@ -120,6 +120,31 @@ static void gdb_install_filter_swizzle(void) {
 }
 
 // Apply all current settings to globalGlassView
+// Recursively walk every CALayer under the glass view and directly set
+// blur/refraction on any "glassBackground" CAFilter we find.
+// This is required because the swizzle only fires when the filter is first
+// created (variant change); after that the filter object is live and we
+// have to poke it directly.
+static void gdb_patch_layer_filters(CALayer *layer) {
+    if (!layer) return;
+    NSArray *filterLists[] = { layer.filters, layer.backgroundFilters, layer.compositingFilter ? @[layer.compositingFilter] : nil };
+    for (int fi = 0; fi < 3; fi++) {
+        for (id filt in filterLists[fi]) {
+            @try {
+                NSString *type = [filt performSelector:@selector(type)];
+                if (![type isEqualToString:@"glassBackground"]) continue;
+                [filt setValue:@(gdb_blur_radius) forKey:@"inputBlurRadius"];
+                [filt setValue:@(gdb_blur_radius) forKey:@"inputBlurFillBlurRadius"];
+                [filt setValue:@(gdb_refraction)  forKey:@"inputInnerRefractionAmount"];
+                [layer setNeedsDisplay];
+            } @catch(id e) {}
+        }
+    }
+    for (CALayer *sub in layer.sublayers) {
+        gdb_patch_layer_filters(sub);
+    }
+}
+
 static void gdb_apply_all(void) {
     // Kept for call sites that bypass the debugger instance; delegates to gdb_force_refresh logic inline.
     if (!globalGlassView) return;
@@ -134,12 +159,13 @@ static void gdb_apply_all(void) {
     } else {
         globalGlassContentView.layer.backgroundColor = nil;
     }
+    // Directly poke any live glassBackground filters so blur/refraction update immediately.
+    gdb_patch_layer_filters(globalGlassView.layer);
     // Frame-nudge forces the native Liquid Glass pipeline to recompute SDF geometry.
     NSRect f = globalGlassView.frame;
     globalGlassView.frame = NSMakeRect(f.origin.x, f.origin.y, f.size.width + 0.5, f.size.height + 0.5);
     globalGlassView.frame = f;
     [globalGlassView setNeedsLayout:YES];
-
     [globalGlassView setNeedsDisplay:YES];
     [globalGlassView.layer setNeedsLayout];
     [globalGlassView.layer setNeedsDisplay];
