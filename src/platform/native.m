@@ -146,22 +146,34 @@ static void gdb_patch_layer_filters(CALayer *layer) {
 }
 
 static void gdb_apply_all(void) {
-    // Kept for call sites that bypass the debugger instance; delegates to gdb_force_refresh logic inline.
     if (!globalGlassView) return;
+
+    // Set non-variant properties first so they're in effect before the pipeline runs.
     @try { [globalGlassView setValue:@(gdb_style)       forKey:@"style"]; }              @catch(id e){}
-    @try { [globalGlassView setValue:@(gdb_variant)     forKey:@"_variant"]; }            @catch(id e){}
     @try { [globalGlassView setValue:@(gdb_adaptive)    forKey:@"_adaptiveAppearance"]; } @catch(id e){}
     @try { [globalGlassView setValue:@(gdb_subdued)     forKey:@"_subduedState"]; }       @catch(id e){}
     @try { [globalGlassView setValue:@(gdb_interaction) forKey:@"_interactionState"]; }   @catch(id e){}
+
+    // Force the internal filter-setup pipeline to run regardless of whether gdb_variant
+    // changed. The pipeline only fires on an actual value transition, so we toggle to a
+    // sentinel then immediately back to the desired value. Both hops go through the
+    // CAFilter swizzle, so blur/refraction are intercepted on every apply.
+    int sentinel = (gdb_variant == 0) ? 1 : 0;
+    @try { [globalGlassView setValue:@(sentinel)    forKey:@"_variant"]; } @catch(id e){}
+    @try { [globalGlassView setValue:@(gdb_variant) forKey:@"_variant"]; } @catch(id e){}
+
+    // Belt-and-suspenders: also directly patch any already-live glassBackground filters
+    // on the layer tree in case the swizzle missed them.
+    gdb_patch_layer_filters(globalGlassView.layer);
+
     if (gdb_tint_alpha > 0.001) {
         globalGlassContentView.layer.backgroundColor =
             [NSColor colorWithWhite:0.0 alpha:gdb_tint_alpha].CGColor;
     } else {
         globalGlassContentView.layer.backgroundColor = nil;
     }
-    // Directly poke any live glassBackground filters so blur/refraction update immediately.
-    gdb_patch_layer_filters(globalGlassView.layer);
-    // Frame-nudge forces the native Liquid Glass pipeline to recompute SDF geometry.
+
+    // Frame-nudge flushes the geometry pass.
     NSRect f = globalGlassView.frame;
     globalGlassView.frame = NSMakeRect(f.origin.x, f.origin.y, f.size.width + 0.5, f.size.height + 0.5);
     globalGlassView.frame = f;
