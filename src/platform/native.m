@@ -77,6 +77,10 @@ static CAShapeLayer *globalRimShape = nil;
 // ─── Glass Debugger ───────────────────────────────────────────────────────────
 #import <objc/runtime.h>
 
+// Forward declaration — defined later after settings_window.m is imported.
+void wallify_update_glass_rect(double x, double y, double w, double h, double radius,
+                               float tint_r, float tint_g, float tint_b, bool active);
+
 // Current debugger-controlled values
 static int    gdb_style             = 0;
 static int    gdb_variant           = 4;
@@ -87,6 +91,13 @@ static double gdb_blur_radius       = 5.0;
 static double gdb_refraction        = -60.0;
 static double gdb_tint_alpha        = 0.0;
 static bool   gdb_use_concentric    = true;  // which class is active
+
+// Last-known rect params — saved every time wallify_update_glass_rect fires so
+// gdb_apply_all can recreate the glass view with the same geometry.
+static double gdb_last_x      = 0, gdb_last_y      = 0;
+static double gdb_last_w      = 400, gdb_last_h    = 200;
+static double gdb_last_radius = 26;
+static float  gdb_last_tint_r = 0, gdb_last_tint_g = 0, gdb_last_tint_b = 0;
 
 // CAFilter swizzle for blur / refraction
 static void (*orig_cafilter_setval)(id, SEL, id, NSString *) = NULL;
@@ -146,41 +157,41 @@ static void gdb_patch_layer_filters(CALayer *layer) {
 }
 
 static void gdb_apply_all(void) {
-    if (!globalGlassView) return;
+    // Only meaningful if glass is active and we have stored rect params.
+    if (!globalGlassView || gdb_last_w == 0) return;
 
-    // Set non-variant properties first so they're in effect before the pipeline runs.
-    @try { [globalGlassView setValue:@(gdb_style)       forKey:@"style"]; }              @catch(id e){}
-    @try { [globalGlassView setValue:@(gdb_adaptive)    forKey:@"_adaptiveAppearance"]; } @catch(id e){}
-    @try { [globalGlassView setValue:@(gdb_subdued)     forKey:@"_subduedState"]; }       @catch(id e){}
-    @try { [globalGlassView setValue:@(gdb_interaction) forKey:@"_interactionState"]; }   @catch(id e){}
-
-    // Force the internal filter-setup pipeline to run regardless of whether gdb_variant
-    // changed. The pipeline only fires on an actual value transition, so we toggle to a
-    // sentinel then immediately back to the desired value. Both hops go through the
-    // CAFilter swizzle, so blur/refraction are intercepted on every apply.
-    int sentinel = (gdb_variant == 0) ? 1 : 0;
-    @try { [globalGlassView setValue:@(sentinel)    forKey:@"_variant"]; } @catch(id e){}
-    @try { [globalGlassView setValue:@(gdb_variant) forKey:@"_variant"]; } @catch(id e){}
-
-    // Belt-and-suspenders: also directly patch any already-live glassBackground filters
-    // on the layer tree in case the swizzle missed them.
-    gdb_patch_layer_filters(globalGlassView.layer);
-
-    if (gdb_tint_alpha > 0.001) {
-        globalGlassContentView.layer.backgroundColor =
-            [NSColor colorWithWhite:0.0 alpha:gdb_tint_alpha].CGColor;
-    } else {
-        globalGlassContentView.layer.backgroundColor = nil;
+    // ── Teardown ──────────────────────────────────────────────────────────────
+    // Recover the Metal view from inside the glass content view back to the
+    // panel container so it isn't destroyed along with the glass hierarchy.
+    NSView *container = globalGlassView.superview;
+    if (globalMetalView && container) {
+        [globalMetalView removeFromSuperview];
+        [container addSubview:globalMetalView];
+        globalMetalView.frame = container.bounds;
     }
 
-    // Frame-nudge flushes the geometry pass.
-    NSRect f = globalGlassView.frame;
-    globalGlassView.frame = NSMakeRect(f.origin.x, f.origin.y, f.size.width + 0.5, f.size.height + 0.5);
-    globalGlassView.frame = f;
-    [globalGlassView setNeedsLayout:YES];
-    [globalGlassView setNeedsDisplay:YES];
-    [globalGlassView.layer setNeedsLayout];
-    [globalGlassView.layer setNeedsDisplay];
+    // Remove the glass view (also removes globalGlassContentView which is a subview).
+    [globalGlassView removeFromSuperview];
+    globalGlassView = nil;
+    globalGlassContentView = nil;
+
+    // Clean up the rim overlay so it gets recreated fresh.
+    if (globalRimView) {
+        [globalRimView removeFromSuperview];
+        globalRimView = nil;
+        globalRimGradient = nil;
+        globalRimShape = nil;
+    }
+
+    // ── Recreate ──────────────────────────────────────────────────────────────
+    // wallify_update_glass_rect will dispatch_async back to the main queue and
+    // recreate everything from scratch, going through the swizzled CAFilter
+    // setup where gdb_blur_radius / gdb_refraction are intercepted, and reading
+    // gdb_style / gdb_variant / gdb_subdued / gdb_interaction at creation time.
+    wallify_update_glass_rect(
+        gdb_last_x, gdb_last_y, gdb_last_w, gdb_last_h, gdb_last_radius,
+        gdb_last_tint_r, gdb_last_tint_g, gdb_last_tint_b, true
+    );
 }
 
 @interface WallifyGlassDebugger : NSObject <NSTextFieldDelegate>
@@ -862,6 +873,12 @@ void wallify_update_glass_rect(
     double x, double y, double w, double h, double radius,
     float tint_r, float tint_g, float tint_b, bool active
 ) {
+    // Save for debugger recreation.
+    if (active) {
+        gdb_last_x = x; gdb_last_y = y; gdb_last_w = w; gdb_last_h = h;
+        gdb_last_radius = radius;
+        gdb_last_tint_r = tint_r; gdb_last_tint_g = tint_g; gdb_last_tint_b = tint_b;
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!panel || !globalMetalView) return;
         NSView *container = panel.contentView;
