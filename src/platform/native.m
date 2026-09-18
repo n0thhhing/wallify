@@ -78,24 +78,25 @@ static CAShapeLayer *globalRimShape = nil;
 @end
 @implementation WallifyPanel
 - (BOOL)canBecomeKeyWindow { return NO; }
+@end
+
 /*
- * Route all mouse events directly to the Metal view, bypassing the
- * NSGlassEffectView hit-test chain entirely. This ensures clicks,
- * drags and releases all land on WallifyView consistently.
+ * Transparent glass view that forwards all hit tests directly to the Metal view.
+ * This prevents the glass from swallowing clicks/drags.
  */
-- (void)sendEvent:(NSEvent *)event {
-    if (!globalMetalView) { [super sendEvent:event]; return; }
-    switch (event.type) {
-        case NSEventTypeLeftMouseDown:    [globalMetalView mouseDown:event];    return;
-        case NSEventTypeLeftMouseUp:      [globalMetalView mouseUp:event];      return;
-        case NSEventTypeLeftMouseDragged: [globalMetalView mouseDragged:event]; return;
-        case NSEventTypeMouseMoved:       [globalMetalView mouseMoved:event];   return;
-        case NSEventTypeMouseExited:      [globalMetalView mouseExited:event];  return;
-        case NSEventTypeRightMouseUp:     [globalMetalView rightMouseUp:event]; return;
-        default: [super sendEvent:event]; return;
+@interface WallifyGlassView : NSVisualEffectView
+@end
+@implementation WallifyGlassView
+- (NSView *)hitTest:(NSPoint)point {
+    if (self.isHidden) return nil;
+    if (globalMetalView) {
+        NSPoint localPoint = [self convertPoint:point fromView:self.superview];
+        return [globalMetalView hitTest:[self convertPoint:localPoint toView:globalMetalView.superview]];
     }
+    return nil;
 }
 @end
+
 
 @interface WallifyStatusMenuTarget : NSObject
 + (instancetype)sharedTarget;
@@ -518,7 +519,7 @@ void wallify_update_glass_rect(
                      * The Metal view is CONTENT of the glass view.
                      * Do not put NSVisualEffectView behind it as a sibling.
                      */
-                    globalGlassView = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
+                    globalGlassView = [[WallifyGlassView alloc] initWithFrame:NSZeroRect];
                     globalGlassView.material = NSVisualEffectMaterialHUDWindow;
                     globalGlassView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
                     globalGlassView.state = NSVisualEffectStateActive;
