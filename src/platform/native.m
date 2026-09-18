@@ -2,6 +2,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/CATransaction.h>
+#import <QuartzCore/QuartzCore.h>
 #include <stdatomic.h>
 #include <simd/simd.h>
 #include <unistd.h>
@@ -114,6 +115,8 @@ static void movePanel(int left, int top) {
 static NSGlassEffectView *globalGlassView = nil;
 static NSView *globalGlassContentView = nil;
 static WallifyView *globalMetalView = nil;
+static CAGradientLayer *globalGlassRimGradient = nil;
+static CAShapeLayer *globalGlassRimMask = nil;
 
 bool wallify_create(int width, int height, int left, int top) {
     profiling = getenv("WALLIFY_PROFILE") != NULL;
@@ -491,7 +494,7 @@ void wallify_update_glass_rect(
                      * Do not put NSGlassEffectView behind it as a sibling.
                      */
                     globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
-                    globalGlassView.style = NSGlassEffectViewStyleRegular;
+                    globalGlassView.style = NSGlassEffectViewStyleClear;
                     if (@available(macOS 27.0, *)) {
                         globalGlassView.effectIsInteractive = YES;
                     }
@@ -529,7 +532,7 @@ void wallify_update_glass_rect(
                  * Keep the tint extremely subtle.
                  * The underlying artwork should provide most of the color.
                  */
-                globalGlassView.tintColor = [NSColor colorWithSRGBRed:tint_r green:tint_g blue:tint_b alpha:0.055];
+                globalGlassView.tintColor = [NSColor colorWithSRGBRed:tint_r green:tint_g blue:tint_b alpha:0.018];
 
                 /*
                  * Content view occupies the glass bounds.
@@ -552,12 +555,52 @@ void wallify_update_glass_rect(
                 );
 
                 /*
-                 * No hand-drawn CALayer border.
-                 * NSGlassEffectView supplies the optical edge,
-                 * highlight and depth treatment itself.
+                 * Subtle optical rim.
+                 *
+                 * This is deliberately NOT a uniform white border.
+                 * The Apple-style edge is more visible on the upper/leading
+                 * side and falls away around the rest of the glass.
                  */
                 globalGlassView.wantsLayer = YES;
                 globalGlassView.layer.cornerCurve = kCACornerCurveContinuous;
+
+                if (!globalGlassRimGradient) {
+                    globalGlassRimGradient = [CAGradientLayer layer];
+                    globalGlassRimGradient.masksToBounds = NO;
+                    globalGlassRimGradient.startPoint = CGPointMake(0.05, 0.0);
+                    globalGlassRimGradient.endPoint = CGPointMake(0.95, 1.0);
+                    globalGlassRimGradient.colors = @[
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.28].CGColor,
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.12].CGColor,
+                        (id)[NSColor colorWithWhite:0.0 alpha:0.14].CGColor,
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.07].CGColor
+                    ];
+
+                    globalGlassRimMask = [CAShapeLayer layer];
+                    globalGlassRimMask.fillColor = NSColor.clearColor.CGColor;
+                    globalGlassRimMask.strokeColor = NSColor.whiteColor.CGColor;
+                    globalGlassRimMask.lineWidth = 1.15;
+
+                    globalGlassRimGradient.mask = globalGlassRimMask;
+                    [globalGlassView.layer addSublayer:globalGlassRimGradient];
+                }
+
+                globalGlassRimGradient.frame = globalGlassView.bounds;
+
+                CGFloat rimInset = 0.6;
+                CGFloat rimRadius = MAX(0.0, radius - rimInset);
+                CGRect rimRect = CGRectInset(globalGlassView.bounds, rimInset, rimInset);
+
+                CGPathRef rimPath = CGPathCreateWithRoundedRect(
+                    rimRect,
+                    rimRadius,
+                    rimRadius,
+                    NULL
+                );
+
+                globalGlassRimMask.frame = globalGlassRimGradient.bounds;
+                globalGlassRimMask.path = rimPath;
+                CGPathRelease(rimPath);
 
             } else {
                 if (globalGlassView) {
