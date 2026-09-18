@@ -121,6 +121,7 @@ static void gdb_install_filter_swizzle(void) {
 
 // Apply all current settings to globalGlassView
 static void gdb_apply_all(void) {
+    // Kept for call sites that bypass the debugger instance; delegates to gdb_force_refresh logic inline.
     if (!globalGlassView) return;
     @try { [globalGlassView setValue:@(gdb_style)       forKey:@"style"]; }              @catch(id e){}
     @try { [globalGlassView setValue:@(gdb_variant)     forKey:@"_variant"]; }            @catch(id e){}
@@ -133,19 +134,25 @@ static void gdb_apply_all(void) {
     } else {
         globalGlassContentView.layer.backgroundColor = nil;
     }
+    // Frame-nudge forces the native Liquid Glass pipeline to recompute SDF geometry.
+    NSRect f = globalGlassView.frame;
+    globalGlassView.frame = NSMakeRect(f.origin.x, f.origin.y, f.size.width + 0.5, f.size.height + 0.5);
+    globalGlassView.frame = f;
     [globalGlassView setNeedsLayout:YES];
+
     [globalGlassView setNeedsDisplay:YES];
+    [globalGlassView.layer setNeedsLayout];
+    [globalGlassView.layer setNeedsDisplay];
 }
 
-@interface WallifyGlassDebugger : NSObject
+@interface WallifyGlassDebugger : NSObject <NSTextFieldDelegate>
 @property (nonatomic, strong) NSWindow *panel;
-@property (nonatomic, strong) NSArray<NSTextField *> *valueLabels;
 + (instancetype)shared;
 - (void)show;
 @end
 
 @implementation WallifyGlassDebugger {
-    NSMutableArray<NSTextField *> *_valueLabels;
+    NSMutableArray<NSTextField *> *_valueFields; // editable, tag = sliderTag + 100
 }
 
 + (instancetype)shared {
@@ -163,34 +170,64 @@ static void gdb_apply_all(void) {
         gdb_use_concentric ? @"Concentric" : @"Base"];
 }
 
-- (void)updateLabel:(int)idx value:(double)v {
-    if (idx < (int)_valueLabels.count) {
-        _valueLabels[idx].stringValue = [NSString stringWithFormat:@"%.2g", v];
+- (NSSlider *)sliderForTag:(int)sliderTag {
+    for (NSView *v in _panel.contentView.subviews) {
+        if ([v isKindOfClass:[NSSlider class]] && v.tag == sliderTag) return (NSSlider *)v;
     }
+    return nil;
+}
+
+- (NSTextField *)fieldForTag:(int)sliderTag {
+    return (NSTextField *)[_panel.contentView viewWithTag:sliderTag + 100];
+}
+
+- (void)setFieldValue:(NSTextField *)field intMode:(BOOL)intMode value:(double)v {
+    field.stringValue = intMode
+        ? [NSString stringWithFormat:@"%d", (int)v]
+        : [NSString stringWithFormat:@"%.2f", v];
+}
+
+// Central apply: updates gdb_ state, syncs slider & field, then refreshes glass.
+- (void)applyTag:(int)tag value:(double)v syncField:(BOOL)syncField syncSlider:(BOOL)syncSlider {
+    NSSlider *sl = [self sliderForTag:tag];
+    BOOL isInt = sl.allowsTickMarkValuesOnly;
+    if (isInt) v = round(v);
+    v = sl ? MAX(sl.minValue, MIN(sl.maxValue, v)) : v;
+
+    switch (tag) {
+        case 1: gdb_style       = (int)v; break;
+        case 2: gdb_variant     = (int)v; break;
+        case 3: gdb_adaptive    = (int)v; break;
+        case 4: gdb_subdued     = (int)v; break;
+        case 5: gdb_interaction = (int)v; break;
+        case 6: gdb_blur_radius = v;      break;
+        case 7: gdb_refraction  = v;      break;
+        case 8: gdb_tint_alpha  = v;      break;
+        default: break;
+    }
+
+    if (syncSlider && sl) sl.doubleValue = v;
+    if (syncField) {
+        NSTextField *tf = [self fieldForTag:tag];
+        if (tf) [self setFieldValue:tf intMode:isInt value:v];
+    }
+
+    gdb_apply_all();
 }
 
 - (void)sliderChanged:(NSSlider *)slider {
-    int tag = (int)slider.tag;
-    double v = slider.doubleValue;
+    [self applyTag:(int)slider.tag value:slider.doubleValue syncField:YES syncSlider:NO];
+}
 
-    switch (tag) {
-        case 1: gdb_style       = (int)v; [self updateLabel:0 value:v]; break;
-        case 2: gdb_variant     = (int)v; [self updateLabel:1 value:v]; break;
-        case 3: gdb_adaptive    = (int)v; [self updateLabel:2 value:v]; break;
-        case 4: gdb_subdued     = (int)v; [self updateLabel:3 value:v]; break;
-        case 5: gdb_interaction = (int)v; [self updateLabel:4 value:v]; break;
-        case 6: gdb_blur_radius = v;      [self updateLabel:5 value:v]; break;
-        case 7: gdb_refraction  = v;      [self updateLabel:6 value:v]; break;
-        case 8: gdb_tint_alpha  = v;      [self updateLabel:7 value:v]; break;
-        default: break;
-    }
-    gdb_apply_all();
+- (void)textFieldChanged:(NSTextField *)field {
+    int sliderTag = (int)field.tag - 100;
+    [self applyTag:sliderTag value:field.doubleValue syncField:NO syncSlider:YES];
 }
 
 - (void)classSwitched:(NSSegmentedControl *)seg {
     gdb_use_concentric = (seg.selectedSegment == 0);
-    NSLog(@"[GlassDebugger] Class switch requested — will take effect on next native_glass enable/disable cycle");
-    // Show a brief note in the copy label area
+    NSLog(@"[GlassDebugger] Class → %@  (disable/re-enable Native Glass to apply)",
+          gdb_use_concentric ? @"Concentric" : @"Base");
 }
 
 - (void)copyValues:(id)sender {
@@ -223,10 +260,9 @@ static void gdb_apply_all(void) {
             NSLog(@"[GlassDebugger]   %-42s → (not readable: %@)", key.UTF8String, e.reason);
         }
     }
-    // Dump CAFilter chain on the glass layer
     NSLog(@"[GlassDebugger] ── CALayer filters ──");
     for (id filt in globalGlassView.layer.filters) {
-        NSLog(@"[GlassDebugger]   filter: %@  keys: %@", filt, [filt respondsToSelector:@selector(allKeys)] ? [(NSDictionary *)filt allKeys] : @"?");
+        NSLog(@"[GlassDebugger]   filter: %@", filt);
     }
     for (id filt in globalGlassView.layer.backgroundFilters) {
         NSLog(@"[GlassDebugger]   bgFilter: %@", filt);
@@ -237,26 +273,24 @@ static void gdb_apply_all(void) {
 - (void)show {
     if (_panel) { [_panel makeKeyAndOrderFront:nil]; return; }
 
-    // Param definitions: {label, tag, min, max, isInt, defaultVal, tickCount}
-    // tickCount == 0 → continuous
     typedef struct { const char *label; int tag; double min; double max; BOOL isInt; double def; int ticks; } Param;
     Param params[] = {
-        { "Style (0–5)",              1,    0,   5,   YES,   0,   6 },
-        { "Variant (0–9)",            2,    0,   9,   YES,   4,  10 },
-        { "Adaptive Appearance (0–2)",3,    0,   2,   YES,   0,   3 },
-        { "Subdued State (0–3)",      4,    0,   3,   YES,   0,   4 },
-        { "Interaction State (0–3)",  5,    0,   3,   YES,   1,   4 },
-        { "Blur Radius (0–40)",       6,    0,  40,   NO,    5,   0 },
-        { "Refraction (−150 to 150)", 7, -150, 150,   NO,  -60,   0 },
-        { "Tint Alpha (0–1)",         8,    0,   1,   NO,    0,   0 },
+        { "Style (0–5)",              1,    0,   5,  YES,   0,   6 },
+        { "Variant (0–9)",            2,    0,   9,  YES,   4,  10 },
+        { "Adaptive Appearance (0–2)",3,    0,   2,  YES,   0,   3 },
+        { "Subdued State (0–3)",      4,    0,   3,  YES,   0,   4 },
+        { "Interaction State (0–3)",  5,    0,   3,  YES,   1,   4 },
+        { "Blur Radius (0–40)",       6,    0,  40,   NO,   5,   0 },
+        { "Refraction (−150–150)",    7, -150, 150,   NO, -60,   0 },
+        { "Tint Alpha (0–1)",         8,    0,   1,   NO,   0,   0 },
     };
     int N = (int)(sizeof(params)/sizeof(params[0]));
 
-    CGFloat panelW  = 340;
-    CGFloat rowH    = 54;
-    CGFloat topPad  = 14;
-    CGFloat botPad  = 80; // space for bottom buttons
-    CGFloat panelH  = topPad + N * rowH + botPad + 40;
+    CGFloat panelW = 380;
+    CGFloat rowH   = 58;
+    CGFloat topPad = 14;
+    CGFloat botPad = 96;
+    CGFloat panelH = topPad + N * rowH + botPad;
 
     _panel = [[NSWindow alloc]
         initWithContentRect:NSMakeRect(60, 200, panelW, panelH)
@@ -269,7 +303,10 @@ static void gdb_apply_all(void) {
     _panel.releasedWhenClosed = NO;
 
     NSView *cv = _panel.contentView;
-    _valueLabels = [NSMutableArray array];
+    _valueFields = [NSMutableArray array];
+
+    CGFloat tfW = 72;
+    CGFloat slW = panelW - 14 - tfW - 10 - 14;
 
     for (int i = 0; i < N; i++) {
         Param p = params[i];
@@ -277,23 +314,36 @@ static void gdb_apply_all(void) {
 
         // Row label
         NSTextField *lbl = [NSTextField labelWithString:@(p.label)];
-        lbl.frame = NSMakeRect(14, y + 30, panelW - 28, 16);
+        lbl.frame = NSMakeRect(14, y + 34, slW, 16);
         lbl.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightMedium];
         lbl.textColor = [NSColor secondaryLabelColor];
         [cv addSubview:lbl];
 
-        // Value readout (right-aligned)
-        NSTextField *valLbl = [NSTextField labelWithString:[NSString stringWithFormat:@"%.2g", p.def]];
-        valLbl.frame = NSMakeRect(panelW - 60, y + 30, 44, 16);
-        valLbl.alignment = NSTextAlignmentRight;
-        valLbl.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightBold];
-        valLbl.textColor = [NSColor systemYellowColor];
-        [cv addSubview:valLbl];
-        [_valueLabels addObject:valLbl];
+        // Editable value text field (right side, types a number → Enter applies)
+        NSTextField *valField = [[NSTextField alloc] initWithFrame:
+            NSMakeRect(panelW - 14 - tfW, y + 28, tfW, 24)];
+        valField.stringValue = p.isInt
+            ? [NSString stringWithFormat:@"%d", (int)p.def]
+            : [NSString stringWithFormat:@"%.2f", p.def];
+        valField.font = [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold];
+        valField.textColor = [NSColor systemYellowColor];
+        valField.backgroundColor = [NSColor colorWithWhite:0.12 alpha:1.0];
+        valField.drawsBackground = YES;
+        valField.bezeled = YES;
+        valField.bezelStyle = NSTextFieldSquareBezel;
+        valField.editable = YES;
+        valField.selectable = YES;
+        valField.alignment = NSTextAlignmentCenter;
+        valField.tag = p.tag + 100;
+        valField.target = self;
+        valField.action = @selector(textFieldChanged:);
+        valField.delegate = self;
+        [cv addSubview:valField];
+        [_valueFields addObject:valField];
 
         // Slider
         NSSlider *sl = [NSSlider sliderWithTarget:self action:@selector(sliderChanged:)];
-        sl.frame = NSMakeRect(14, y + 8, panelW - 28, 20);
+        sl.frame = NSMakeRect(14, y + 8, slW, 20);
         sl.minValue = p.min;
         sl.maxValue = p.max;
         sl.tag = p.tag;
@@ -309,9 +359,9 @@ static void gdb_apply_all(void) {
     }
 
     // ── Class switcher ──
-    CGFloat btnY = botPad - 30;
+    CGFloat clsY = botPad - 36;
     NSTextField *clsLbl = [NSTextField labelWithString:@"Glass Class:"];
-    clsLbl.frame = NSMakeRect(14, btnY + 22, 100, 16);
+    clsLbl.frame = NSMakeRect(14, clsY + 24, 90, 16);
     clsLbl.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightMedium];
     clsLbl.textColor = [NSColor secondaryLabelColor];
     [cv addSubview:clsLbl];
@@ -321,27 +371,21 @@ static void gdb_apply_all(void) {
                       trackingMode:NSSegmentSwitchTrackingSelectOne
                             target:self
                             action:@selector(classSwitched:)];
-    classSeg.frame = NSMakeRect(14, btnY, 200, 24);
+    classSeg.frame = NSMakeRect(110, clsY + 20, 220, 24);
     classSeg.selectedSegment = 0;
     [cv addSubview:classSeg];
 
-    // ── Dump KVC button ──
-    NSButton *dumpBtn = [NSButton buttonWithTitle:@"Dump KVC" target:self action:@selector(dumpKVC:)];
-    dumpBtn.frame = NSMakeRect(14, 14, 100, 28);
-    dumpBtn.bezelStyle = NSBezelStyleRounded;
-    [cv addSubview:dumpBtn];
-
-    // ── Copy values button ──
-    NSButton *copyBtn = [NSButton buttonWithTitle:@"Copy Values" target:self action:@selector(copyValues:)];
-    copyBtn.frame = NSMakeRect(124, 14, 100, 28);
-    copyBtn.bezelStyle = NSBezelStyleRounded;
-    [cv addSubview:copyBtn];
-
-    // ── Apply button ──
-    NSButton *applyBtn = [NSButton buttonWithTitle:@"Apply All" target:self action:@selector(applyAll:)];
-    applyBtn.frame = NSMakeRect(234, 14, 92, 28);
-    applyBtn.bezelStyle = NSBezelStyleRounded;
-    [cv addSubview:applyBtn];
+    // ── Bottom buttons ──
+    NSButton *dumpBtn  = [NSButton buttonWithTitle:@"Dump KVC"    target:self action:@selector(dumpKVC:)];
+    NSButton *copyBtn  = [NSButton buttonWithTitle:@"Copy Values" target:self action:@selector(copyValues:)];
+    NSButton *applyBtn = [NSButton buttonWithTitle:@"Apply All"   target:self action:@selector(applyAll:)];
+    dumpBtn.frame  = NSMakeRect(14,  14, 110, 28);
+    copyBtn.frame  = NSMakeRect(132, 14, 116, 28);
+    applyBtn.frame = NSMakeRect(256, 14, 110, 28);
+    for (NSButton *b in @[dumpBtn, copyBtn, applyBtn]) {
+        b.bezelStyle = NSBezelStyleRounded;
+        [cv addSubview:b];
+    }
 
     [_panel makeKeyAndOrderFront:nil];
 }
