@@ -70,6 +70,9 @@ void wallify_profile_scene(double seconds) {
 static NSGlassEffectView *globalGlassView = nil;
 static NSView *globalGlassContentView = nil;
 static WallifyView *globalMetalView = nil;
+static NSView *globalRimView = nil;
+static CAGradientLayer *globalRimGradient = nil;
+static CAShapeLayer *globalRimShape = nil;
 
 @interface WallifyPanel : NSPanel
 @end
@@ -185,8 +188,9 @@ bool wallify_create(int width, int height, int left, int top) {
     NSRect bounds = NSMakeRect(0, 0, atomic_load(&surfaceWidth), atomic_load(&surfaceHeight));
     panel = [[WallifyPanel alloc] initWithContentRect:bounds styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel backing:NSBackingStoreBuffered defer:NO];
     panel.title = @"Wallify";
-    panel.opaque = NO;
-    panel.backgroundColor = NSColor.clearColor;
+    [panel setOpaque:NO];
+    [panel setBackgroundColor:[NSColor clearColor]];
+    panel.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
     panel.hasShadow = NO;
     panel.hidesOnDeactivate = NO;
     panel.releasedWhenClosed = NO;
@@ -521,6 +525,11 @@ void wallify_update_glass_rect(
                     [globalGlassView setValue:@0 forKey:@"style"];
                     [globalGlassView setValue:@4 forKey:@"_variant"];
                     globalGlassView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
+                    @try {
+                        [globalGlassView setValue:@0 forKey:@"_adaptiveAppearance"]; // Don't let system override our dark mode force
+                        [globalGlassView setValue:@0 forKey:@"_subduedState"];       // Ensure it's not subdued (greyed out)
+                        [globalGlassView setValue:@1 forKey:@"_interactionState"];   // Force interactive/active look
+                    } @catch (NSException *e) {}
 
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
                     globalGlassContentView.clipsToBounds = YES;
@@ -564,6 +573,59 @@ void wallify_update_glass_rect(
                     atomic_load(&surfaceWidth),
                     atomic_load(&surfaceHeight)
                 );
+
+                /*
+                 * Directional specular rim — overlaid ABOVE Metal content.
+                 *
+                 * The rim is a transparent NSView whose backing layer is a
+                 * CAGradientLayer masked by a hairline CAShapeLayer stroke.
+                 *
+                 * It is added to globalGlassContentView AFTER globalMetalView
+                 * so it is Z-ordered on top of the Metal content:
+                 *   wallpaper → NSGlassEffectView blur → Metal → rim overlay
+                 *
+                 * The gradient runs top-left bright → bottom-right dark/return,
+                 * matching Apple's physically-based widget rim lighting exactly.
+                 */
+                if (!globalRimView) {
+                    globalRimGradient = [CAGradientLayer layer];
+                    globalRimGradient.type = kCAGradientLayerAxial;
+                    globalRimGradient.startPoint = CGPointMake(0.0, 1.0); /* top-left (flipped coords) */
+                    globalRimGradient.endPoint   = CGPointMake(1.0, 0.0); /* bottom-right */
+                    globalRimGradient.colors = @[
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.50].CGColor,  /* top-left: bright specular */
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.18].CGColor,  /* mid: fading highlight    */
+                        (id)[NSColor colorWithWhite:0.0 alpha:0.10].CGColor,  /* lower: shadow edge        */
+                        (id)[NSColor colorWithWhite:1.0 alpha:0.05].CGColor,  /* bottom-right: return glow */
+                    ];
+                    globalRimGradient.locations = @[@0.0, @0.42, @0.68, @1.0];
+
+                    globalRimShape = [CAShapeLayer layer];
+                    globalRimShape.fillColor   = [NSColor clearColor].CGColor;
+                    globalRimShape.strokeColor = [NSColor whiteColor].CGColor;
+                    globalRimShape.lineWidth   = 1.0;
+                    globalRimGradient.mask = globalRimShape;
+
+                    globalRimView = [[NSView alloc] initWithFrame:NSZeroRect];
+                    globalRimView.wantsLayer = YES;
+                    globalRimView.layer = globalRimGradient;
+                    globalRimView.autoresizingMask = NSViewNotSizable;
+
+                    /* Add on top of Metal inside the glass content view */
+                    [globalGlassContentView addSubview:globalRimView positioned:NSWindowAbove relativeTo:globalMetalView];
+                }
+
+                /* Size the rim overlay to exactly the glass card bounds (content-view local coords) */
+                globalRimView.frame = globalGlassView.bounds;
+                globalRimGradient.frame = globalRimView.bounds;
+
+                CGFloat rimInset  = 0.5;
+                CGFloat rimRadius = MAX(0.0, radius - rimInset);
+                CGRect  rimRect   = CGRectInset(globalRimView.bounds, rimInset, rimInset);
+                CGPathRef rimPath = CGPathCreateWithRoundedRect(rimRect, rimRadius, rimRadius, NULL);
+                globalRimShape.frame = globalRimGradient.bounds;
+                globalRimShape.path  = rimPath;
+                CGPathRelease(rimPath);
 
 
 
