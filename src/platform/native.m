@@ -932,7 +932,7 @@ void wallify_update_glass_rect(
                     globalGlassContentView.wantsLayer = YES;
                     if (gdb_tint_alpha > 0.001) {
                         globalGlassContentView.layer.backgroundColor =
-                            [NSColor colorWithCalibratedRed:gdb_last_tint_r green:gdb_last_tint_g blue:gdb_last_tint_b alpha:gdb_tint_alpha].CGColor;
+                            [NSColor colorWithWhite:0.0 alpha:gdb_tint_alpha].CGColor;
                     } else {
                         globalGlassContentView.layer.backgroundColor = nil;
                     }
