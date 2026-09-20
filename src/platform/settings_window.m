@@ -520,11 +520,11 @@ static NSButton *makeActionButton(
     [view addSubview:modeLabel];
 
     self.modeSegment =
-        makeSegments(@[@"Compact", @"Medium", @"Expanded", @"Wide"], 14, self, @selector(segmentChanged:), 148, 39, 365);
+        makeSegments(@[@"1 × 1", @"2 × 1", @"3 × 1", @"1 × 2", @"2 × 2"], 14, self, @selector(segmentChanged:), 148, 39, 365);
     [view addSubview:self.modeSegment];
 
     [view addSubview:makeRowSubtitle(
-        @"1×1 compact, 2×1 medium, 3×1 expanded, or 4×1 wide.",
+        @"Choose the desktop tile footprint used by Wallify.",
         18, 72, 500
     )];
 
@@ -925,7 +925,7 @@ static NSButton *makeActionButton(
             : 1;
 
     self.modeSegment.selectedSegment =
-        (s.widget_mode >= 0 && s.widget_mode <= 3)
+        (s.widget_mode >= 0 && s.widget_mode <= 4)
             ? s.widget_mode
             : 2;
 
