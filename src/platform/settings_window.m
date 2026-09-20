@@ -550,7 +550,8 @@ static NSButton *wfButton(
                                                             weight:NSFontWeightMedium];
         button.imagePosition = NSImageLeft;
         button.contentTintColor = [NSColor secondaryLabelColor];
-        button.contentHuggingPriority = 1.0;
+        [button setContentHuggingPriority:250.0
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
         button.translatesAutoresizingMaskIntoConstraints = NO;
         button.wantsLayer = YES;
         button.layer.cornerRadius = 8.0;
@@ -588,7 +589,7 @@ static NSButton *wfButton(
 - (void)buildContent {
     NSStackView *layout = [[NSStackView alloc] initWithFrame:NSZeroRect];
     layout.orientation = NSUserInterfaceLayoutOrientationVertical;
-    layout.alignment = NSLayoutAttributeFill;
+    layout.alignment = NSLayoutAttributeWidth;
     layout.spacing = 0.0;
     layout.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:layout];
@@ -642,7 +643,7 @@ static NSButton *wfButton(
 
     self.pageStack = [[NSStackView alloc] initWithFrame:NSZeroRect];
     self.pageStack.orientation = NSUserInterfaceLayoutOrientationVertical;
-    self.pageStack.alignment = NSLayoutAttributeFill;
+    self.pageStack.alignment = NSLayoutAttributeWidth;
     self.pageStack.spacing = 0.0;
     self.pageStack.edgeInsets = NSEdgeInsetsMake(26, 28, 34, 28);
     self.pageStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -825,7 +826,7 @@ static NSButton *wfButton(
         [[NSStackView alloc] initWithFrame:NSZeroRect];
 
     sectionStack.orientation = NSUserInterfaceLayoutOrientationVertical;
-    sectionStack.alignment = NSLayoutAttributeFill;
+    sectionStack.alignment = NSLayoutAttributeWidth;
     sectionStack.spacing = 0.0;
     sectionStack.translatesAutoresizingMaskIntoConstraints = NO;
 
@@ -835,7 +836,6 @@ static NSButton *wfButton(
     [sectionStack addArrangedSubview:header];
 
     [header.topAnchor constraintEqualToAnchor:sectionStack.topAnchor].active = YES;
-    header.edgeInsets = NSEdgeInsetsMake(0, 2, 8, 2);
 
     NSView *card = [[NSView alloc] initWithFrame:NSZeroRect];
     card.wantsLayer = YES;
@@ -1142,7 +1142,7 @@ static NSButton *wfButton(
     } else if ([control isKindOfClass:[NSPopUpButton class]]) {
         NSPopUpButton *popup = (NSPopUpButton *)control;
         if (index >= 0 && index < popup.numberOfItems)
-            popup.indexOfSelectedItem = index;
+            [popup selectItemAtIndex:index];
     }
 
     if (definition.enabledByBoolKey >= 0) {
