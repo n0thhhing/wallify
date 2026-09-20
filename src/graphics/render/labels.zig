@@ -42,7 +42,7 @@ pub fn drawLabels(canvas: *gpu.Canvas, elapsed: f64) void {
     text.draw(canvas, title, x, lerp(L.card_y + L.mini_title_y, state.layout.art_y + 6.0, t), width, 17.0 * scale, lerp(15.0, 17.0, t) / 17.0, true, primary_color, 0.0, false, true);
     text.draw(canvas, if (artist.len > 0) artist else "Play something to get started", x, lerp(L.card_y + L.mini_artist_y, state.layout.art_y + 30.0, t), width, 14.0 * scale, lerp(11.0, 14.0, t) / 14.0, false, secondary_color, 0.0, false, true);
 
-    if (t < 0.88) return;
+    if (t < 0.88 or !state.setting_show_timestamps) return;
 
     var buffer: [32]u8 = undefined;
     const e: u32 = @intFromFloat(@max(0, elapsed));
