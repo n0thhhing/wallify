@@ -3,7 +3,6 @@ const state = @import("../../state.zig");
 const gpu = @import("../canvas.zig");
 const text = @import("../text_cache.zig");
 
-const L = state.Layout;
 const primary_color: gpu.Color = .{ 245.0 / 255.0, 245.0 / 255.0, 247.0 / 255.0, 1.0 };
 const subtitle_color: gpu.Color = .{ 0.62, 0.60, 0.57, 1.0 };
 const idle_card_bg: gpu.Color = .{ 30.0 / 255.0, 29.0 / 255.0, 32.0 / 255.0, 1.0 };
