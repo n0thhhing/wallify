@@ -26,7 +26,9 @@ pub const ContextMenuAction = enum(c_int) {
     source_spotify = 51,
     source_spotifast = 52,
     mode_compact = 60,
-    mode_expanded = 61,
+    mode_medium = 61,
+    mode_expanded = 62,
+    mode_wide = 63,
     transition_default = 70,
     transition_cinematic = 71,
     transition_ripple = 72,
@@ -162,7 +164,7 @@ pub const ContextMenuCtx = struct {
         const mode_item = autorelease(macos.send(macos.Ref, macos.send(macos.Ref, item_cls, "alloc", .{}), "initWithTitle:action:keyEquivalent:", .{ mode_title, @as(macos.Ref, null), empty_str }));
         const mode_submenu = autorelease(macos.send(macos.Ref, macos.send(macos.Ref, menu_cls, "alloc", .{}), "initWithTitle:", .{mode_title}));
         macos.send(void, mode_submenu, "setAutoenablesItems:", .{false});
-        const modes = [_][]const u8{ "Compact", "Expanded" };
+        const modes = [_][]const u8{ "Compact", "Medium", "Expanded", "Wide" };
         for (modes, 0..) |mode_name, i| {
             const mode_str = macos.string(mode_name);
             defer macos.CFRelease(mode_str);
