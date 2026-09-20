@@ -131,7 +131,7 @@ static NSTextField *makeRowSubtitle(NSString *text, CGFloat x, CGFloat y, CGFloa
 static NSBox *makeCard(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
     NSBox *card = [[NSBox alloc] initWithFrame:NSMakeRect(x, y, w, h)];
     card.boxType = NSBoxCustom;
-    card.borderType = NSNoBorder;
+    card.transparent = YES;
     card.borderWidth = 0;
     card.cornerRadius = 14;
     card.fillColor = [NSColor colorWithWhite:0.5 alpha:0.10];
@@ -271,7 +271,6 @@ static NSButton *makeActionButton(
 
         button.frame = NSMakeRect(12, y, 174, 38);
         button.bordered = NO;
-        button.bezeled = NO;
         button.alignment = NSTextAlignmentLeft;
         button.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
         button.image = [NSImage imageWithSystemSymbolName:item[@"symbol"]
@@ -700,7 +699,7 @@ static NSButton *makeActionButton(
 
     [self.scrollView.documentView removeFromSuperview];
     self.scrollView.documentView = page;
-    self.scrollView.contentView.scrollToPoint:NSMakePoint(0, 0);
+    [self.scrollView.contentView scrollToPoint:NSMakePoint(0, 0)];
 }
 
 #pragma mark Actions
