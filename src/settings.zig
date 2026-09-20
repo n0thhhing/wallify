@@ -76,20 +76,40 @@ pub fn mediaSourceName(v: state.MediaSource) []const u8 {
 }
 
 pub fn parseWidgetMode(raw: []const u8) state.WidgetMode {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "compact") or std.mem.eql(u8, s, "0")) return .compact;
-    if (std.ascii.eqlIgnoreCase(s, "medium")) return .medium;
-    if (std.ascii.eqlIgnoreCase(s, "expanded") or std.mem.eql(u8, s, "1") or std.mem.eql(u8, s, "2")) return .expanded;
-    if (std.ascii.eqlIgnoreCase(s, "wide") or std.mem.eql(u8, s, "3")) return .wide;
+    const s = std.mem.trim(u8, raw, " 	
+");
+    if (std.ascii.eqlIgnoreCase(s, "compact") or
+        std.ascii.eqlIgnoreCase(s, "1x1") or
+        std.mem.eql(u8, s, "0")) return .compact;
+
+    // "expanded" was the old 3×1 default, so keep it and legacy numeric 1 working.
+    if (std.ascii.eqlIgnoreCase(s, "two_by_one") or
+        std.ascii.eqlIgnoreCase(s, "2x1")) return .two_by_one;
+
+    if (std.ascii.eqlIgnoreCase(s, "expanded") or
+        std.ascii.eqlIgnoreCase(s, "three_by_one") or
+        std.ascii.eqlIgnoreCase(s, "3x1") or
+        std.mem.eql(u8, s, "1") or
+        std.mem.eql(u8, s, "2")) return .expanded;
+
+    if (std.ascii.eqlIgnoreCase(s, "one_by_two") or
+        std.ascii.eqlIgnoreCase(s, "1x2") or
+        std.mem.eql(u8, s, "3")) return .one_by_two;
+
+    if (std.ascii.eqlIgnoreCase(s, "two_by_two") or
+        std.ascii.eqlIgnoreCase(s, "2x2") or
+        std.mem.eql(u8, s, "4")) return .two_by_two;
+
     return .expanded;
 }
 
 pub fn widgetModeName(v: state.WidgetMode) []const u8 {
     return switch (v) {
-        .compact => "compact",
-        .medium => "medium",
-        .expanded => "expanded",
-        .wide => "wide",
+        .compact => "1x1",
+        .two_by_one => "2x1",
+        .expanded => "3x1",
+        .one_by_two => "1x2",
+        .two_by_two => "2x2",
     };
 }
 
@@ -285,7 +305,7 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\animation_speed = {s}
         \\
         \\[Behavior]
-        \\# Form factor [compact, expanded]
+        \\# Form factor [1x1, 2x1, 3x1, 1x2, 2x2]
         \\widget_mode = {s}
         \\
         \\# Metadata telemetry source [now_playing, spotify, spotifast]
