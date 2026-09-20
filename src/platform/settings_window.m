@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, WFSettingType) {
 @property(nonatomic, copy) NSString *subtitle;
 @property(nonatomic, copy) NSArray<NSString *> *options;
 @property(nonatomic) NSInteger enabledByBoolKey;
+@property(nonatomic) BOOL enabledByBoolValue;
 @end
 
 @implementation WFSettingDefinition
@@ -84,6 +85,7 @@ static WFSettingDefinition *wfSetting(
     setting.subtitle = subtitle ?: @"";
     setting.options = options ?: @[];
     setting.enabledByBoolKey = -1;
+    setting.enabledByBoolValue = YES;
     return setting;
 }
 
@@ -249,6 +251,7 @@ static NSButton *wfButton(
             @[@"Off", @"Subtle", @"Strong"]
         );
     frame.enabledByBoolKey = 5;
+    frame.enabledByBoolValue = NO;
 
     WFSettingDefinition *animations =
         wfToggle(2, @"Animations", @"Animate widget resizing and state changes.");
@@ -496,7 +499,6 @@ static NSButton *wfButton(
 
     NSTextField *caption =
         wfLabel(@"Preferences", 11.0, NSFontWeightMedium, [NSColor secondaryLabelColor]);
-    caption.edgeInsets = NSEdgeInsetsMake(0, 3, 0, 0);
     [stack addArrangedSubview:caption];
 
     NSBox *divider = [[NSBox alloc] initWithFrame:NSZeroRect];
@@ -833,7 +835,7 @@ static NSButton *wfButton(
     rows.translatesAutoresizingMaskIntoConstraints = NO;
 
     [card addSubview:rows];
-    [wfPin(rows, card, 0, 0, 0, 0) self];
+    wfPin(rows, card, 0, 0, 0, 0);
 
     [sectionStack addArrangedSubview:card];
 
@@ -1164,7 +1166,7 @@ static NSButton *wfButton(
             }[@(definition.enabledByBoolKey)];
 
         if (dependencyValue)
-            enabled = dependencyValue.boolValue;
+            enabled = dependencyValue.boolValue == definition.enabledByBoolValue;
 
         /*
          * A disabled dependent control is allowed to remain stored in the
