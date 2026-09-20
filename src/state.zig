@@ -231,6 +231,33 @@ pub var mode_start_width: f64 = Layout.expanded_panel_width;
 pub var mode_start_height: f64 = Layout.expanded_panel_height;
 pub var mode_target_width: f64 = Layout.expanded_panel_width;
 pub var mode_target_height: f64 = Layout.expanded_panel_height;
+
+pub fn beginModeTransition(
+    new_mode: WidgetMode,
+    current_width: f64,
+    current_height: f64,
+    animate: bool,
+) void {
+    const target = new_mode.dimensions();
+
+    mode_from = setting_mode;
+    setting_mode = new_mode;
+    mode_start_width = current_width;
+    mode_start_height = current_height;
+    mode_target_width = target.width;
+    mode_target_height = target.height;
+    mode_mix = if (animate) 0.0 else 1.0;
+    mode_transition_active = animate;
+}
+
+pub fn modeAnimationFinished() void {
+    mode_mix = 1.0;
+    mode_transition_active = false;
+    mode_from = setting_mode;
+    mode_start_width = mode_target_width;
+    mode_start_height = mode_target_height;
+}
+
 pub var animation_time: f64 = 0;
 pub var marquee_offset: f64 = 0;
 pub var marquee_direction: f64 = 1;
