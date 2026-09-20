@@ -1490,6 +1490,14 @@ void wallify_update_glass_rect(
                         ((void (*)(id, SEL, NSInteger))objc_msgSend)(
                             globalGlassView, widgetVariant, 4);
                     }
+                    // A desktop widget must keep its active material when another
+                    // app becomes key. State 0 follows the window; state 1 opts
+                    // out of the subdued (inactive-window) appearance.
+                    SEL subduedState = NSSelectorFromString(@"set_subduedState:");
+                    if ([globalGlassView respondsToSelector:subduedState]) {
+                        ((void (*)(id, SEL, NSInteger))objc_msgSend)(
+                            globalGlassView, subduedState, 1);
+                    }
                     // Keep the optical material neutral. tintColor changes the
                     // glass highlights as well as its fill; it is not a dimmer.
                     globalGlassView.appearance =
