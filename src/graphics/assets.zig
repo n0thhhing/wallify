@@ -142,7 +142,7 @@ pub fn refreshArtwork() void {
     native.wallify_swap_textures(@intFromEnum(Texture.artwork), @intFromEnum(Texture.previous_artwork));
     native.wallify_swap_textures(@intFromEnum(Texture.glow), @intFromEnum(Texture.previous_glow));
     upload(.artwork, pixels, w, h);
-    native.wallify_blur_texture(@intFromEnum(Texture.artwork), @intFromEnum(Texture.glow), @as(f32, state.Layout.art_size_expanded));
+    native.wallify_blur_texture(@intFromEnum(Texture.artwork), @intFromEnum(Texture.glow), 132.0);
     state.art_transition_until = if (has_art and state.setting_animations) state.animation_time + transition_duration else 0;
     has_art = true;
     art_hash = hash;
