@@ -36,10 +36,6 @@ fn sleep_us(us: u64) void {
     _ = std.posix.system.nanosleep(&ts, null);
 }
 
-fn resizePanelForMode(mode: state.WidgetMode) void {
-    @import("../platform/native.zig").resizeForMode(mode);
-}
-
 fn beginModeTransition(new_mode: state.WidgetMode) void {
     const native = @import("../platform/native.zig");
     const current_width: f64 = @floatFromInt(native.wallify_width());
@@ -160,25 +156,31 @@ pub fn animationLoop() void {
             if (@floor(state.cat_time * fps) != previous_tick) needs_draw = true;
         }
         if (state.mode_transition_active) {
-            const previous_mix = state.mode_mix;
-            state.mode_mix = @min(1.0, state.mode_mix + dt * 5.5);
+            const native = @import("../platform/native.zig");
 
-            // Ease the physical window and the renderer with the same curve.
-            const eased = 1.0 - std.math.pow(f64, 1.0 - state.mode_mix, 3.0);
-            const width = state.mode_start_width +
-                (state.mode_target_width - state.mode_start_width) * eased;
-            const height = state.mode_start_height +
-                (state.mode_target_height - state.mode_start_height) * eased;
-
-            @import("../platform/native.zig").resizeTo(width, height);
-            needs_draw = true;
-
-            if (state.mode_mix >= 1.0 or previous_mix == state.mode_mix) {
+            if (!state.setting_animations) {
+                native.resizeForMode(state.setting_mode);
                 state.modeAnimationFinished();
-                @import("../platform/native.zig").resizeForMode(state.setting_mode);
+                needs_draw = true;
+            } else {
+                const previous_mix = state.mode_mix;
+                state.mode_mix = @min(1.0, state.mode_mix + dt * 5.5);
+
+                // Ease the physical window and renderer with the same curve.
+                const eased = 1.0 - std.math.pow(f64, 1.0 - state.mode_mix, 3.0);
+                const width = state.mode_start_width +
+                    (state.mode_target_width - state.mode_start_width) * eased;
+                const height = state.mode_start_height +
+                    (state.mode_target_height - state.mode_start_height) * eased;
+
+                native.resizeTo(width, height);
+                needs_draw = true;
+
+                if (state.mode_mix >= 1.0 or previous_mix == state.mode_mix) {
+                    state.modeAnimationFinished();
+                    native.resizeForMode(state.setting_mode);
+                }
             }
-        } else if (!state.setting_animations and state.mode_mix != 1.0) {
-            state.mode_mix = 1.0;
         }
 
         if (state.panel_position_dirty) {
