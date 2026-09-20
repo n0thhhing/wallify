@@ -165,7 +165,15 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_intensity = .normal;
     state.setting_speed = .normal;
     state.setting_source = .now_playing;
-    state.setting_mode = .expanded;
+    state.beginModeTransition(
+        .expanded,
+        @floatFromInt(native.wallify_width()),
+        @floatFromInt(native.wallify_height()),
+        state.setting_animations,
+    );
+    if (!state.mode_transition_active) {
+        native.resizeForMode(.expanded);
+    }
     state.setting_hide_text = false;
     state.setting_hide_progress = false;
     state.setting_show_controls = true;
