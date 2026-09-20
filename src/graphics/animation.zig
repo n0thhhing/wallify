@@ -41,6 +41,10 @@ fn sleep_us(us: u64) void {
 fn resizePanel(compact: bool) void {
     @import("../platform/native.zig").resize(compact);
 }
+
+fn resizePanelForMode(mode: state.WidgetMode) void {
+    @import("../platform/native.zig").resizeForMode(mode);
+}
 fn movePanelToWidgetGrid() void {
     @import("../platform/native.zig").wallify_move(state.widget_margin_left, state.widget_margin_top);
     @import("../ui/settings_window.zig").notify_position_changed();
@@ -108,13 +112,25 @@ pub fn animationLoop() void {
             .source_spotify => state.setting_source = .spotify,
             .source_spotifast => state.setting_source = .spotifast,
             .mode_compact => {
-                state.panel_resize_after_compact = true;
-                state.setting_mode = .compact;
+                if (state.setting_mode != .compact) {
+                    state.panel_resize_after_compact = true;
+                    state.setting_mode = .compact;
+                }
+            },
+            .mode_medium => {
+                state.panel_resize_after_compact = false;
+                state.setting_mode = .medium;
+                resizePanelForMode(.medium);
             },
             .mode_expanded => {
                 state.panel_resize_after_compact = false;
-                resizePanel(false);
                 state.setting_mode = .expanded;
+                resizePanelForMode(.expanded);
+            },
+            .mode_wide => {
+                state.panel_resize_after_compact = false;
+                state.setting_mode = .wide;
+                resizePanelForMode(.wide);
             },
             .open_settings => {
                 @import("../ui/settings_window.zig").open();
@@ -149,7 +165,7 @@ pub fn animationLoop() void {
             state.cat_time += dt;
             if (@floor(state.cat_time * fps) != previous_tick) needs_draw = true;
         }
-        const target_mode: f64 = @floatFromInt(@intFromEnum(state.setting_mode));
+        const target_mode: f64 = if (state.setting_mode == .compact) 0.0 else 1.0;
         if (!state.setting_animations) state.mode_mix = target_mode;
         if (@abs(state.mode_mix - target_mode) > MODE_MIX_EPSILON) {
             // Smooth, critically damped-feeling mode morph without a visible jump.
