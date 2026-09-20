@@ -163,61 +163,6 @@ static NSGlassEffectView* globalGlassView = nil;
 static NSView* globalGlassContentView = nil;
 static WallifyView* globalMetalView = nil;
 
-// Apply geometry after AppKit has created (or rebuilt) the material layers.
-// These private inputs were verified in the current runtime's filter graph.
-static void wallify_inset_glass_optics(CALayer* layer) {
-    NSArray* filters = layer.filters;
-    BOOL touched = NO;
-
-    for (id filter in filters) {
-        @try {
-            if (![[filter valueForKey:@"type"] isEqualToString:@"glassBackground"])
-                continue;
-
-            /*
-             * Match the values installed by Apple's macOS 27 widget
-             * material (_variant = 4), measured from a native
-             * NSGlassEffectView on build 26A428.
-             *
-             * Refraction:
-             *   inner height = 9.6
-             *   inner amount = -41.6
-             *
-             * Supporting optical settings:
-             *   blur radius = 6.111111
-             *   key-fill highlight = 0.4
-             *   highlight offset = -0.5
-             *
-             * Leave the outer refraction/aberration settings at their
-             * system defaults; the native widget reports them as disabled.
-             */
-            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputInnerRefractionHeight"])
-                [filter setValue:@9.6 forKey:@"inputInnerRefractionHeight"];
-            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputInnerRefractionAmount"])
-                [filter setValue:@(-41.6) forKey:@"inputInnerRefractionAmount"];
-
-            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputBlurRadius"])
-                [filter setValue:@6.111111 forKey:@"inputBlurRadius"];
-
-            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputKeyFillHighlightEffectOffset"])
-                [filter setValue:@(-0.5) forKey:@"inputKeyFillHighlightEffectOffset"];
-            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputKeyFillHighlightAmount"])
-                [filter setValue:@0.4 forKey:@"inputKeyFillHighlightAmount"];
-
-            touched = YES;
-        } @catch (__unused NSException* exception) {
-            // Preserve the system material if a future runtime changes its inputs.
-        }
-    }
-
-    // Reassign the filter array so Core Animation picks up KVC changes reliably.
-    if (touched)
-        layer.filters = filters;
-
-    for (CALayer* child in layer.sublayers)
-        wallify_inset_glass_optics(child);
-}
-
 @interface WallifyDesktopGlassView : NSGlassEffectView
 @end
 
@@ -986,7 +931,7 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
                   SEL widgetVariant = NSSelectorFromString(@"set_variant:");
                   if ([globalGlassView respondsToSelector:widgetVariant]) {
                       ((void (*)(id, SEL, NSInteger))objc_msgSend)(globalGlassView, widgetVariant,
-                                                                   4);
+                                                                   5);
                   }
                   // Keep the optical material neutral. tintColor changes the
                   // glass highlights as well as its fill; it is not a dimmer.
@@ -1014,10 +959,6 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
               if (!NSEqualRects(globalGlassView.frame, frame))
                   globalGlassView.frame = frame;
               globalGlassView.cornerRadius = radius;
-
-              if (globalGlassView.layer) {
-                  wallify_inset_glass_optics(globalGlassView.layer);
-              }
 
               globalGlassContentView.frame = globalGlassView.bounds;
               globalGlassContentView.layer.cornerRadius = radius;
