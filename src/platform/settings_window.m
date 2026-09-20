@@ -131,6 +131,7 @@ static WFSectionDefinition *wfSection(
     section.title = title;
     section.settings = settings ?: @[];
     return section;
+}
 
 static WFSectionDefinition *wfSpecialSection(
     WFSectionType type,
