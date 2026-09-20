@@ -849,7 +849,7 @@ static NSButton *wfButton(
         [[NSStackView alloc] initWithFrame:NSZeroRect];
 
     rows.orientation = NSUserInterfaceLayoutOrientationVertical;
-    rows.alignment = NSLayoutAttributeFill;
+    rows.alignment = NSLayoutAttributeWidth;
     rows.spacing = 0.0;
     rows.translatesAutoresizingMaskIntoConstraints = NO;
 
