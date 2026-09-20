@@ -299,6 +299,24 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\# Hide progress/scrubber bar [true, false]
         \\hide_progress = {s}
         \\
+        \\# Show playback controls [true, false]
+        \\show_controls = {s}
+        \\
+        \\# Show elapsed and duration timestamps [true, false]
+        \\show_timestamps = {s}
+        \\
+        \\# Show a subtle border around artwork [true, false]
+        \\artwork_border = {s}
+        \\
+        \\# Show compact-mode gradient underlay [true, false]
+        \\compact_gradient = {s}
+        \\
+        \\# Artwork corner radius [0, 1, 2]
+        \\artwork_radius = {d}
+        \\
+        \\# Progress bar thickness [0, 1, 2]
+        \\progress_thickness = {d}
+        \\
         \\# Font size scale [small, normal, large]
         \\font_scale = {s}
         \\
