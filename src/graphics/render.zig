@@ -44,6 +44,8 @@ pub fn drawUIFrame() void {
     state.layout.update(
         @floatFromInt(native.wallify_width()),
         @floatFromInt(native.wallify_height()),
+        state.mode_from,
+        state.setting_mode,
         state.mode_mix,
     );
 
