@@ -203,7 +203,7 @@ pub const Layout = struct {
                     .text_width = @max(64.0, card_w - 32.0),
                     .title_y = 183.0,
                     .artist_y = 207.0,
-                    .timestamp_y = 225.0,
+                    .timestamp_y = 257.0,
                     .buttons = .{
                         .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 286.0, .size = 12.0 },
                         .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 286.0, .size = 14.0 },
@@ -231,7 +231,7 @@ pub const Layout = struct {
                     .text_width = @max(64.0, card_w - 32.0),
                     .title_y = 229.0,
                     .artist_y = 253.0,
-                    .timestamp_y = 267.0,
+                    .timestamp_y = 297.0,
                     .buttons = .{
                         .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 322.0, .size = 12.0 },
                         .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 322.0, .size = 14.0 },
