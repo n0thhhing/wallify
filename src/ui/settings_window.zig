@@ -23,6 +23,12 @@ pub const WallifySettingsSnapshot = extern struct {
     grid_y: c_int,
     hide_text: bool,
     hide_progress: bool,
+    show_controls: bool,
+    show_timestamps: bool,
+    artwork_border: bool,
+    compact_gradient: bool,
+    artwork_radius: c_int,
+    progress_thickness: c_int,
     font_scale: c_int,
     media_key_target: c_int,
 };
@@ -69,6 +75,12 @@ pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) call
             .grid_y = state.widget_grid_y,
             .hide_text = state.setting_hide_text,
             .hide_progress = state.setting_hide_progress,
+            .show_controls = state.setting_show_controls,
+            .show_timestamps = state.setting_show_timestamps,
+            .artwork_border = state.setting_artwork_border,
+            .compact_gradient = state.setting_compact_gradient,
+            .artwork_radius = @intFromEnum(state.setting_artwork_radius),
+            .progress_thickness = @intFromEnum(state.setting_progress_thickness),
             .font_scale = @intFromEnum(state.setting_font_scale),
             .media_key_target = @intFromEnum(state.setting_media_key_target),
         };
@@ -88,6 +100,10 @@ pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) vo
         5 => state.setting_native_glass = val,
         6 => state.setting_hide_text = val,
         7 => state.setting_hide_progress = val,
+        8 => state.setting_show_controls = val,
+        9 => state.setting_show_timestamps = val,
+        19 => state.setting_artwork_border = val,
+        20 => state.setting_compact_gradient = val,
         else => {},
     }
     state.saveWidgetSettings();
@@ -124,6 +140,8 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
             // Notify native layer to install/remove the CGEventTap accordingly
             native.wallify_update_media_key_tap(@intFromEnum(state.setting_media_key_target));
         },
+        21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(val, 0, 2)),
+        22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(val, 0, 2)),
         else => {},
     }
     state.saveWidgetSettings();
@@ -146,6 +164,12 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_mode = .expanded;
     state.setting_hide_text = false;
     state.setting_hide_progress = false;
+    state.setting_show_controls = true;
+    state.setting_show_timestamps = true;
+    state.setting_artwork_border = true;
+    state.setting_compact_gradient = true;
+    state.setting_artwork_radius = .rounded;
+    state.setting_progress_thickness = .standard;
     state.setting_font_scale = .normal;
     state.setting_media_key_target = .off;
     native.wallify_update_media_key_tap(0);
