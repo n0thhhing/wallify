@@ -97,6 +97,12 @@ pub fn animationLoop() void {
                 state.setting_speed = .normal;
                 state.setting_source = .now_playing;
                 state.setting_mode = .expanded;
+                state.setting_show_controls = true;
+                state.setting_show_timestamps = true;
+                state.setting_artwork_border = true;
+                state.setting_compact_gradient = true;
+                state.setting_artwork_radius = .rounded;
+                state.setting_progress_thickness = .standard;
             },
             .source_now_playing => state.setting_source = .now_playing,
             .source_spotify => state.setting_source = .spotify,
