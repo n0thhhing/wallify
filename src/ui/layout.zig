@@ -41,7 +41,9 @@ pub const Layout = struct {
     // Window dimensions (outer borderless window)
     pub const compact_panel_width: f64 = 180.0;
     pub const compact_panel_height: f64 = 180.0;
+    pub const medium_panel_width: f64 = 360.0;
     pub const expanded_panel_width: f64 = 540.0;
+    pub const wide_panel_width: f64 = 720.0;
     pub const expanded_panel_height: f64 = 180.0;
 
     // Visual card dimensions and padding
