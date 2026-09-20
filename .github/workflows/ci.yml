@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS / Zig 0.16
+    runs-on: xcode-27
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Zig
+        uses: vercel-labs/setup-zig@v1
+        with:
+          version: 0.16.0
+
+      - name: Check Zig formatting
+        run: zig fmt --check build.zig build.zig.zon src
+
+      - name: Run tests
+        run: zig build test --summary all
+
+      - name: Build ReleaseFast
+        run: zig build -Doptimize=ReleaseFast --summary all
