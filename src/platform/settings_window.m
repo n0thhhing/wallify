@@ -520,11 +520,11 @@ static NSButton *makeActionButton(
     [view addSubview:modeLabel];
 
     self.modeSegment =
-        makeSegments(@[@"Compact", @"Expanded"], 14, self, @selector(segmentChanged:), 148, 39, 250);
+        makeSegments(@[@"Compact", @"Medium", @"Expanded", @"Wide"], 14, self, @selector(segmentChanged:), 148, 39, 365);
     [view addSubview:self.modeSegment];
 
     [view addSubview:makeRowSubtitle(
-        @"Compact is a small tile. Expanded shows the full player.",
+        @"1×1 compact, 2×1 medium, 3×1 expanded, or 4×1 wide.",
         18, 72, 500
     )];
 
@@ -925,9 +925,9 @@ static NSButton *makeActionButton(
             : 1;
 
     self.modeSegment.selectedSegment =
-        (s.widget_mode >= 0 && s.widget_mode <= 1)
+        (s.widget_mode >= 0 && s.widget_mode <= 3)
             ? s.widget_mode
-            : 1;
+            : 2;
 
     self.sourceSegment.selectedSegment =
         (s.media_source >= 0 && s.media_source <= 3)
