@@ -15,8 +15,6 @@ const IDLE_MIX_SPEED: f64 = 2.5;
 const MODE_MIX_EPSILON: f64 = 0.001;
 const MODE_MIX_SPEED: f64 = 8.0;
 const PANEL_SNAP_DURATION: f64 = 0.22;
-const MARQUEE_MODE_THRESHOLD: f64 = 0.99;
-const COMPACT_MODE_THRESHOLD: f64 = 0.5;
 const MARQUEE_FONT_SIZE: usize = 15;
 const MARQUEE_VIEWPORT_WIDTH: f64 = 126.0;
 const MARQUEE_SPEED: f64 = 28.0;
@@ -38,13 +36,27 @@ fn sleep_us(us: u64) void {
     _ = std.posix.system.nanosleep(&ts, null);
 }
 
-fn resizePanel(compact: bool) void {
-    @import("../platform/native.zig").resize(compact);
-}
-
 fn resizePanelForMode(mode: state.WidgetMode) void {
     @import("../platform/native.zig").resizeForMode(mode);
 }
+
+fn beginModeTransition(new_mode: state.WidgetMode) void {
+    const native = @import("../platform/native.zig");
+    const current_width: f64 = @floatFromInt(native.wallify_width());
+    const current_height: f64 = @floatFromInt(native.wallify_height());
+
+    state.beginModeTransition(
+        new_mode,
+        current_width,
+        current_height,
+        state.setting_animations,
+    );
+
+    if (!state.mode_transition_active) {
+        native.resizeForMode(new_mode);
+    }
+}
+
 fn movePanelToWidgetGrid() void {
     @import("../platform/native.zig").wallify_move(state.widget_margin_left, state.widget_margin_top);
     @import("../ui/settings_window.zig").notify_position_changed();
@@ -88,7 +100,6 @@ pub fn animationLoop() void {
             .speed_normal => state.setting_speed = .normal,
             .speed_fast => state.setting_speed = .fast,
             .restore_defaults => {
-                state.panel_resize_after_compact = false;
                 state.setting_idle_style = .pixel_cat;
                 state.setting_transition = .cinematic;
                 state.setting_glow = true;
@@ -99,8 +110,7 @@ pub fn animationLoop() void {
                 state.setting_intensity = .normal;
                 state.setting_speed = .normal;
                 state.setting_source = .now_playing;
-                state.setting_mode = .expanded;
-                resizePanelForMode(.expanded);
+                beginModeTransition(.expanded);
                 state.setting_show_controls = true;
                 state.setting_show_timestamps = true;
                 state.setting_artwork_border = true;
@@ -111,27 +121,11 @@ pub fn animationLoop() void {
             .source_now_playing => state.setting_source = .now_playing,
             .source_spotify => state.setting_source = .spotify,
             .source_spotifast => state.setting_source = .spotifast,
-            .mode_compact => {
-                if (state.setting_mode != .compact) {
-                    state.panel_resize_after_compact = true;
-                    state.setting_mode = .compact;
-                }
-            },
-            .mode_medium => {
-                state.panel_resize_after_compact = false;
-                state.setting_mode = .medium;
-                resizePanelForMode(.medium);
-            },
-            .mode_expanded => {
-                state.panel_resize_after_compact = false;
-                state.setting_mode = .expanded;
-                resizePanelForMode(.expanded);
-            },
-            .mode_wide => {
-                state.panel_resize_after_compact = false;
-                state.setting_mode = .wide;
-                resizePanelForMode(.wide);
-            },
+            .mode_compact => beginModeTransition(.compact),
+            .mode_two_by_one => beginModeTransition(.two_by_one),
+            .mode_expanded => beginModeTransition(.expanded),
+            .mode_one_by_two => beginModeTransition(.one_by_two),
+            .mode_two_by_two => beginModeTransition(.two_by_two),
             .open_settings => {
                 @import("../ui/settings_window.zig").open();
             },
@@ -165,21 +159,28 @@ pub fn animationLoop() void {
             state.cat_time += dt;
             if (@floor(state.cat_time * fps) != previous_tick) needs_draw = true;
         }
-        const target_mode: f64 = if (state.setting_mode == .compact) 0.0 else 1.0;
-        if (!state.setting_animations) state.mode_mix = target_mode;
-        if (@abs(state.mode_mix - target_mode) > MODE_MIX_EPSILON) {
-            // Smooth, critically damped-feeling mode morph without a visible jump.
-            state.mode_mix += (target_mode - state.mode_mix) * @min(1, dt * MODE_MIX_SPEED);
+        if (state.mode_transition_active) {
+            const previous_mix = state.mode_mix;
+            state.mode_mix = @min(1.0, state.mode_mix + dt * 5.5);
+
+            // Ease the physical window and the renderer with the same curve.
+            const eased = 1.0 - std.math.pow(f64, 1.0 - state.mode_mix, 3.0);
+            const width = state.mode_start_width +
+                (state.mode_target_width - state.mode_start_width) * eased;
+            const height = state.mode_start_height +
+                (state.mode_target_height - state.mode_start_height) * eased;
+
+            @import("../platform/native.zig").resizeTo(width, height);
             needs_draw = true;
-        } else state.mode_mix = target_mode;
-        if (state.panel_resize_after_compact and state.mode_mix <= 0.001) {
-            // Defer shrinking the physical NSWindow until the card has fully contracted,
-            // preventing the terminal window border from visibly clipping the expanding/contracting panel mid-animation.
-            state.panel_resize_after_compact = false;
-            state.mode_mix = 0;
-            resizePanel(true);
-            needs_draw = true;
+
+            if (state.mode_mix >= 1.0 or previous_mix == state.mode_mix) {
+                state.modeAnimationFinished();
+                @import("../platform/native.zig").resizeForMode(state.setting_mode);
+            }
+        } else if (!state.setting_animations and state.mode_mix != 1.0) {
+            state.mode_mix = 1.0;
         }
+
         if (state.panel_position_dirty) {
             state.panel_position_dirty = false;
             movePanelToWidgetGrid();
@@ -202,7 +203,7 @@ pub fn animationLoop() void {
                 }
             }
         }
-        if (!state.spotifyIdle() and state.mode_mix < MARQUEE_MODE_THRESHOLD and state.global_title_len > 0) {
+        if (!state.spotifyIdle() and state.layout.compact_mix > 0.01 and state.global_title_len > 0) {
             // Compact tiles lack horizontal clearance for full track titles.
             // If the text width exceeds the viewport, we auto-scroll back and forth (marquee effect).
             const title_width = text_cache.width(state.global_title[0..state.global_title_len], MARQUEE_FONT_SIZE, true);
@@ -250,7 +251,7 @@ pub fn animationLoop() void {
             needs_draw = true;
         }
         if (state.global_rate > 0 and !state.global_is_dragging and
-            (state.mode_mix >= COMPACT_MODE_THRESHOLD or (state.setting_glow and state.setting_animations))) needs_draw = true;
+            (state.layout.compact_mix < COMPACT_MODE_THRESHOLD or (state.setting_glow and state.setting_animations))) needs_draw = true;
         const icon_target: f64 = if (state.global_rate > 0) 1 else 0;
         if (state.play_pause_mix != icon_target) {
             state.play_pause_mix = icon_transition.advance(state.play_pause_mix, state.global_rate > 0, dt);
