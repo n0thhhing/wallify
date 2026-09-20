@@ -135,7 +135,7 @@ pub const Layout = struct {
             .compact => .{
                 .art_x = 8.0,
                 .art_y = 8.0,
-                .art_size = card_w,
+                .art_size = @min(card_w, card_h),
                 .art_radius = 26.0,
                 .bar_x = 16.0,
                 .bar_y = 26.0,
@@ -209,7 +209,7 @@ pub const Layout = struct {
                 };
             },
             .two_by_two => blk: {
-                const art_size = @min(200.0, @max(96.0, card_w - 64.0));
+                const art_size = @min(200.0, @max(96.0, @min(card_w - 64.0, card_h - 32.0)));
                 const art_x = (width - art_size) / 2.0;
                 const art_y = height - 8.0 - 16.0 - art_size;
                 const bar_x = 16.0;
