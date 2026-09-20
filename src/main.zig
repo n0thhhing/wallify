@@ -13,9 +13,16 @@ pub fn main() !void {
     window.widget_application_init();
     state.loadWidgetSettings();
     if (state.setting_debug) window.widget_debug_window_show();
-    state.mode_mix = if (state.setting_mode == .compact) 0.0 else 1.0;
+    const initial_size = state.setting_mode.dimensions();
+    state.mode_from = state.setting_mode;
+    state.mode_mix = 1.0;
+    state.mode_transition_active = false;
+    state.mode_start_width = initial_size.width;
+    state.mode_start_height = initial_size.height;
+    state.mode_target_width = initial_size.width;
+    state.mode_target_height = initial_size.height;
     spotify.widget_spotify_observe();
-    if (!@import("platform/native.zig").create(state.setting_mode == .compact, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
+    if (!@import("platform/native.zig").create(state.setting_mode, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
