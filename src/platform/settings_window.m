@@ -331,7 +331,7 @@ static NSImageView *wfSymbol(
             );
     }
 
-undefined}
+}
 
 @end
 
