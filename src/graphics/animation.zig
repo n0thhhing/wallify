@@ -261,7 +261,7 @@ pub fn animationLoop() void {
             needs_draw = true;
         }
         if (state.global_rate > 0 and !state.global_is_dragging and
-            (state.layout.compact_mix < COMPACT_MODE_THRESHOLD or (state.setting_glow and state.setting_animations))) needs_draw = true;
+            (state.layout.compact_mix < 0.5 or (state.setting_glow and state.setting_animations))) needs_draw = true;
         const icon_target: f64 = if (state.global_rate > 0) 1 else 0;
         if (state.play_pause_mix != icon_target) {
             state.play_pause_mix = icon_transition.advance(state.play_pause_mix, state.global_rate > 0, dt);
