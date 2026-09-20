@@ -89,7 +89,6 @@ pub fn animationLoop() void {
             .speed_fast => state.setting_speed = .fast,
             .restore_defaults => {
                 state.panel_resize_after_compact = false;
-                resizePanel(false);
                 state.setting_idle_style = .pixel_cat;
                 state.setting_transition = .cinematic;
                 state.setting_glow = true;
@@ -101,6 +100,7 @@ pub fn animationLoop() void {
                 state.setting_speed = .normal;
                 state.setting_source = .now_playing;
                 state.setting_mode = .expanded;
+                resizePanelForMode(.expanded);
                 state.setting_show_controls = true;
                 state.setting_show_timestamps = true;
                 state.setting_artwork_border = true;
