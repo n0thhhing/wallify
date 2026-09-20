@@ -99,20 +99,28 @@ pub fn animationLoop() void {
                 state.setting_idle_style = .pixel_cat;
                 state.setting_transition = .cinematic;
                 state.setting_glow = true;
+                state.setting_native_glass = false;
                 state.setting_aurora = true;
                 state.setting_animations = true;
                 state.setting_dim = true;
+                state.setting_debug = false;
+                window.widget_debug_window_hide();
                 state.setting_frame = .subtle;
                 state.setting_intensity = .normal;
                 state.setting_speed = .normal;
                 state.setting_source = .now_playing;
-                beginModeTransition(.expanded);
+                state.setting_hide_text = false;
+                state.setting_hide_progress = false;
                 state.setting_show_controls = true;
                 state.setting_show_timestamps = true;
                 state.setting_artwork_border = true;
                 state.setting_compact_gradient = true;
                 state.setting_artwork_radius = .rounded;
                 state.setting_progress_thickness = .standard;
+                state.setting_font_scale = .normal;
+                state.setting_media_key_target = .off;
+                @import("../platform/native.zig").wallify_update_media_key_tap(0);
+                beginModeTransition(.expanded);
             },
             .source_now_playing => state.setting_source = .now_playing,
             .source_spotify => state.setting_source = .spotify,
