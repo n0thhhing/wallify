@@ -9,12 +9,19 @@ extern const char *wallify_settings_path(void);
 - (BOOL)isFlipped { return YES; }
 @end
 
-@interface WallifySettingsWindowController : NSObject <NSWindowDelegate, NSToolbarDelegate>
+@interface WallifySettingsWindowController : NSObject <NSWindowDelegate>
 
 @property (nonatomic, strong) NSWindow *window;
-@property (nonatomic, strong) NSTabView *tabView;
+@property (nonatomic, strong) WallifyFlippedView *rootView;
+@property (nonatomic, strong) WallifyFlippedView *sidebarView;
+@property (nonatomic, strong) NSScrollView *scrollView;
+@property (nonatomic, strong) WallifyFlippedView *contentView;
+@property (nonatomic, strong) NSArray<NSView *> *pages;
+@property (nonatomic, strong) NSArray<NSButton *> *sidebarButtons;
+@property (nonatomic, strong) NSTextField *pageTitleLabel;
+@property (nonatomic, strong) NSTextField *pageSubtitleLabel;
 
-// Appearance controls
+// Appearance
 @property (nonatomic, strong) NSButton *nativeGlassSwitch;
 @property (nonatomic, strong) NSButton *glowSwitch;
 @property (nonatomic, strong) NSButton *auroraSwitch;
@@ -24,7 +31,7 @@ extern const char *wallify_settings_path(void);
 @property (nonatomic, strong) NSSegmentedControl *frameSegment;
 @property (nonatomic, strong) NSSegmentedControl *speedSegment;
 
-// Behavior controls
+// Playback
 @property (nonatomic, strong) NSSegmentedControl *modeSegment;
 @property (nonatomic, strong) NSSegmentedControl *sourceSegment;
 @property (nonatomic, strong) NSSegmentedControl *idleSegment;
@@ -34,7 +41,7 @@ extern const char *wallify_settings_path(void);
 @property (nonatomic, strong) NSSegmentedControl *fontScaleSegment;
 @property (nonatomic, strong) NSSegmentedControl *mediaKeySegment;
 
-// Desktop & Advanced controls
+// Desktop
 @property (nonatomic, strong) NSTextField *gridStatusLabel;
 @property (nonatomic, strong) NSButton *debugSwitch;
 
@@ -47,6 +54,148 @@ extern const char *wallify_settings_path(void);
 
 static WallifySettingsWindowController *sharedSettingsController = nil;
 
+#pragma mark - Helpers
+
+static NSTextField *makeTextLabel(
+    NSString *text,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w,
+    CGFloat fontSize,
+    NSFontWeight weight,
+    NSColor *color
+) {
+    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(x, y, w, 20)];
+    label.stringValue = text;
+    label.font = [NSFont systemFontOfSize:fontSize weight:weight];
+    label.textColor = color;
+    label.editable = NO;
+    label.bezeled = NO;
+    label.drawsBackground = NO;
+    label.selectable = NO;
+    return label;
+}
+
+static NSTextField *makePageTitle(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
+    return makeTextLabel(
+        text,
+        x,
+        y,
+        w,
+        26,
+        NSFontWeightBold,
+        [NSColor labelColor]
+    );
+}
+
+static NSTextField *makePageSubtitle(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
+    NSTextField *label = makeTextLabel(
+        text,
+        x,
+        y,
+        w,
+        13,
+        NSFontWeightRegular,
+        [NSColor secondaryLabelColor]
+    );
+    label.lineBreakMode = NSLineBreakByWordWrapping;
+    return label;
+}
+
+static NSTextField *makeSectionLabel(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
+    return makeTextLabel(
+        text,
+        x,
+        y,
+        w,
+        11,
+        NSFontWeightSemibold,
+        [NSColor tertiaryLabelColor]
+    );
+}
+
+static NSTextField *makeRowSubtitle(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
+    NSTextField *label = makeTextLabel(
+        text,
+        x,
+        y,
+        w,
+        11,
+        NSFontWeightRegular,
+        [NSColor secondaryLabelColor]
+    );
+    label.lineBreakMode = NSLineBreakByTruncatingTail;
+    return label;
+}
+
+static NSBox *makeCard(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
+    NSBox *card = [[NSBox alloc] initWithFrame:NSMakeRect(x, y, w, h)];
+    card.boxType = NSBoxCustom;
+    card.borderType = NSNoBorder;
+    card.borderWidth = 0;
+    card.cornerRadius = 14;
+    card.fillColor = [NSColor colorWithWhite:0.5 alpha:0.10];
+    return card;
+}
+
+static NSButton *makeToggle(
+    NSString *title,
+    int tag,
+    id target,
+    SEL action,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w
+) {
+    NSButton *button = [NSButton buttonWithTitle:title target:target action:action];
+    button.frame = NSMakeRect(x, y, w, 22);
+    button.tag = tag;
+    button.buttonType = NSButtonTypeSwitch;
+    button.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+    button.controlSize = NSControlSizeRegular;
+    return button;
+}
+
+static NSSegmentedControl *makeSegments(
+    NSArray<NSString *> *items,
+    int tag,
+    id target,
+    SEL action,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w
+) {
+    NSSegmentedControl *control =
+        [NSSegmentedControl segmentedControlWithLabels:items
+                                           trackingMode:NSSegmentSwitchTrackingSelectOne
+                                                 target:target
+                                                 action:action];
+    control.frame = NSMakeRect(x, y, w, 26);
+    control.tag = tag;
+    control.segmentDistribution = NSSegmentDistributionFillEqually;
+    control.controlSize = NSControlSizeRegular;
+    return control;
+}
+
+static NSButton *makeActionButton(
+    NSString *title,
+    id target,
+    SEL action,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w
+) {
+    NSButton *button = [[NSButton alloc] initWithFrame:NSMakeRect(x, y, w, 28)];
+    button.title = title;
+    button.bezelStyle = NSBezelStyleRounded;
+    button.font = [NSFont systemFontOfSize:12 weight:NSFontWeightMedium];
+    button.target = target;
+    button.action = action;
+    return button;
+}
+
+#pragma mark - Controller
+
 @implementation WallifySettingsWindowController
 
 + (instancetype)sharedController {
@@ -57,368 +206,516 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     return sharedSettingsController;
 }
 
-static NSTextField *makeHeaderLabel(NSString *text, CGFloat x, CGFloat y) {
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(x, y, 480, 18)];
-    label.stringValue = text;
-    label.font = [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold];
-    label.textColor = [NSColor secondaryLabelColor];
-    label.editable = NO;
-    label.bezeled = NO;
-    label.drawsBackground = NO;
-    label.selectable = NO;
-    return label;
-}
-
-static NSTextField *makeItemLabel(NSString *text, CGFloat x, CGFloat y) {
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(x, y, 480, 18)];
-    label.stringValue = text;
-    label.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
-    label.textColor = [NSColor labelColor];
-    label.editable = NO;
-    label.bezeled = NO;
-    label.drawsBackground = NO;
-    label.selectable = NO;
-    return label;
-}
-
-static NSTextField *makeSubtext(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(x, y, w, 16)];
-    label.stringValue = text;
-    label.font = [NSFont systemFontOfSize:11];
-    label.textColor = [NSColor secondaryLabelColor];
-    label.editable = NO;
-    label.bezeled = NO;
-    label.drawsBackground = NO;
-    label.selectable = NO;
-    return label;
-}
-
-static NSButton *makeSwitch(NSString *title, int tag, id target, SEL action, CGFloat x, CGFloat y) {
-    NSButton *btn = [NSButton checkboxWithTitle:title target:target action:action];
-    btn.frame = NSMakeRect(x, y, 320, 20);
-    btn.tag = tag;
-    btn.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
-    return btn;
-}
-
-static NSSegmentedControl *makeSegments(NSArray<NSString *> *items, int tag, id target, SEL action, CGFloat x, CGFloat y, CGFloat w) {
-    NSSegmentedControl *sc = [NSSegmentedControl segmentedControlWithLabels:items trackingMode:NSSegmentSwitchTrackingSelectOne target:target action:action];
-    sc.frame = NSMakeRect(x, y, w, 24);
-    sc.tag = tag;
-    sc.segmentDistribution = NSSegmentDistributionFillEqually;
-    return sc;
-}
-
-static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
-    NSBox *box = [[NSBox alloc] initWithFrame:NSMakeRect(x, y, w, 1)];
-    box.boxType = NSBoxSeparator;
-    return box;
-}
+#pragma mark Window
 
 - (void)createWindow {
-    NSRect frame = NSMakeRect(0, 0, 520, 680);
-    NSUInteger style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
-    self.window = [[NSWindow alloc] initWithContentRect:frame styleMask:style backing:NSBackingStoreBuffered defer:NO];
-    self.window.title = @"Wallify Settings";
+    NSRect frame = NSMakeRect(0, 0, 820, 640);
+
+    self.window = [[NSWindow alloc]
+        initWithContentRect:frame
+                  styleMask:NSWindowStyleMaskTitled |
+                            NSWindowStyleMaskClosable |
+                            NSWindowStyleMaskMiniaturizable
+                    backing:NSBackingStoreBuffered
+                      defer:NO];
+
+    self.window.title = @"Wallify";
     self.window.delegate = self;
     self.window.releasedWhenClosed = NO;
     self.window.tabbingMode = NSWindowTabbingModeDisallowed;
+    self.window.minSize = NSMakeSize(760, 560);
 
-    WallifyFlippedView *root = [[WallifyFlippedView alloc] initWithFrame:frame];
-    root.material = NSVisualEffectMaterialPopover;
-    root.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-    root.state = NSVisualEffectStateActive;
-    self.window.contentView = root;
+    self.rootView = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)];
+    self.rootView.material = NSVisualEffectMaterialUnderWindowBackground;
+    self.rootView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    self.rootView.state = NSVisualEffectStateActive;
+    self.window.contentView = self.rootView;
 
-    NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"SettingsToolbar"];
-    toolbar.delegate = self;
-    toolbar.displayMode = NSToolbarDisplayModeIconAndLabel;
-    toolbar.allowsUserCustomization = NO;
-    toolbar.autosavesConfiguration = NO;
-    self.window.toolbar = toolbar;
+    [self buildSidebar];
+    [self buildMainContent];
 
-    // Tab view container
-    self.tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(0, 0, 520, 600)];
-    self.tabView.tabViewType = NSNoTabsNoBorder;
-    [root addSubview:self.tabView];
-
-    // Build Tab 1: Appearance
-    NSTabViewItem *itemAppearance = [[NSTabViewItem alloc] initWithIdentifier:@"appearance"];
-    itemAppearance.label = @"Appearance";
-    itemAppearance.image = [NSImage imageWithSystemSymbolName:@"paintpalette" accessibilityDescription:nil];
-    WallifyFlippedView *viewAppearance = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 520, 480)];
-    [self buildAppearanceTab:viewAppearance];
-    itemAppearance.view = viewAppearance;
-    [self.tabView addTabViewItem:itemAppearance];
-
-    // Build Tab 2: Behavior
-    NSTabViewItem *itemBehavior = [[NSTabViewItem alloc] initWithIdentifier:@"behavior"];
-    WallifyFlippedView *viewBehavior = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 520, 580)];
-    [self buildBehaviorTab:viewBehavior];
-    itemBehavior.view = viewBehavior;
-    [self.tabView addTabViewItem:itemBehavior];
-
-    // Build Tab 3: Desktop & About
-    NSTabViewItem *itemDesktop = [[NSTabViewItem alloc] initWithIdentifier:@"desktop"];
-    WallifyFlippedView *viewDesktop = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 520, 480)];
-    [self buildDesktopTab:viewDesktop];
-    itemDesktop.view = viewDesktop;
-    [self.tabView addTabViewItem:itemDesktop];
-
-    // Divider above bottom bar
-    [root addSubview:makeDivider(0, 632, 520)];
-
-    // Bottom bar
-    NSTextField *versionLabel = makeSubtext(@"Wallify v2.1 • Metal 3 Desktop Widget", 20, 645, 220);
-    [root addSubview:versionLabel];
-
-    NSButton *restoreBtn = [[NSButton alloc] initWithFrame:NSMakeRect(240, 642, 160, 26)];
-    restoreBtn.title = @"Restore Defaults…";
-    restoreBtn.bezelStyle = NSBezelStyleRounded;
-    restoreBtn.target = self;
-    restoreBtn.action = @selector(restoreDefaultsClicked:);
-    [root addSubview:restoreBtn];
-
-    NSButton *doneBtn = [[NSButton alloc] initWithFrame:NSMakeRect(410, 642, 90, 26)];
-    doneBtn.title = @"Done";
-    doneBtn.bezelStyle = NSBezelStyleRounded;
-    doneBtn.keyEquivalent = @"\r";
-    doneBtn.target = self;
-    doneBtn.action = @selector(doneClicked:);
-    [root addSubview:doneBtn];
+    [self selectPage:0];
 }
 
-- (void)buildAppearanceTab:(WallifyFlippedView *)view {
-    // Section 1: Lighting & Glow
-    [view addSubview:makeHeaderLabel(@"LIGHTING & ATMOSPHERE", 20, 16)];
+- (void)buildSidebar {
+    self.sidebarView =
+        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 198, 640)];
 
-    self.nativeGlassSwitch = makeSwitch(@"Native macOS Frosted Glass", 5, self, @selector(switchChanged:), 20, 38);
+    self.sidebarView.material = NSVisualEffectMaterialSidebar;
+    self.sidebarView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    self.sidebarView.state = NSVisualEffectStateActive;
+    [self.rootView addSubview:self.sidebarView];
+
+    NSTextField *brand =
+        makeTextLabel(@"Wallify", 22, 24, 150, 20, NSFontWeightBold, [NSColor labelColor]);
+    [self.sidebarView addSubview:brand];
+
+    NSTextField *settings =
+        makeTextLabel(@"SETTINGS", 22, 49, 150, 12, NSFontWeightSemibold, [NSColor secondaryLabelColor]);
+    [self.sidebarView addSubview:settings];
+
+    NSArray<NSDictionary *> *items = @[
+        @{@"title": @"Appearance", @"symbol": @"paintpalette.fill"},
+        @{@"title": @"Playback", @"symbol": @"play.circle.fill"},
+        @{@"title": @"Desktop", @"symbol": @"macwindow.on.rectangle"},
+    ];
+
+    NSMutableArray<NSButton *> *buttons = [NSMutableArray array];
+
+    CGFloat y = 84;
+    for (NSDictionary *item in items) {
+        NSButton *button =
+            [NSButton buttonWithTitle:item[@"title"]
+                               target:self
+                               action:@selector(sidebarButtonClicked:)];
+
+        button.frame = NSMakeRect(12, y, 174, 38);
+        button.bordered = NO;
+        button.bezeled = NO;
+        button.alignment = NSTextAlignmentLeft;
+        button.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+        button.image = [NSImage imageWithSystemSymbolName:item[@"symbol"]
+                                accessibilityDescription:nil];
+        button.imagePosition = NSImageLeft;
+        button.imageScaling = NSImageScaleProportionallyDown;
+        button.contentTintColor = [NSColor secondaryLabelColor];
+        button.tag = (NSInteger)buttons.count;
+        button.wantsLayer = YES;
+        button.layer.cornerRadius = 9;
+
+        [self.sidebarView addSubview:button];
+        [buttons addObject:button];
+        y += 44;
+    }
+
+    self.sidebarButtons = buttons;
+
+    NSBox *separator =
+        [[NSBox alloc] initWithFrame:NSMakeRect(12, 500, 174, 1)];
+    separator.boxType = NSBoxSeparator;
+    [self.sidebarView addSubview:separator];
+
+    NSTextField *version =
+        makeTextLabel(@"Wallify 2.1", 22, 530, 150, 11, NSFontWeightMedium, [NSColor secondaryLabelColor]);
+    [self.sidebarView addSubview:version];
+
+    NSTextField *engine =
+        makeTextLabel(@"Native Metal • macOS", 22, 548, 160, 10, NSFontWeightRegular, [NSColor tertiaryLabelColor]);
+    [self.sidebarView addSubview:engine];
+}
+
+- (void)buildMainContent {
+    CGFloat sidebarWidth = 198;
+
+    self.contentView =
+        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(sidebarWidth, 0, 622, 640)];
+    self.contentView.material = NSVisualEffectMaterialUnderPageBackground;
+    self.contentView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    self.contentView.state = NSVisualEffectStateActive;
+    [self.rootView addSubview:self.contentView];
+
+    self.pageTitleLabel =
+        makePageTitle(@"Appearance", 36, 28, 500);
+    [self.contentView addSubview:self.pageTitleLabel];
+
+    self.pageSubtitleLabel =
+        makePageSubtitle(
+            @"Control the glass, glow, colors, and animation behavior of your widget.",
+            36,
+            59,
+            500
+        );
+    [self.contentView addSubview:self.pageSubtitleLabel];
+
+    self.scrollView =
+        [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 104, 582, 468)];
+    self.scrollView.hasVerticalScroller = YES;
+    self.scrollView.autohidesScrollers = YES;
+    self.scrollView.borderType = NSNoBorder;
+    self.scrollView.drawsBackground = NO;
+
+    [self.contentView addSubview:self.scrollView];
+
+    [self buildPages];
+}
+
+- (void)buildPages {
+    WallifyFlippedView *appearance =
+        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 550, 760)];
+    [self buildAppearancePage:appearance];
+
+    WallifyFlippedView *playback =
+        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 550, 900)];
+    [self buildPlaybackPage:playback];
+
+    WallifyFlippedView *desktop =
+        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 550, 760)];
+    [self buildDesktopPage:desktop];
+
+    self.pages = @[appearance, playback, desktop];
+}
+
+#pragma mark Pages
+
+- (void)buildAppearancePage:(WallifyFlippedView *)view {
+    NSBox *glassCard = makeCard(0, 0, 550, 235);
+    [view addSubview:glassCard];
+
+    [view addSubview:makeSectionLabel(@"GLASS & ATMOSPHERE", 18, 18, 500)];
+
+    self.nativeGlassSwitch =
+        makeToggle(@"Native Glass", 5, self, @selector(switchChanged:), 18, 43, 300);
     [view addSubview:self.nativeGlassSwitch];
-    [view addSubview:makeSubtext(@"Uses true OS-level vibrancy blurring underneath the widget.", 44, 62, 450)];
+    [view addSubview:makeRowSubtitle(
+        @"Use the native macOS glass material for the widget.",
+        43, 67, 470
+    )];
 
-    self.glowSwitch = makeSwitch(@"Radiant Artwork Glow", 0, self, @selector(switchChanged:), 20, 84);
+    self.glowSwitch =
+        makeToggle(@"Artwork Glow", 0, self, @selector(switchChanged:), 18, 91, 300);
     [view addSubview:self.glowSwitch];
-    [view addSubview:makeSubtext(@"Casts an ambient atmospheric glow matching current album art colors.", 44, 108, 450)];
+    [view addSubview:makeRowSubtitle(
+        @"Pull ambient color from the current album artwork.",
+        43, 115, 470
+    )];
 
-    self.auroraSwitch = makeSwitch(@"Dynamic Aurora Background", 1, self, @selector(switchChanged:), 20, 130);
+    self.auroraSwitch =
+        makeToggle(@"Aurora Background", 1, self, @selector(switchChanged:), 18, 139, 300);
     [view addSubview:self.auroraSwitch];
-    [view addSubview:makeSubtext(@"Multi-stop animated color gradient shifting smoothly behind the widget.", 44, 154, 450)];
+    [view addSubview:makeRowSubtitle(
+        @"Animate a soft multi-stop gradient behind the widget.",
+        43, 163, 470
+    )];
 
-    [view addSubview:makeItemLabel(@"Glow Intensity", 20, 178)];
-    self.intensitySegment = makeSegments(@[@"Low", @"Normal", @"High"], 11, self, @selector(segmentChanged:), 20, 200, 320);
+    NSTextField *intensityLabel =
+        makeTextLabel(@"Glow Intensity", 18, 194, 140, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:intensityLabel];
+
+    self.intensitySegment =
+        makeSegments(@[@"Low", @"Normal", @"High"], 11, self, @selector(segmentChanged:), 165, 188, 250);
     [view addSubview:self.intensitySegment];
 
-    [view addSubview:makeDivider(20, 238, 480)];
+    NSBox *motionCard = makeCard(0, 249, 550, 220);
+    [view addSubview:motionCard];
 
-    // Section 2: Motion & Glass Frame
-    [view addSubview:makeHeaderLabel(@"MOTION & GLASS BORDER", 20, 250)];
+    [view addSubview:makeSectionLabel(@"MOTION", 18, 267, 500)];
 
-    self.animationsSwitch = makeSwitch(@"Fluid UI Animations", 2, self, @selector(switchChanged:), 20, 272);
+    self.animationsSwitch =
+        makeToggle(@"Fluid Animations", 2, self, @selector(switchChanged:), 18, 292, 300);
     [view addSubview:self.animationsSwitch];
-    [view addSubview:makeSubtext(@"Spring physics for resizing, marquee titles, and pet reactions.", 44, 296, 450)];
+    [view addSubview:makeRowSubtitle(
+        @"Animate resizing, title movement, and mascot reactions.",
+        43, 316, 470
+    )];
 
-    self.dimSwitch = makeSwitch(@"Dim Artwork When Paused", 3, self, @selector(switchChanged:), 20, 318);
+    self.dimSwitch =
+        makeToggle(@"Dim Artwork When Paused", 3, self, @selector(switchChanged:), 18, 340, 300);
     [view addSubview:self.dimSwitch];
-    [view addSubview:makeSubtext(@"Subtly reduces artwork brightness when playback is paused.", 44, 342, 450)];
+    [view addSubview:makeRowSubtitle(
+        @"Lower artwork brightness while playback is paused.",
+        43, 364, 470
+    )];
 
-    [view addSubview:makeItemLabel(@"Glass Border Accent", 20, 366)];
-    self.frameSegment = makeSegments(@[@"Off", @"Subtle", @"Strong"], 10, self, @selector(segmentChanged:), 20, 388, 320);
+    NSTextField *frameLabel =
+        makeTextLabel(@"Glass Border", 18, 396, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:frameLabel];
+
+    self.frameSegment =
+        makeSegments(@[@"Off", @"Subtle", @"Strong"], 10, self, @selector(segmentChanged:), 165, 390, 250);
     [view addSubview:self.frameSegment];
 
-    [view addSubview:makeItemLabel(@"Animation Pacing", 20, 422)];
-    self.speedSegment = makeSegments(@[@"Slow", @"Normal", @"Fast"], 12, self, @selector(segmentChanged:), 20, 444, 320);
+    NSTextField *speedLabel =
+        makeTextLabel(@"Animation Speed", 18, 432, 130, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:speedLabel];
+
+    self.speedSegment =
+        makeSegments(@[@"Slow", @"Normal", @"Fast"], 12, self, @selector(segmentChanged:), 165, 426, 250);
     [view addSubview:self.speedSegment];
 }
 
-- (void)buildBehaviorTab:(WallifyFlippedView *)view {
-    // Section 1: Form Factor
-    [view addSubview:makeHeaderLabel(@"WIDGET SIZE & LAYOUT", 20, 16)];
+- (void)buildPlaybackPage:(WallifyFlippedView *)view {
+    NSBox *layoutCard = makeCard(0, 0, 550, 190);
+    [view addSubview:layoutCard];
 
-    [view addSubview:makeItemLabel(@"Form Factor", 20, 36)];
-    self.modeSegment = makeSegments(@[@"Compact (1×1 Mini Tile)", @"Expanded Player (3×1)"], 14, self, @selector(segmentChanged:), 20, 58, 440);
+    [view addSubview:makeSectionLabel(@"WIDGET", 18, 18, 500)];
+
+    NSTextField *modeLabel =
+        makeTextLabel(@"Form Factor", 18, 45, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:modeLabel];
+
+    self.modeSegment =
+        makeSegments(@[@"Compact", @"Expanded"], 14, self, @selector(segmentChanged:), 148, 39, 250);
     [view addSubview:self.modeSegment];
-    [view addSubview:makeSubtext(@"Compact displays 180×180pt artwork or pet; Expanded shows player info & controls.", 20, 88, 480)];
 
-    [view addSubview:makeDivider(20, 118, 480)];
+    [view addSubview:makeRowSubtitle(
+        @"Compact is a small tile. Expanded shows the full player.",
+        18, 72, 500
+    )];
 
-    // Section 2: Audio Source
-    [view addSubview:makeHeaderLabel(@"AUDIO TELEMETRY", 20, 130)];
+    NSTextField *sourceLabel =
+        makeTextLabel(@"Media Source", 18, 108, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:sourceLabel];
 
-    [view addSubview:makeItemLabel(@"Media Source", 20, 150)];
-    self.sourceSegment = makeSegments(@[@"System Now Playing", @"Spotify Direct", @"Spotifast", @"Auto"], 13, self, @selector(segmentChanged:), 20, 172, 440);
+    self.sourceSegment =
+        makeSegments(@[@"Now Playing", @"Spotify", @"Spotifast", @"Auto"], 13, self, @selector(segmentChanged:), 148, 102, 365);
     [view addSubview:self.sourceSegment];
-    [view addSubview:makeSubtext(@"Now Playing supports all media; Spotify uses AppleScript; Spotifast connects via fast local IPC.", 20, 202, 480)];
 
-    [view addSubview:makeDivider(20, 230, 480)];
+    NSBox *idleCard = makeCard(0, 204, 550, 195);
+    [view addSubview:idleCard];
 
-    // Section 3: Idle Character & Transition
-    [view addSubview:makeHeaderLabel(@"IDLE COMPANION & ARTWORK", 20, 242)];
+    [view addSubview:makeSectionLabel(@"IDLE & TRANSITIONS", 18, 222, 500)];
 
-    [view addSubview:makeItemLabel(@"Idle Mascot", 20, 262)];
-    self.idleSegment = makeSegments(@[@"🐱 Pixel Cat", @"🍌 Banana Cat", @"♫ Spotify Button"], 15, self, @selector(segmentChanged:), 20, 284, 440);
+    NSTextField *idleLabel =
+        makeTextLabel(@"Idle Companion", 18, 249, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:idleLabel];
+
+    self.idleSegment =
+        makeSegments(@[@"Pixel Cat", @"Banana Cat", @"Spotify"], 15, self, @selector(segmentChanged:), 148, 243, 365);
     [view addSubview:self.idleSegment];
-    [view addSubview:makeSubtext(@"Interactive companion shown when no media is playing. Click the cat to pet it!", 20, 314, 480)];
 
-    [view addSubview:makeItemLabel(@"Track Artwork Transition", 20, 344)];
-    self.transitionPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(20, 366, 320, 26) pullsDown:NO];
-    [self.transitionPopup addItemsWithTitles:@[
-        @"Default (Smooth Crossfade)",
-        @"Cinematic (Zoom & Push)",
-        @"Liquid Ripple (Metal Wave)",
-        @"3D Card Flip (Spatial Rotation)",
-        @"Vinyl Spin (Turntable Rotation)",
-        @"Cyber Glitch (CRT Slice)"
-    ]];
+    [view addSubview:makeRowSubtitle(
+        @"Shown when no track is playing. Click the cat to interact with it.",
+        18, 275, 500
+    )];
+
+    NSTextField *transitionLabel =
+        makeTextLabel(@"Track Transition", 18, 310, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:transitionLabel];
+
+    self.transitionPopup =
+        [[NSPopUpButton alloc] initWithFrame:NSMakeRect(148, 304, 365, 28) pullsDown:NO];
     self.transitionPopup.target = self;
     self.transitionPopup.action = @selector(transitionChanged:);
+    [self.transitionPopup addItemsWithTitles:@[
+        @"Default • Smooth Crossfade",
+        @"Cinematic • Zoom & Push",
+        @"Liquid Ripple",
+        @"3D Card Flip",
+        @"Vinyl Spin",
+        @"Cyber Glitch"
+    ]];
     [view addSubview:self.transitionPopup];
-    [view addSubview:makeSubtext(@"GPU Metal shader animation played when switching songs.", 20, 398, 480)];
 
-    [view addSubview:makeDivider(20, 412, 480)];
+    [view addSubview:makeRowSubtitle(
+        @"GPU transition played when the artwork changes.",
+        18, 339, 500
+    )];
 
-    // Section 4: Visibility & Font
-    [view addSubview:makeHeaderLabel(@"VISIBILITY & FONT", 20, 424)];
-    self.hideTextSwitch = makeSwitch(@"Hide Track Title & Artist", 6, self, @selector(switchChanged:), 20, 442);
+    NSBox *visibilityCard = makeCard(0, 413, 550, 185);
+    [view addSubview:visibilityCard];
+
+    [view addSubview:makeSectionLabel(@"VISIBILITY & TYPOGRAPHY", 18, 431, 500)];
+
+    self.hideTextSwitch =
+        makeToggle(@"Hide Track Text", 6, self, @selector(switchChanged:), 18, 459, 220);
     [view addSubview:self.hideTextSwitch];
 
-    self.hideProgressSwitch = makeSwitch(@"Hide Progress Bar", 7, self, @selector(switchChanged:), 220, 442);
+    self.hideProgressSwitch =
+        makeToggle(@"Hide Progress Bar", 7, self, @selector(switchChanged:), 280, 459, 220);
     [view addSubview:self.hideProgressSwitch];
 
-    self.fontScaleSegment = makeSegments(@[@"Small", @"Normal", @"Large"], 17, self, @selector(segmentChanged:), 20, 462, 320);
+    [view addSubview:makeRowSubtitle(
+        @"Choose which playback details remain visible.",
+        43, 483, 470
+    )];
+
+    NSTextField *fontLabel =
+        makeTextLabel(@"Font Size", 18, 519, 90, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:fontLabel];
+
+    self.fontScaleSegment =
+        makeSegments(@[@"Small", @"Normal", @"Large"], 17, self, @selector(segmentChanged:), 148, 513, 250);
     [view addSubview:self.fontScaleSegment];
 
-    [view addSubview:makeDivider(20, 490, 480)];
+    NSBox *keysCard = makeCard(0, 612, 550, 150);
+    [view addSubview:keysCard];
 
-    // Section 5: Media Key Redirect
-    [view addSubview:makeHeaderLabel(@"MEDIA KEY REDIRECT (F7 / F8 / F9)", 20, 502)];
-    [view addSubview:makeSubtext(@"Intercepts hardware play/pause and skip keys and routes them to the chosen app instead of Apple Music. Requires Accessibility permission.", 20, 520, 480)];
-    self.mediaKeySegment = makeSegments(@[@"Off", @"Active Source", @"Spotify", @"Spotifast"], 18, self, @selector(segmentChanged:), 20, 548, 440);
+    [view addSubview:makeSectionLabel(@"MEDIA KEY REDIRECT", 18, 630, 500)];
+    [view addSubview:makeRowSubtitle(
+        @"Route F7 / F8 / F9 through Wallify instead of the system media handler.",
+        18, 654, 500
+    )];
+
+    self.mediaKeySegment =
+        makeSegments(@[@"Off", @"Active", @"Spotify", @"Spotifast"], 18, self, @selector(segmentChanged:), 18, 685, 430);
     [view addSubview:self.mediaKeySegment];
+
+    [view addSubview:makeRowSubtitle(
+        @"Accessibility permission is required to intercept hardware media keys.",
+        18, 720, 500
+    )];
 }
 
-- (void)buildDesktopTab:(WallifyFlippedView *)view {
-    // Section 1: Desktop Grid Placement
-    [view addSubview:makeHeaderLabel(@"MACOS DESKTOP GRID PLACEMENT", 20, 16)];
+- (void)buildDesktopPage:(WallifyFlippedView *)view {
+    NSBox *positionCard = makeCard(0, 0, 550, 190);
+    [view addSubview:positionCard];
 
-    NSBox *gridBox = [[NSBox alloc] initWithFrame:NSMakeRect(20, 38, 480, 105)];
-    gridBox.titlePosition = NSNoTitle;
-    WallifyFlippedView *boxContent = [[WallifyFlippedView alloc] initWithFrame:gridBox.contentView.bounds];
+    [view addSubview:makeSectionLabel(@"DESKTOP PLACEMENT", 18, 18, 500)];
 
-    NSTextField *boxTitle = makeItemLabel(@"Current Desktop Position", 16, 12);
-    [boxContent addSubview:boxTitle];
+    NSTextField *positionTitle =
+        makeTextLabel(@"Current Position", 18, 46, 500, 13, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:positionTitle];
 
-    self.gridStatusLabel = makeSubtext(@"Position: checking...", 16, 34, 440);
-    self.gridStatusLabel.textColor = [NSColor labelColor];
-    [boxContent addSubview:self.gridStatusLabel];
+    self.gridStatusLabel =
+        makeTextLabel(@"Margin: checking…", 18, 72, 500, 12, NSFontWeightRegular, [NSColor secondaryLabelColor]);
+    [view addSubview:self.gridStatusLabel];
 
-    NSButton *snapResetBtn = [[NSButton alloc] initWithFrame:NSMakeRect(16, 64, 250, 26)];
-    snapResetBtn.title = @"Snap to Default Grid Slot (8, 8)";
-    snapResetBtn.bezelStyle = NSBezelStyleRounded;
-    snapResetBtn.target = self;
-    snapResetBtn.action = @selector(resetPositionClicked:);
-    [boxContent addSubview:snapResetBtn];
+    [view addSubview:makeRowSubtitle(
+        @"Drag the widget directly on the desktop, or reset it to the default slot.",
+        18, 99, 500
+    )];
 
-    gridBox.contentView = boxContent;
-    [view addSubview:gridBox];
+    NSButton *resetPosition =
+        makeActionButton(
+            @"Reset Position",
+            self,
+            @selector(resetPositionClicked:),
+            18,
+            132,
+            130
+        );
+    [view addSubview:resetPosition];
 
-    [view addSubview:makeDivider(20, 158, 480)];
+    NSBox *debugCard = makeCard(0, 204, 550, 140);
+    [view addSubview:debugCard];
 
-    // Section 2: Diagnostics
-    [view addSubview:makeHeaderLabel(@"DIAGNOSTICS & DEBUGGING", 20, 170)];
+    [view addSubview:makeSectionLabel(@"DIAGNOSTICS", 18, 222, 500)];
 
-    self.debugSwitch = makeSwitch(@"Show Snapping Diagnostics HUD", 4, self, @selector(switchChanged:), 20, 192);
+    self.debugSwitch =
+        makeToggle(@"Snapping Diagnostics HUD", 4, self, @selector(switchChanged:), 18, 248, 300);
     [view addSubview:self.debugSwitch];
-    [view addSubview:makeSubtext(@"Displays live floating window with WindowServer coordinates, candidates, and snap metrics.", 44, 216, 450)];
 
-    [view addSubview:makeDivider(20, 246, 480)];
+    [view addSubview:makeRowSubtitle(
+        @"Shows WindowServer coordinates, snap candidates, and live metrics.",
+        43, 272, 470
+    )];
 
-    // Section 3: Settings File
-    [view addSubview:makeHeaderLabel(@"CONFIGURATION FILE", 20, 258)];
+    NSBox *fileCard = makeCard(0, 358, 550, 168);
+    [view addSubview:fileCard];
 
-    NSString *confPath = [NSString stringWithUTF8String:wallify_settings_path()];
-    NSTextField *pathLabel = makeSubtext(confPath, 20, 280, 480);
-    pathLabel.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
+    [view addSubview:makeSectionLabel(@"CONFIGURATION", 18, 376, 500)];
+
+    NSString *confPath =
+        [NSString stringWithUTF8String:wallify_settings_path()];
+
+    NSTextField *pathLabel =
+        makeTextLabel(
+            confPath,
+            18,
+            402,
+            500,
+            10,
+            NSFontWeightRegular,
+            [NSColor secondaryLabelColor]
+        );
+    pathLabel.font = [NSFont monospacedSystemFontOfSize:10 weight:NSFontWeightRegular];
+    pathLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
     [view addSubview:pathLabel];
 
-    NSButton *revealBtn = [[NSButton alloc] initWithFrame:NSMakeRect(20, 306, 150, 26)];
-    revealBtn.title = @"Reveal in Finder";
-    revealBtn.bezelStyle = NSBezelStyleRounded;
-    revealBtn.target = self;
-    revealBtn.action = @selector(revealConfigClicked:);
-    [view addSubview:revealBtn];
+    [view addSubview:makeActionButton(
+        @"Reveal in Finder",
+        self,
+        @selector(revealConfigClicked:),
+        18,
+        445,
+        130
+    )];
 
-    NSButton *openEditorBtn = [[NSButton alloc] initWithFrame:NSMakeRect(180, 306, 160, 26)];
-    openEditorBtn.title = @"Open in Text Editor";
-    openEditorBtn.bezelStyle = NSBezelStyleRounded;
-    openEditorBtn.target = self;
-    openEditorBtn.action = @selector(openConfigClicked:);
-    [view addSubview:openEditorBtn];
+    [view addSubview:makeActionButton(
+        @"Open File",
+        self,
+        @selector(openConfigClicked:),
+        158,
+        445,
+        110
+    )];
 
-    [view addSubview:makeDivider(20, 348, 480)];
+    NSBox *aboutCard = makeCard(0, 540, 550, 170);
+    [view addSubview:aboutCard];
 
-    // Section 4: About
-    [view addSubview:makeHeaderLabel(@"ABOUT WALLIFY", 20, 360)];
+    [view addSubview:makeSectionLabel(@"ABOUT", 18, 558, 500)];
 
-    NSTextField *aboutTitle = makeItemLabel(@"Wallify 2.1", 20, 380);
-    aboutTitle.font = [NSFont systemFontOfSize:14 weight:NSFontWeightBold];
+    NSTextField *aboutTitle =
+        makeTextLabel(@"Wallify", 18, 585, 500, 18, NSFontWeightBold, [NSColor labelColor]);
     [view addSubview:aboutTitle];
 
-    [view addSubview:makeSubtext(@"Engineered with native Metal 3 shaders and AppKit for macOS Sequoia.", 20, 402, 480)];
-    [view addSubview:makeSubtext(@"Zero runtime dependencies • Pure native performance", 20, 420, 480)];
+    [view addSubview:makeRowSubtitle(
+        @"Native Metal 3 rendering with AppKit glass on macOS.",
+        18, 614, 500
+    )];
+
+    [view addSubview:makeRowSubtitle(
+        @"No runtime dependencies • Hardware accelerated.",
+        18, 635, 500
+    )];
 }
 
-- (NSArray<NSToolbarItemIdentifier> *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar {
-    return @[@"appearance", @"behavior", @"desktop"];
+#pragma mark Sidebar
+
+- (void)sidebarButtonClicked:(NSButton *)sender {
+    [self selectPage:sender.tag];
 }
 
-- (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar {
-    return @[@"appearance", @"behavior", @"desktop"];
-}
+- (void)selectPage:(NSInteger)index {
+    if (index < 0 || index >= (NSInteger)self.pages.count) return;
 
-- (NSArray<NSToolbarItemIdentifier> *)toolbarSelectableItemIdentifiers:(NSToolbar *)toolbar {
-    return @[@"appearance", @"behavior", @"desktop"];
-}
+    for (NSButton *button in self.sidebarButtons) {
+        BOOL selected = button.tag == index;
 
-- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSToolbarItemIdentifier)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag {
-    NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:itemIdentifier];
-    if ([itemIdentifier isEqualToString:@"appearance"]) {
-        item.label = @"Appearance";
-        item.image = [NSImage imageWithSystemSymbolName:@"paintpalette" accessibilityDescription:nil];
-        item.target = self;
-        item.action = @selector(toolbarAction:);
-    } else if ([itemIdentifier isEqualToString:@"behavior"]) {
-        item.label = @"Behavior";
-        item.image = [NSImage imageWithSystemSymbolName:@"switch.2" accessibilityDescription:nil];
-        item.target = self;
-        item.action = @selector(toolbarAction:);
-    } else if ([itemIdentifier isEqualToString:@"desktop"]) {
-        item.label = @"Desktop & About";
-        item.image = [NSImage imageWithSystemSymbolName:@"macwindow" accessibilityDescription:nil];
-        item.target = self;
-        item.action = @selector(toolbarAction:);
+        button.layer.backgroundColor =
+            selected
+                ? [NSColor selectedContentBackgroundColor].CGColor
+                : NSColor.clearColor.CGColor;
+
+        button.contentTintColor =
+            selected
+                ? [NSColor whiteColor]
+                : [NSColor secondaryLabelColor];
     }
-    return item;
+
+    NSArray<NSString *> *titles = @[@"Appearance", @"Playback", @"Desktop"];
+    NSArray<NSString *> *subtitles = @[
+        @"Control the glass, glow, colors, and animation behavior of your widget.",
+        @"Choose playback sources, transitions, idle behavior, visibility, and media keys.",
+        @"Manage desktop placement, diagnostics, and the Wallify configuration file."
+    ];
+
+    self.pageTitleLabel.stringValue = titles[index];
+    self.pageSubtitleLabel.stringValue = subtitles[index];
+
+    for (NSView *page in self.pages) {
+        [page removeFromSuperview];
+    }
+
+    NSView *page = self.pages[index];
+
+    CGFloat documentHeight = MAX(page.frame.size.height, self.scrollView.contentView.bounds.size.height);
+
+    page.frame = NSMakeRect(
+        16,
+        0,
+        self.scrollView.contentSize.width - 32,
+        documentHeight
+    );
+
+    [self.scrollView.documentView removeFromSuperview];
+    self.scrollView.documentView = page;
+    self.scrollView.contentView.scrollToPoint:NSMakePoint(0, 0);
 }
 
-- (void)toolbarAction:(NSToolbarItem *)sender {
-    if ([sender.itemIdentifier isEqualToString:@"appearance"]) [self.tabView selectTabViewItemAtIndex:0];
-    else if ([sender.itemIdentifier isEqualToString:@"behavior"]) [self.tabView selectTabViewItemAtIndex:1];
-    else if ([sender.itemIdentifier isEqualToString:@"desktop"]) [self.tabView selectTabViewItemAtIndex:2];
-}
+#pragma mark Actions
 
 - (void)switchChanged:(NSButton *)sender {
-    BOOL val = (sender.state == NSControlStateValueOn);
-    wallify_settings_apply_bool((int)sender.tag, val);
+    BOOL value = sender.state == NSControlStateValueOn;
+    wallify_settings_apply_bool((int)sender.tag, value);
 }
 
 - (void)segmentChanged:(NSSegmentedControl *)sender {
-    int val = (int)sender.selectedSegment;
-    wallify_settings_apply_int((int)sender.tag, val);
+    wallify_settings_apply_int((int)sender.tag, (int)sender.selectedSegment);
 }
 
 - (void)transitionChanged:(NSPopUpButton *)sender {
-    int val = (int)sender.indexOfSelectedItem;
-    wallify_settings_apply_int(16, val);
+    wallify_settings_apply_int(16, (int)sender.indexOfSelectedItem);
 }
 
 - (void)resetPositionClicked:(id)sender {
@@ -429,7 +726,8 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
 - (void)restoreDefaultsClicked:(id)sender {
     NSAlert *alert = [[NSAlert alloc] init];
     alert.messageText = @"Restore Default Settings?";
-    alert.informativeText = @"All appearance, behavior, and animation preferences will be reset to their factory defaults.";
+    alert.informativeText =
+        @"Appearance, playback, visibility, and animation preferences will be reset.";
     [alert addButtonWithTitle:@"Restore Defaults"];
     [alert addButtonWithTitle:@"Cancel"];
     alert.alertStyle = NSAlertStyleWarning;
@@ -441,60 +739,119 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
 }
 
 - (void)revealConfigClicked:(id)sender {
-    NSString *path = [NSString stringWithUTF8String:wallify_settings_path()];
-    [[NSWorkspace sharedWorkspace] selectFile:path inFileViewerRootedAtPath:@""];
+    NSString *path =
+        [NSString stringWithUTF8String:wallify_settings_path()];
+    [[NSWorkspace sharedWorkspace]
+        selectFile:path
+        inFileViewerRootedAtPath:@""];
 }
 
 - (void)openConfigClicked:(id)sender {
-    NSString *path = [NSString stringWithUTF8String:wallify_settings_path()];
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:path]];
+    NSString *path =
+        [NSString stringWithUTF8String:wallify_settings_path()];
+    [[NSWorkspace sharedWorkspace]
+        openURL:[NSURL fileURLWithPath:path]];
 }
 
 - (void)doneClicked:(id)sender {
     [self closeSettingsWindow];
 }
 
+#pragma mark State
+
 - (void)updateGridStatusLabel {
-    WallifySettingsSnapshot s;
-    wallify_settings_get_snapshot(&s);
-    self.gridStatusLabel.stringValue = [NSString stringWithFormat:@"Margin: Left %d pt, Top %d pt  •  Grid Slot: Col %d, Row %d", s.margin_left, s.margin_top, s.grid_x, s.grid_y];
+    WallifySettingsSnapshot snapshot;
+    wallify_settings_get_snapshot(&snapshot);
+
+    self.gridStatusLabel.stringValue =
+        [NSString stringWithFormat:
+            @"Left %d pt   •   Top %d pt   •   Grid %d, %d",
+            snapshot.margin_left,
+            snapshot.margin_top,
+            snapshot.grid_x,
+            snapshot.grid_y];
 }
 
 - (void)refreshUIFromState {
     WallifySettingsSnapshot s;
     wallify_settings_get_snapshot(&s);
 
-    self.nativeGlassSwitch.state = s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
-    self.glowSwitch.state = s.glow ? NSControlStateValueOn : NSControlStateValueOff;
-    self.auroraSwitch.state = s.aurora ? NSControlStateValueOn : NSControlStateValueOff;
-    self.animationsSwitch.state = s.animations ? NSControlStateValueOn : NSControlStateValueOff;
-    self.dimSwitch.state = s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
-    self.debugSwitch.state = s.debug_hud ? NSControlStateValueOn : NSControlStateValueOff;
+    self.nativeGlassSwitch.state =
+        s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
+    self.glowSwitch.state =
+        s.glow ? NSControlStateValueOn : NSControlStateValueOff;
+    self.auroraSwitch.state =
+        s.aurora ? NSControlStateValueOn : NSControlStateValueOff;
+    self.animationsSwitch.state =
+        s.animations ? NSControlStateValueOn : NSControlStateValueOff;
+    self.dimSwitch.state =
+        s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
+    self.debugSwitch.state =
+        s.debug_hud ? NSControlStateValueOn : NSControlStateValueOff;
 
-    self.hideTextSwitch.state = s.hide_text ? NSControlStateValueOn : NSControlStateValueOff;
-    self.hideProgressSwitch.state = s.hide_progress ? NSControlStateValueOn : NSControlStateValueOff;
+    self.hideTextSwitch.state =
+        s.hide_text ? NSControlStateValueOn : NSControlStateValueOff;
+    self.hideProgressSwitch.state =
+        s.hide_progress ? NSControlStateValueOn : NSControlStateValueOff;
 
-    self.frameSegment.selectedSegment = (s.frame_strength >= 0 && s.frame_strength <= 2) ? s.frame_strength : 1;
-    self.intensitySegment.selectedSegment = (s.glow_intensity >= 0 && s.glow_intensity <= 2) ? s.glow_intensity : 1;
-    self.speedSegment.selectedSegment = (s.animation_speed >= 0 && s.animation_speed <= 2) ? s.animation_speed : 1;
-    self.modeSegment.selectedSegment = (s.widget_mode >= 0 && s.widget_mode <= 1) ? s.widget_mode : 1;
-    self.sourceSegment.selectedSegment = (s.media_source >= 0 && s.media_source <= 3) ? s.media_source : 0;
-    self.idleSegment.selectedSegment = (s.idle_style >= 0 && s.idle_style <= 2) ? s.idle_style : 0;
-    self.fontScaleSegment.selectedSegment = (s.font_scale >= 0 && s.font_scale <= 2) ? s.font_scale : 1;
-    self.mediaKeySegment.selectedSegment = (s.media_key_target >= 0 && s.media_key_target <= 3) ? s.media_key_target : 0;
+    self.frameSegment.selectedSegment =
+        (s.frame_strength >= 0 && s.frame_strength <= 2)
+            ? s.frame_strength
+            : 1;
 
-    if (s.track_transition >= 0 && s.track_transition < self.transitionPopup.numberOfItems) {
-        [self.transitionPopup selectItemAtIndex:s.track_transition];
+    self.intensitySegment.selectedSegment =
+        (s.glow_intensity >= 0 && s.glow_intensity <= 2)
+            ? s.glow_intensity
+            : 1;
+
+    self.speedSegment.selectedSegment =
+        (s.animation_speed >= 0 && s.animation_speed <= 2)
+            ? s.animation_speed
+            : 1;
+
+    self.modeSegment.selectedSegment =
+        (s.widget_mode >= 0 && s.widget_mode <= 1)
+            ? s.widget_mode
+            : 1;
+
+    self.sourceSegment.selectedSegment =
+        (s.media_source >= 0 && s.media_source <= 3)
+            ? s.media_source
+            : 0;
+
+    self.idleSegment.selectedSegment =
+        (s.idle_style >= 0 && s.idle_style <= 2)
+            ? s.idle_style
+            : 0;
+
+    self.fontScaleSegment.selectedSegment =
+        (s.font_scale >= 0 && s.font_scale <= 2)
+            ? s.font_scale
+            : 1;
+
+    self.mediaKeySegment.selectedSegment =
+        (s.media_key_target >= 0 && s.media_key_target <= 3)
+            ? s.media_key_target
+            : 0;
+
+    if (s.track_transition >= 0 &&
+        s.track_transition < self.transitionPopup.numberOfItems) {
+        [self.transitionPopup
+            selectItemAtIndex:s.track_transition];
     }
 
     [self updateGridStatusLabel];
 }
 
+#pragma mark Presentation
+
 - (void)showSettingsWindow {
     if (!self.window) {
         [self createWindow];
     }
+
     [self refreshUIFromState];
+
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
@@ -507,41 +864,49 @@ static NSBox *makeDivider(CGFloat x, CGFloat y, CGFloat w) {
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
-    // Window hidden, controller stays ready for next open
+    (void)notification;
 }
 
 @end
 
 void wallify_show_settings_window(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[WallifySettingsWindowController sharedController] showSettingsWindow];
+        [[WallifySettingsWindowController sharedController]
+            showSettingsWindow];
     });
 }
 
 void wallify_close_settings_window(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[WallifySettingsWindowController sharedController] closeSettingsWindow];
+        [[WallifySettingsWindowController sharedController]
+            closeSettingsWindow];
     });
 }
 
 void wallify_settings_notify_position_changed(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[WallifySettingsWindowController sharedController] updateGridStatusLabel];
+        [[WallifySettingsWindowController sharedController]
+            updateGridStatusLabel];
     });
 }
 
 bool wallify_has_settings_flag(void) {
     NSArray *args = [[NSProcessInfo processInfo] arguments];
+
     for (NSString *arg in args) {
-        if ([arg isEqualToString:@"--settings"] || [arg isEqualToString:@"-s"]) {
+        if ([arg isEqualToString:@"--settings"] ||
+            [arg isEqualToString:@"-s"]) {
             return true;
         }
     }
+
     return false;
 }
+
 void wallify_refresh_settings_ui(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (sharedSettingsController && sharedSettingsController.window.isVisible) {
+        if (sharedSettingsController &&
+            sharedSettingsController.window.isVisible) {
             [sharedSettingsController refreshUIFromState];
         }
     });
