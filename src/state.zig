@@ -149,7 +149,9 @@ pub const MediaSource = enum(u8) {
 
 pub const WidgetMode = enum(u8) {
     compact = 0,
-    expanded = 1,
+    medium = 1,
+    expanded = 2,
+    wide = 3,
 };
 
 pub const FontScale = enum(u8) {
