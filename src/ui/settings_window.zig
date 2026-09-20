@@ -117,13 +117,17 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
         12 => state.setting_speed = @enumFromInt(std.math.clamp(val, 0, 2)),
         13 => state.setting_source = @enumFromInt(std.math.clamp(val, 0, 3)),
         14 => {
-            const new_mode: state.WidgetMode = @enumFromInt(std.math.clamp(val, 0, 3));
+            const new_mode: state.WidgetMode = @enumFromInt(std.math.clamp(val, 0, 4));
             if (state.setting_mode != new_mode) {
-                state.setting_mode = new_mode;
-                if (new_mode == .compact) {
-                    state.panel_resize_after_compact = true;
-                } else {
-                    state.panel_resize_after_compact = false;
+                const current_width: f64 = @floatFromInt(native.wallify_width());
+                const current_height: f64 = @floatFromInt(native.wallify_height());
+                state.beginModeTransition(
+                    new_mode,
+                    current_width,
+                    current_height,
+                    state.setting_animations,
+                );
+                if (!state.mode_transition_active) {
                     native.resizeForMode(new_mode);
                 }
             }
@@ -173,8 +177,15 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_font_scale = .normal;
     state.setting_media_key_target = .off;
     native.wallify_update_media_key_tap(0);
-    state.panel_resize_after_compact = false;
-    native.resize(false);
+    state.beginModeTransition(
+        .expanded,
+        @floatFromInt(native.wallify_width()),
+        @floatFromInt(native.wallify_height()),
+        state.setting_animations,
+    );
+    if (!state.mode_transition_active) {
+        native.resizeForMode(.expanded);
+    }
     state.saveWidgetSettings();
     state.requestFrame();
 }
