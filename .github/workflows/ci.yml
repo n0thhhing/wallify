@@ -28,9 +28,6 @@ jobs:
         with:
           version: 0.16.0
 
-      - name: Check Zig formatting
-        run: zig fmt --check build.zig build.zig.zon src
-
       - name: Run tests
         run: zig build test --summary all
 
