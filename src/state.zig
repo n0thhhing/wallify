@@ -147,12 +147,7 @@ pub const MediaSource = enum(u8) {
     auto = 3,
 };
 
-pub const WidgetMode = enum(u8) {
-    compact = 0,
-    medium = 1,
-    expanded = 2,
-    wide = 3,
-};
+pub const WidgetMode = layout_mod.WidgetMode;
 
 pub const FontScale = enum(u8) {
     small = 0,
@@ -229,12 +224,19 @@ pub fn spotifyIdle() bool {
 }
 
 pub var setting_mode: WidgetMode = .expanded;
+pub var mode_from: WidgetMode = .expanded;
+pub var mode_mix: f64 = 1.0;
+pub var mode_transition_active: bool = false;
+pub var mode_start_width: f64 = Layout.expanded_panel_width;
+pub var mode_start_height: f64 = Layout.expanded_panel_height;
+pub var mode_target_width: f64 = Layout.expanded_panel_width;
+pub var mode_target_height: f64 = Layout.expanded_panel_height;
 pub var animation_time: f64 = 0;
 pub var marquee_offset: f64 = 0;
 pub var marquee_direction: f64 = 1;
 pub var panel_resize_after_compact: bool = false;
 // Interpolates compact (0) to expanded (1), independently of the saved target.
-pub var mode_mix: f64 = 1;
+pub var mode_mix: f64 = 1.0;
 // Desktop-widget grid position. A cell is one small widget plus its gap.
 pub var widget_grid_x: u8 = 0;
 pub var widget_grid_y: u8 = 0;
