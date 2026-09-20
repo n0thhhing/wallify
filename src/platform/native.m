@@ -154,6 +154,36 @@ static NSGlassEffectView *globalGlassView = nil;
 static NSView *globalGlassContentView = nil;
 static WallifyView *globalMetalView = nil;
 
+// Apply geometry after AppKit has created (or rebuilt) the material layers.
+// These private inputs were verified in the current runtime's filter graph.
+static void wallify_inset_glass_optics(CALayer *layer) {
+    for (id filter in layer.filters) {
+        @try {
+            if (![[filter valueForKey:@"type"] isEqualToString:@"glassBackground"]) continue;
+            [filter setValue:@18.0 forKey:@"inputInnerRefractionHeight"];
+            [filter setValue:@(-2.0) forKey:@"inputKeyFillHighlightEffectOffset"];
+            [filter setValue:@0.25 forKey:@"inputKeyFillHighlightAmount"];
+        } @catch (__unused NSException *exception) {
+            // Preserve the system material if a future runtime changes its inputs.
+        }
+    }
+    for (CALayer *child in layer.sublayers) wallify_inset_glass_optics(child);
+}
+
+@interface WallifyDesktopGlassView : NSGlassEffectView
+@end
+
+@implementation WallifyDesktopGlassView
+- (void)layout {
+    [super layout];
+    wallify_inset_glass_optics(self.layer);
+    // AppKit may materialize its filters after the initial layout callback.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        wallify_inset_glass_optics(self.layer);
+    });
+}
+@end
+
 @interface WallifyStatusMenuTarget : NSObject
 + (instancetype)sharedTarget;
 - (void)statusOpenSettings:(id)sender;
@@ -1480,7 +1510,7 @@ void wallify_update_glass_rect(
         if (@available(macOS 26.0, *)) {
             if (active) {
                 if (!globalGlassView) {
-                    globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
+                    globalGlassView = [[WallifyDesktopGlassView alloc] initWithFrame:NSZeroRect];
                     globalGlassView.style = NSGlassEffectViewStyleRegular;
                     // On this runtime style=4 resets to style=0 / _variant=0.
                     // Select the private variant explicitly, leaving its optical
@@ -1490,13 +1520,12 @@ void wallify_update_glass_rect(
                         ((void (*)(id, SEL, NSInteger))objc_msgSend)(
                             globalGlassView, widgetVariant, 4);
                     }
-                    // A desktop widget must keep its active material when another
-                    // app becomes key. State 0 follows the window; state 1 opts
-                    // out of the subdued (inactive-window) appearance.
+                    // Runtime probe: state 1 forces the more blurred subdued
+                    // material; state 2 disables it. Keep desktop glass unsubdued.
                     SEL subduedState = NSSelectorFromString(@"set_subduedState:");
                     if ([globalGlassView respondsToSelector:subduedState]) {
                         ((void (*)(id, SEL, NSInteger))objc_msgSend)(
-                            globalGlassView, subduedState, 1);
+                            globalGlassView, subduedState, 2);
                     }
                     // Keep the optical material neutral. tintColor changes the
                     // glass highlights as well as its fill; it is not a dimmer.
