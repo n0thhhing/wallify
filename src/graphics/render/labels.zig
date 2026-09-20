@@ -3,7 +3,6 @@ const state = @import("../../state.zig");
 const gpu = @import("../canvas.zig");
 const text = @import("../text_cache.zig");
 
-const L = state.Layout;
 const primary_color: gpu.Color = .{ 245.0 / 255.0, 245.0 / 255.0, 247.0 / 255.0, 1.0 };
 
 fn lerp(a: f64, b: f64, t: f64) f64 {
