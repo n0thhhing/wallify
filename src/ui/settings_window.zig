@@ -124,7 +124,7 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
                     state.panel_resize_after_compact = true;
                 } else {
                     state.panel_resize_after_compact = false;
-                    native.resize(false);
+                    native.resizeForMode(new_mode);
                 }
             }
         },
