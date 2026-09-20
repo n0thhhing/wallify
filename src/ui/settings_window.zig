@@ -134,9 +134,11 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_idle_style = .pixel_cat;
     state.setting_transition = .cinematic;
     state.setting_glow = true;
+    state.setting_native_glass = false;
     state.setting_aurora = true;
     state.setting_animations = true;
     state.setting_dim = true;
+    state.setting_debug = false;
     state.setting_frame = .subtle;
     state.setting_intensity = .normal;
     state.setting_speed = .normal;
