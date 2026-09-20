@@ -7,7 +7,6 @@ const window = @import("../../ui/window.zig");
 const icon_transition = @import("../icon_transition.zig");
 const labels = @import("labels.zig");
 
-const L = state.Layout;
 
 fn lerp(a: f64, b: f64, t: f64) f64 {
     return a + (b - a) * t;
