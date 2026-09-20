@@ -1481,7 +1481,9 @@ void wallify_update_glass_rect(
             if (active) {
                 if (!globalGlassView) {
                     globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
-                    globalGlassView.style = NSGlassEffectViewStyleClear;
+                    // Undocumented Widgets style. This is the style selector,
+                    // not the separate private _variant property.
+                    globalGlassView.style = (NSGlassEffectViewStyle)4;
                     // Keep the optical material neutral. tintColor changes the
                     // glass highlights as well as its fill; it is not a dimmer.
                     globalGlassView.appearance =
@@ -1489,10 +1491,9 @@ void wallify_update_glass_rect(
                     globalGlassView.tintColor = nil;
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
                     globalGlassContentView.wantsLayer = YES;
-                    // Dark desktop backing sits above the refracted wallpaper,
-                    // below Metal content, so artwork and controls retain contrast.
+                    // Let the widget material supply its own background shading.
                     globalGlassContentView.layer.backgroundColor =
-                        [NSColor colorWithWhite:0.0 alpha:0.64].CGColor;
+                        NSColor.clearColor.CGColor;
                     globalGlassContentView.layer.cornerCurve = kCACornerCurveContinuous;
                     globalGlassContentView.layer.masksToBounds = YES;
                     globalGlassContentView.clipsToBounds = YES;
