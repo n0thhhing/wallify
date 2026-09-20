@@ -1481,9 +1481,15 @@ void wallify_update_glass_rect(
             if (active) {
                 if (!globalGlassView) {
                     globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
-                    // Undocumented Widgets style. This is the style selector,
-                    // not the separate private _variant property.
-                    globalGlassView.style = (NSGlassEffectViewStyle)4;
+                    globalGlassView.style = NSGlassEffectViewStyleRegular;
+                    // On this runtime style=4 resets to style=0 / _variant=0.
+                    // Select the private variant explicitly, leaving its optical
+                    // filters and rim under AppKit's control.
+                    SEL widgetVariant = NSSelectorFromString(@"set_variant:");
+                    if ([globalGlassView respondsToSelector:widgetVariant]) {
+                        ((void (*)(id, SEL, NSInteger))objc_msgSend)(
+                            globalGlassView, widgetVariant, 4);
+                    }
                     // Keep the optical material neutral. tintColor changes the
                     // glass highlights as well as its fill; it is not a dimmer.
                     globalGlassView.appearance =
