@@ -1,5 +1,7 @@
 # Wallify
 
+[![CI](https://github.com/n0thhhing/wallify/actions/workflows/ci.yml/badge.svg)](https://github.com/n0thhhing/wallify/actions/workflows/ci.yml)
+
 A native macOS music widget written in Zig with an AppKit window and Metal GPU renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
 
 ## Features
@@ -9,7 +11,7 @@ A native macOS music widget written in Zig with an AppKit window and Metal GPU r
 - **Media key redirect** — intercepts F7/F8/F9 via `CGEventTap` and routes them to your chosen source instead of waking Apple Music (requires Accessibility permission)
 - **Artwork transitions** — Smooth Crossfade, Cinematic, Liquid Ripple, 3D Card Flip, Vinyl Spin, Cyber Glitch (Metal shader animations)
 - **Idle companions** — Pixel Cat, Banana Cat, or Spotify button when nothing is playing
-- **Compact / Expanded** widget modes with spring-physics resize animation
+- **Five widget form factors** — 1×1, 2×1, 3×1, 1×2, and 2×2 with animated resizing
 - **Aurora background** — multi-stop gradient shifting to album art dominant colors
 - **Configurable** — hide text, hide progress bar, font scale, glow intensity, animation speed, glass border strength
 
