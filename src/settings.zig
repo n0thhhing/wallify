@@ -78,14 +78,18 @@ pub fn mediaSourceName(v: state.MediaSource) []const u8 {
 pub fn parseWidgetMode(raw: []const u8) state.WidgetMode {
     const s = std.mem.trim(u8, raw, " \t\r\n");
     if (std.ascii.eqlIgnoreCase(s, "compact") or std.mem.eql(u8, s, "0")) return .compact;
-    if (std.ascii.eqlIgnoreCase(s, "expanded") or std.mem.eql(u8, s, "1")) return .expanded;
+    if (std.ascii.eqlIgnoreCase(s, "medium") or std.mem.eql(u8, s, "1")) return .medium;
+    if (std.ascii.eqlIgnoreCase(s, "expanded") or std.mem.eql(u8, s, "2")) return .expanded;
+    if (std.ascii.eqlIgnoreCase(s, "wide") or std.mem.eql(u8, s, "3")) return .wide;
     return .expanded;
 }
 
 pub fn widgetModeName(v: state.WidgetMode) []const u8 {
     return switch (v) {
         .compact => "compact",
+        .medium => "medium",
         .expanded => "expanded",
+        .wide => "wide",
     };
 }
 
