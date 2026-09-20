@@ -75,7 +75,9 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
         .w = size,
         .h = size,
     };
-    const glass_factor: f32 = if (state.setting_native_glass) 0.20 else 1.0;
+    // Keep artwork glow visible with native Liquid Glass, but reduce it enough
+    // that it complements the system material instead of overpowering the rim.
+    const glass_factor: f32 = if (state.setting_native_glass) 0.45 else 1.0;
     var alpha: f32 = @floatCast(0.5 * ease * state.setting_intensity.multiplier() * glass_factor);
 
     // In animated transition modes, pulse the ambient glow slightly during the transition
