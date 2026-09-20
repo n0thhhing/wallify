@@ -84,11 +84,13 @@ pub fn parseWidgetMode(raw: []const u8) state.WidgetMode {
 
     // "expanded" was the old 3×1 default, so keep it and legacy numeric 1 working.
     if (std.ascii.eqlIgnoreCase(s, "two_by_one") or
-        std.ascii.eqlIgnoreCase(s, "2x1")) return .two_by_one;
+        std.ascii.eqlIgnoreCase(s, "2x1") or
+        std.ascii.eqlIgnoreCase(s, "medium")) return .two_by_one;
 
     if (std.ascii.eqlIgnoreCase(s, "expanded") or
         std.ascii.eqlIgnoreCase(s, "three_by_one") or
         std.ascii.eqlIgnoreCase(s, "3x1") or
+        std.ascii.eqlIgnoreCase(s, "wide") or
         std.mem.eql(u8, s, "1") or
         std.mem.eql(u8, s, "2")) return .expanded;
 
