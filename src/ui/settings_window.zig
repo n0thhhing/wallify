@@ -117,7 +117,7 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
         12 => state.setting_speed = @enumFromInt(std.math.clamp(val, 0, 2)),
         13 => state.setting_source = @enumFromInt(std.math.clamp(val, 0, 3)),
         14 => {
-            const new_mode: state.WidgetMode = @enumFromInt(std.math.clamp(val, 0, 1));
+            const new_mode: state.WidgetMode = @enumFromInt(std.math.clamp(val, 0, 3));
             if (state.setting_mode != new_mode) {
                 state.setting_mode = new_mode;
                 if (new_mode == .compact) {
