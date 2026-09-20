@@ -21,24 +21,18 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
 
     const ease = 1.0 - std.math.pow(f64, 1.0 - state.global_anim_art_t, 3);
     const inset = 10.0 * (1.0 - ease);
-
-    const compact_radius: f64 = switch (state.setting_artwork_radius) {
-        .soft => 18.0,
-        .rounded => 26.0,
-        .large => 30.0,
-    };
-    const expanded_radius: f64 = switch (state.setting_artwork_radius) {
-        .soft => 8.0,
-        .rounded => 14.0,
-        .large => 22.0,
+    const radius_delta: f64 = switch (state.setting_artwork_radius) {
+        .soft => -8.0,
+        .rounded => 0.0,
+        .large => 8.0,
     };
 
     const art = gpu.Rect{
         .x = state.layout.art_x + inset,
         .y = state.layout.art_y + inset,
-        .w = state.layout.art_size - 2.0 * inset,
-        .h = state.layout.art_size - 2.0 * inset,
-        .radius = @max(0.0, lerp(compact_radius, expanded_radius, state.mode_mix) - inset * (1.0 - state.mode_mix)),
+        .w = @max(1.0, state.layout.art_size - 2.0 * inset),
+        .h = @max(1.0, state.layout.art_size - 2.0 * inset),
+        .radius = @max(0.0, state.layout.art_radius + radius_delta - inset * state.layout.compact_mix),
     };
 
     const transition = std.math.clamp(1.0 - (state.art_transition_until - state.animation_time) / assets.transition_duration, 0.0, 1.0);
@@ -47,14 +41,13 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     drawArtworkGlow(canvas, ease, mix);
     drawArtworkImage(canvas, art, ease, mix);
 
-    if (state.mode_mix < 0.5) {
-        // Compact gradient underlay for text contrast
+    if (state.layout.compact_mix > 0.5) {
         if (state.setting_compact_gradient) {
             _ = canvas.add(native.gpu.WALLIFY_GRADIENT, 0, .{
                 .x = card.x,
                 .y = card.y + 84.0,
                 .w = card.w,
-                .h = card.h - 84.0,
+                .h = @max(0.0, card.h - 84.0),
             }, .{ 0.0, 0.0, 0.0, 162.0 / 255.0 });
         }
     } else {
@@ -114,7 +107,7 @@ fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, ease: f64, mix: f64) voi
         if (state.setting_dim) {
             canvas.fill(art, .{ 0.0, 0.0, 0.0, @floatCast(0.4 * (1.0 - ease)) });
         }
-        if (state.mode_mix >= 0.5 and state.setting_artwork_border) {
+        if (state.layout.compact_mix < 0.5 and state.setting_artwork_border) {
             canvas.stroke(art, 0.5, .{ 1.0, 1.0, 1.0, 0.11 });
         }
     } else {
