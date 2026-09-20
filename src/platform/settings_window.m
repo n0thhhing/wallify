@@ -2,253 +2,210 @@
 
 extern const char *wallify_settings_path(void);
 
-@interface WallifyFlippedView : NSVisualEffectView
+typedef NS_ENUM(NSInteger, WFSettingType) {
+    WFSettingTypeToggle,
+    WFSettingTypeSegments,
+    WFSettingTypePopup,
+};
+
+@interface WFSettingDefinition : NSObject
+@property(nonatomic) WFSettingType type;
+@property(nonatomic) NSInteger key;
+@property(nonatomic, copy) NSString *title;
+@property(nonatomic, copy) NSString *subtitle;
+@property(nonatomic, copy) NSArray<NSString *> *options;
+@property(nonatomic) NSInteger enabledByBoolKey;
 @end
 
-@implementation WallifyFlippedView
-- (BOOL)isFlipped { return YES; }
+@implementation WFSettingDefinition
+@end
+
+@interface WFSectionDefinition : NSObject
+@property(nonatomic, copy) NSString *title;
+@property(nonatomic, copy) NSArray<WFSettingDefinition *> *settings;
+@end
+
+@implementation WFSectionDefinition
+@end
+
+@interface WFPageDefinition : NSObject
+@property(nonatomic, copy) NSString *title;
+@property(nonatomic, copy) NSString *symbol;
+@property(nonatomic, copy) NSArray<WFSectionDefinition *> *sections;
+@end
+
+@implementation WFPageDefinition
+@end
+
+@interface WallifyFlippedVisualView : NSVisualEffectView
+@end
+
+@implementation WallifyFlippedVisualView
+- (BOOL)isFlipped {
+    return YES;
+}
 @end
 
 @interface WallifySettingsWindowController : NSObject <NSWindowDelegate>
-
 @property(nonatomic, strong) NSWindow *window;
-@property(nonatomic, strong) WallifyFlippedView *rootView;
-@property(nonatomic, strong) WallifyFlippedView *sidebarView;
-@property(nonatomic, strong) WallifyFlippedView *contentView;
+@property(nonatomic, strong) WallifyFlippedVisualView *rootView;
+@property(nonatomic, strong) WallifyFlippedVisualView *sidebarView;
+@property(nonatomic, strong) NSView *contentView;
+@property(nonatomic, strong) NSStackView *pageStack;
 @property(nonatomic, strong) NSScrollView *scrollView;
-@property(nonatomic, strong) NSArray<NSView *> *pages;
-@property(nonatomic, strong) NSArray<NSButton *> *sidebarButtons;
-
-@property(nonatomic, strong) NSTextField *pageTitleLabel;
 @property(nonatomic, strong) NSImageView *pageIconView;
-
-// Appearance
-@property(nonatomic, strong) NSButton *nativeGlassSwitch;
-@property(nonatomic, strong) NSButton *glowSwitch;
-@property(nonatomic, strong) NSButton *auroraSwitch;
-@property(nonatomic, strong) NSSegmentedControl *intensitySegment;
-@property(nonatomic, strong) NSButton *animationsSwitch;
-@property(nonatomic, strong) NSButton *dimSwitch;
-@property(nonatomic, strong) NSButton *artworkBorderSwitch;
-@property(nonatomic, strong) NSButton *compactGradientSwitch;
-@property(nonatomic, strong) NSSegmentedControl *artworkRadiusSegment;
-@property(nonatomic, strong) NSSegmentedControl *progressThicknessSegment;
-@property(nonatomic, strong) NSSegmentedControl *frameSegment;
-@property(nonatomic, strong) NSSegmentedControl *speedSegment;
-
-// Playback
-@property(nonatomic, strong) NSSegmentedControl *modeSegment;
-@property(nonatomic, strong) NSSegmentedControl *sourceSegment;
-@property(nonatomic, strong) NSSegmentedControl *idleSegment;
-@property(nonatomic, strong) NSPopUpButton *transitionPopup;
-@property(nonatomic, strong) NSButton *hideTextSwitch;
-@property(nonatomic, strong) NSButton *hideProgressSwitch;
-@property(nonatomic, strong) NSButton *showControlsSwitch;
-@property(nonatomic, strong) NSButton *showTimestampsSwitch;
-@property(nonatomic, strong) NSSegmentedControl *fontScaleSegment;
-@property(nonatomic, strong) NSSegmentedControl *mediaKeySegment;
-
-// Desktop
-@property(nonatomic, strong) NSTextField *gridStatusLabel;
-@property(nonatomic, strong) NSButton *debugSwitch;
-
+@property(nonatomic, strong) NSTextField *pageTitleLabel;
+@property(nonatomic, strong) NSTextField *positionStatusLabel;
+@property(nonatomic, strong) NSArray<NSButton *> *sidebarButtons;
+@property(nonatomic, strong) NSArray<WFPageDefinition *> *pageDefinitions;
+@property(nonatomic, strong) NSMutableDictionary<NSNumber *, NSControl *> *controlsByKey;
+@property(nonatomic) NSInteger selectedPageIndex;
 + (instancetype)sharedController;
 - (void)showSettingsWindow;
 - (void)closeSettingsWindow;
 - (void)refreshUIFromState;
-
 @end
 
 static WallifySettingsWindowController *sharedSettingsController = nil;
 
-#pragma mark - Small UI helpers
+#pragma mark - Definition helpers
 
-static NSTextField *label(
+static WFSettingDefinition *wfSetting(
+    WFSettingType type,
+    NSInteger key,
+    NSString *title,
+    NSString *subtitle,
+    NSArray<NSString *> *options
+) {
+    WFSettingDefinition *setting = [WFSettingDefinition new];
+    setting.type = type;
+    setting.key = key;
+    setting.title = title;
+    setting.subtitle = subtitle ?: @"";
+    setting.options = options ?: @[];
+    setting.enabledByBoolKey = -1;
+    return setting;
+}
+
+static WFSettingDefinition *wfToggle(
+    NSInteger key,
+    NSString *title,
+    NSString *subtitle
+) {
+    return wfSetting(WFSettingTypeToggle, key, title, subtitle, nil);
+}
+
+static WFSettingDefinition *wfSegments(
+    NSInteger key,
+    NSString *title,
+    NSString *subtitle,
+    NSArray<NSString *> *options
+) {
+    return wfSetting(WFSettingTypeSegments, key, title, subtitle, options);
+}
+
+static WFSettingDefinition *wfPopup(
+    NSInteger key,
+    NSString *title,
+    NSString *subtitle,
+    NSArray<NSString *> *options
+) {
+    return wfSetting(WFSettingTypePopup, key, title, subtitle, options);
+}
+
+static WFSectionDefinition *wfSection(
+    NSString *title,
+    NSArray<WFSettingDefinition *> *settings
+) {
+    WFSectionDefinition *section = [WFSectionDefinition new];
+    section.title = title;
+    section.settings = settings;
+    return section;
+}
+
+static WFPageDefinition *wfPage(
+    NSString *title,
+    NSString *symbol,
+    NSArray<WFSectionDefinition *> *sections
+) {
+    WFPageDefinition *page = [WFPageDefinition new];
+    page.title = title;
+    page.symbol = symbol;
+    page.sections = sections;
+    return page;
+}
+
+#pragma mark - UI primitives
+
+static NSTextField *wfLabel(
     NSString *text,
-    NSRect frame,
     CGFloat size,
     NSFontWeight weight,
     NSColor *color
 ) {
-    NSTextField *view =
-        [[NSTextField alloc] initWithFrame:frame];
+    NSTextField *field = [[NSTextField alloc] initWithFrame:NSZeroRect];
 
-    view.stringValue = text;
-    view.font = [NSFont systemFontOfSize:size weight:weight];
-    view.textColor = color;
-    view.editable = NO;
-    view.bezeled = NO;
-    view.drawsBackground = NO;
-    view.selectable = NO;
-    view.lineBreakMode = NSLineBreakByTruncatingTail;
+    field.stringValue = text ?: @"";
+    field.font = [NSFont systemFontOfSize:size weight:weight];
+    field.textColor = color;
+    field.editable = NO;
+    field.bezeled = NO;
+    field.drawsBackground = NO;
+    field.selectable = NO;
+    field.usesSingleLineMode = YES;
+    field.lineBreakMode = NSLineBreakByTruncatingTail;
+    field.translatesAutoresizingMaskIntoConstraints = NO;
+
+    return field;
+}
+
+static NSImageView *wfSymbolView(
+    NSString *symbol,
+    CGFloat pointSize,
+    NSFontWeight weight
+) {
+    NSImageView *view = [[NSImageView alloc] initWithFrame:NSZeroRect];
+
+    view.image = [NSImage imageWithSystemSymbolName:symbol
+                              accessibilityDescription:nil];
+    view.symbolConfiguration =
+        [NSImageSymbolConfiguration configurationWithPointSize:pointSize
+                                                        weight:weight];
+    view.contentTintColor = [NSColor controlAccentColor];
+    view.imageScaling = NSImageScaleProportionallyUpOrDown;
+    view.translatesAutoresizingMaskIntoConstraints = NO;
 
     return view;
 }
 
-static NSBox *groupBox(NSRect frame) {
-    NSBox *box =
-        [[NSBox alloc] initWithFrame:frame];
-
-    box.boxType = NSBoxCustom;
-    box.transparent = NO;
-    box.borderWidth = 0;
-    box.cornerRadius = 12;
-    box.fillColor =
-        [[NSColor controlBackgroundColor]
-            colorWithAlphaComponent:0.52];
-
-    return box;
-}
-
-static NSButton *makeToggle(
-    int tag,
-    id target,
-    SEL action
+static void wfPin(
+    NSView *view,
+    NSView *parent,
+    CGFloat top,
+    CGFloat leading,
+    CGFloat bottom,
+    CGFloat trailing
 ) {
-    NSButton *button =
-        [NSButton buttonWithTitle:@""
-                           target:target
-                           action:action];
-
-    button.buttonType = NSButtonTypeSwitch;
-    button.tag = tag;
-    button.controlSize = NSControlSizeRegular;
-
-    return button;
+    [NSLayoutConstraint activateConstraints:@[
+        [view.topAnchor constraintEqualToAnchor:parent.topAnchor constant:top],
+        [view.leadingAnchor constraintEqualToAnchor:parent.leadingAnchor constant:leading],
+        [view.bottomAnchor constraintEqualToAnchor:parent.bottomAnchor constant:-bottom],
+        [view.trailingAnchor constraintEqualToAnchor:parent.trailingAnchor constant:-trailing],
+    ]];
 }
 
-static NSSegmentedControl *makeSegments(
-    NSArray<NSString *> *items,
-    int tag,
-    id target,
-    SEL action
-) {
-    NSSegmentedControl *control =
-        [NSSegmentedControl segmentedControlWithLabels:items
-                                           trackingMode:NSSegmentSwitchTrackingSelectOne
-                                                 target:target
-                                                 action:action];
-
-    control.tag = tag;
-    control.segmentDistribution =
-        NSSegmentDistributionFillEqually;
-    control.controlSize = NSControlSizeRegular;
-
-    return control;
-}
-
-static NSButton *actionButton(
+static NSButton *wfButton(
     NSString *title,
     id target,
     SEL action
 ) {
     NSButton *button =
-        [NSButton buttonWithTitle:title
-                           target:target
-                           action:action];
+        [NSButton buttonWithTitle:title target:target action:action];
 
     button.bezelStyle = NSBezelStyleRounded;
-    button.font =
-        [NSFont systemFontOfSize:12
-                          weight:NSFontWeightMedium];
-
+    button.controlSize = NSControlSizeRegular;
+    button.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
     return button;
-}
-
-static void separator(NSView *parent, CGFloat y, CGFloat width) {
-    NSBox *line =
-        [[NSBox alloc]
-            initWithFrame:NSMakeRect(18, y, width - 36, 1)];
-
-    line.boxType = NSBoxSeparator;
-    [parent addSubview:line];
-}
-
-static void addToggleRow(
-    NSView *parent,
-    NSString *title,
-    NSString *subtitle,
-    NSButton *control,
-    CGFloat y,
-    CGFloat width,
-    BOOL showSeparator
-) {
-    [parent addSubview:
-        label(
-            title,
-            NSMakeRect(18, y + 9, 280, 20),
-            13,
-            NSFontWeightMedium,
-            [NSColor labelColor]
-        )];
-
-    if (subtitle.length > 0) {
-        [parent addSubview:
-            label(
-                subtitle,
-                NSMakeRect(18, y + 30, 390, 18),
-                11,
-                NSFontWeightRegular,
-                [NSColor secondaryLabelColor]
-            )];
-    }
-
-    control.frame =
-        NSMakeRect(
-            width - 76,
-            y + 13,
-            58,
-            24
-        );
-
-    [parent addSubview:control];
-
-    if (showSeparator)
-        separator(parent, y + 69, width);
-}
-
-static void addControlRow(
-    NSView *parent,
-    NSString *title,
-    NSString *subtitle,
-    NSControl *control,
-    CGFloat y,
-    CGFloat width,
-    CGFloat controlWidth,
-    BOOL showSeparator
-) {
-    [parent addSubview:
-        label(
-            title,
-            NSMakeRect(18, y + 9, 160, 20),
-            13,
-            NSFontWeightMedium,
-            [NSColor labelColor]
-        )];
-
-    if (subtitle.length > 0) {
-        [parent addSubview:
-            label(
-                subtitle,
-                NSMakeRect(18, y + 31, 200, 18),
-                11,
-                NSFontWeightRegular,
-                [NSColor secondaryLabelColor]
-            )];
-    }
-
-    control.frame =
-        NSMakeRect(
-            width - controlWidth - 18,
-            y + 15,
-            controlWidth,
-            28
-        );
-
-    [parent addSubview:control];
-
-    if (showSeparator)
-        separator(parent, y + 69, width);
 }
 
 #pragma mark - Controller
@@ -257,26 +214,199 @@ static void addControlRow(
 
 + (instancetype)sharedController {
     static dispatch_once_t onceToken;
-
     dispatch_once(&onceToken, ^{
-        sharedSettingsController =
-            [[WallifySettingsWindowController alloc] init];
+        sharedSettingsController = [WallifySettingsWindowController new];
     });
-
     return sharedSettingsController;
+}
+
+#pragma mark Definitions
+
+- (void)buildDefinitions {
+    WFSettingDefinition *nativeGlass =
+        wfToggle(5, @"Native Glass", @"Use the macOS Liquid Glass material.");
+
+    WFSettingDefinition *glow =
+        wfToggle(0, @"Artwork Glow", @"Use album artwork to create ambient color.");
+
+    WFSettingDefinition *glowIntensity =
+        wfSegments(
+            11,
+            @"Glow Intensity",
+            @"Controls the strength of the ambient glow.",
+            @[@"Low", @"Normal", @"High"]
+        );
+    glowIntensity.enabledByBoolKey = 0;
+
+    WFSettingDefinition *aurora =
+        wfToggle(1, @"Aurora", @"Animated background gradient.");
+
+    WFSettingDefinition *frame =
+        wfSegments(
+            10,
+            @"Custom Border",
+            @"Border strength for the custom material.",
+            @[@"Off", @"Subtle", @"Strong"]
+        );
+    frame.enabledByBoolKey = 5;
+
+    WFSettingDefinition *animations =
+        wfToggle(2, @"Animations", @"Animate widget resizing and state changes.");
+
+    WFSettingDefinition *speed =
+        wfSegments(
+            12,
+            @"Animation Speed",
+            @"How quickly UI transitions are animated.",
+            @[@"Slow", @"Normal", @"Fast"]
+        );
+    speed.enabledByBoolKey = 2;
+
+    WFSettingDefinition *generalMode =
+        wfSegments(
+            14,
+            @"Form Factor",
+            @"Choose the widget footprint.",
+            @[@"1 × 1", @"2 × 1", @"3 × 1", @"1 × 2", @"2 × 2"]
+        );
+
+    WFSettingDefinition *source =
+        wfSegments(
+            13,
+            @"Media Source",
+            @"Choose where Wallify reads playback information.",
+            @[@"Now Playing", @"Spotify", @"Spotifast", @"Auto"]
+        );
+
+    WFSettingDefinition *idle =
+        wfSegments(
+            15,
+            @"Idle Companion",
+            @"Shown when nothing is currently playing.",
+            @[@"Pixel Cat", @"Banana Cat", @"Spotify"]
+        );
+
+    WFSettingDefinition *transition =
+        wfPopup(
+            16,
+            @"Track Transition",
+            @"Effect used when artwork changes.",
+            @[@"Default", @"Cinematic", @"Ripple", @"Card Flip", @"Vinyl", @"Glitch"]
+        );
+
+    WFSettingDefinition *mediaKeys =
+        wfSegments(
+            18,
+            @"Media Key Target",
+            @"Route F7, F8 and F9 through Wallify.",
+            @[@"Off", @"Active", @"Spotify", @"Spotifast"]
+        );
+
+    WFSettingDefinition *artworkBorder =
+        wfToggle(19, @"Artwork Border", @"Add a fine edge around album artwork.");
+
+    WFSettingDefinition *compactGradient =
+        wfToggle(20, @"Compact Contrast", @"Add a subtle fade behind text in 1 × 1 mode.");
+
+    WFSettingDefinition *artworkRadius =
+        wfSegments(
+            21,
+            @"Artwork Corners",
+            @"Choose the album artwork corner radius.",
+            @[@"Soft", @"Rounded", @"Large"]
+        );
+
+    WFSettingDefinition *dimPaused =
+        wfToggle(3, @"Dim When Paused", @"Lower artwork brightness while paused.");
+
+    WFSettingDefinition *progressThickness =
+        wfSegments(
+            22,
+            @"Progress Thickness",
+            @"Choose the visual weight of the progress bar.",
+            @[@"Thin", @"Standard", @"Thick"]
+        );
+
+    WFSettingDefinition *fontScale =
+        wfSegments(
+            17,
+            @"Font Size",
+            @"Scale title, artist and playback labels.",
+            @[@"Small", @"Normal", @"Large"]
+        );
+
+    WFSettingDefinition *hideText =
+        wfToggle(6, @"Hide Track Text", @"Hide the title and artist labels.");
+
+    WFSettingDefinition *hideProgress =
+        wfToggle(7, @"Hide Progress Bar", @"Hide the playback progress bar.");
+
+    WFSettingDefinition *showControls =
+        wfToggle(8, @"Playback Controls", @"Show previous, play/pause and next.");
+
+    WFSettingDefinition *showTimestamps =
+        wfToggle(9, @"Time Labels", @"Show elapsed and remaining time.");
+
+    WFSettingDefinition *debug =
+        wfToggle(4, @"Snapping Diagnostics", @"Show snap candidates and coordinates.");
+
+    self.pageDefinitions = @[
+        wfPage(
+            @"General",
+            @"slider.horizontal.3",
+            @[
+                wfSection(@"Widget", @[generalMode, source]),
+                wfSection(@"Idle", @[idle, transition]),
+                wfSection(@"Media Keys", @[mediaKeys]),
+            ]
+        ),
+
+        wfPage(
+            @"Appearance",
+            @"paintbrush",
+            @[
+                wfSection(@"Material", @[nativeGlass, glow, glowIntensity, aurora, frame]),
+                wfSection(@"Artwork", @[artworkBorder, compactGradient, artworkRadius]),
+                wfSection(@"Motion", @[animations, speed, dimPaused]),
+            ]
+        ),
+
+        wfPage(
+            @"Playback",
+            @"play.circle",
+            @[
+                wfSection(@"Visibility", @[hideText, hideProgress, showControls, showTimestamps]),
+                wfSection(@"Progress", @[progressThickness]),
+                wfSection(@"Typography", @[fontScale]),
+            ]
+        ),
+
+        wfPage(
+            @"Desktop",
+            @"rectangle.on.rectangle",
+            @[
+                wfSection(@"Position", @[]),
+                wfSection(@"Diagnostics", @[debug]),
+                wfSection(@"Configuration", @[]),
+            ]
+        ),
+    ];
 }
 
 #pragma mark Window
 
 - (void)createWindow {
-    const CGFloat width = 760.0;
-    const CGFloat height = 580.0;
-    const CGFloat sidebarWidth = 180.0;
+    const CGFloat width = 820.0;
+    const CGFloat height = 620.0;
+    const CGFloat sidebarWidth = 190.0;
+
+    self.controlsByKey = [NSMutableDictionary dictionary];
+    self.selectedPageIndex = 0;
+    [self buildDefinitions];
 
     self.window =
         [[NSWindow alloc]
-            initWithContentRect:
-                NSMakeRect(0, 0, width, height)
+            initWithContentRect:NSMakeRect(0, 0, width, height)
                       styleMask:
                           NSWindowStyleMaskTitled |
                           NSWindowStyleMaskClosable |
@@ -287,1010 +417,566 @@ static void addControlRow(
     self.window.title = @"Wallify";
     self.window.delegate = self;
     self.window.releasedWhenClosed = NO;
-    self.window.tabbingMode = NSWindowTabbingModeDisallowed;
     self.window.restorable = NO;
-    self.window.minSize = NSMakeSize(700, 540);
-    self.window.collectionBehavior |=
-        NSWindowCollectionBehaviorFullScreenAuxiliary;
+    self.window.tabbingMode = NSWindowTabbingModeDisallowed;
+    self.window.minSize = NSMakeSize(760, 560);
+    self.window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenAuxiliary;
 
     self.rootView =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(0, 0, width, height)];
+        [[WallifyFlippedVisualView alloc] initWithFrame:NSZeroRect];
 
-    self.rootView.autoresizingMask =
-        NSViewWidthSizable |
-        NSViewHeightSizable;
+    self.rootView.material = NSVisualEffectMaterialUnderWindowBackground;
+    self.rootView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    self.rootView.state = NSVisualEffectStateActive;
+    self.rootView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.window.contentView = self.rootView;
 
-    self.rootView.material =
-        NSVisualEffectMaterialUnderWindowBackground;
-
-    self.rootView.blendingMode =
-        NSVisualEffectBlendingModeWithinWindow;
-
-    self.rootView.state =
-        NSVisualEffectStateActive;
-
-    self.window.contentView =
-        self.rootView;
-
-    /*
-     * Sidebar.
-     */
     self.sidebarView =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(
-                    0,
-                    0,
-                    sidebarWidth,
-                    height
-                )];
+        [[WallifyFlippedVisualView alloc] initWithFrame:NSZeroRect];
 
-    self.sidebarView.autoresizingMask =
-        NSViewHeightSizable;
-
-    self.sidebarView.material =
-        NSVisualEffectMaterialSidebar;
-
-    self.sidebarView.blendingMode =
-        NSVisualEffectBlendingModeWithinWindow;
-
-    self.sidebarView.state =
-        NSVisualEffectStateActive;
+    self.sidebarView.material = NSVisualEffectMaterialSidebar;
+    self.sidebarView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    self.sidebarView.state = NSVisualEffectStateActive;
+    self.sidebarView.translatesAutoresizingMaskIntoConstraints = NO;
 
     [self.rootView addSubview:self.sidebarView];
 
-    /*
-     * Main content.
-     */
-    self.contentView =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(
-                    sidebarWidth,
-                    0,
-                    width - sidebarWidth,
-                    height
-                )];
-
-    self.contentView.autoresizingMask =
-        NSViewWidthSizable |
-        NSViewHeightSizable;
-
-    self.contentView.material =
-        NSVisualEffectMaterialUnderPageBackground;
-
-    self.contentView.blendingMode =
-        NSVisualEffectBlendingModeWithinWindow;
-
-    self.contentView.state =
-        NSVisualEffectStateActive;
-
+    self.contentView = [[NSView alloc] initWithFrame:NSZeroRect];
+    self.contentView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.rootView addSubview:self.contentView];
 
-    [self buildSidebar];
-    [self buildHeader];
-    [self buildScrollView];
-    [self buildPages];
-    [self buildFooter];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.sidebarView.leadingAnchor constraintEqualToAnchor:self.rootView.leadingAnchor],
+        [self.sidebarView.topAnchor constraintEqualToAnchor:self.rootView.topAnchor],
+        [self.sidebarView.bottomAnchor constraintEqualToAnchor:self.rootView.bottomAnchor],
+        [self.sidebarView.widthAnchor constraintEqualToConstant:sidebarWidth],
 
+        [self.contentView.leadingAnchor constraintEqualToAnchor:self.sidebarView.trailingAnchor],
+        [self.contentView.topAnchor constraintEqualToAnchor:self.rootView.topAnchor],
+        [self.contentView.trailingAnchor constraintEqualToAnchor:self.rootView.trailingAnchor],
+        [self.contentView.bottomAnchor constraintEqualToAnchor:self.rootView.bottomAnchor],
+    ]];
+
+    [self buildSidebar];
+    [self buildContent];
     [self selectPage:0];
 }
 
 #pragma mark Sidebar
 
 - (void)buildSidebar {
-    NSImageView *icon =
-        [[NSImageView alloc]
-            initWithFrame:NSMakeRect(22, 20, 28, 28)];
+    NSStackView *stack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    stack.alignment = NSLayoutAttributeLeading;
+    stack.spacing = 7.0;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-    icon.image =
-        [NSImage imageWithSystemSymbolName:
-            @"music.note"
-            accessibilityDescription:@"Wallify"];
+    [self.sidebarView addSubview:stack];
 
-    icon.symbolConfiguration =
-        [NSImageSymbolConfiguration
-            configurationWithPointSize:17
-            weight:NSFontWeightSemibold];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.leadingAnchor constraintEqualToAnchor:self.sidebarView.leadingAnchor constant:14],
+        [stack.trailingAnchor constraintEqualToAnchor:self.sidebarView.trailingAnchor constant:-14],
+        [stack.topAnchor constraintEqualToAnchor:self.sidebarView.topAnchor constant:18],
+        [stack.bottomAnchor constraintLessThanOrEqualToAnchor:self.sidebarView.bottomAnchor constant:-18],
+    ]];
 
-    icon.contentTintColor =
-        [NSColor controlAccentColor];
+    NSStackView *brand = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    brand.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    brand.alignment = NSLayoutAttributeCenterY;
+    brand.spacing = 10.0;
+    brand.edgeInsets = NSEdgeInsetsMake(0, 3, 0, 0);
 
-    [self.sidebarView addSubview:icon];
+    NSImageView *icon = wfSymbolView(@"music.note", 19.0, NSFontWeightSemibold);
+    NSTextField *title = wfLabel(@"Wallify", 17.0, NSFontWeightSemibold, [NSColor labelColor]);
 
-    [self.sidebarView addSubview:
-        label(
-            @"Wallify",
-            NSMakeRect(58, 16, 105, 22),
-            15,
-            NSFontWeightSemibold,
-            [NSColor labelColor]
-        )];
+    [brand addArrangedSubview:icon];
+    [brand addArrangedSubview:title];
 
-    [self.sidebarView addSubview:
-        label(
-            @"Settings",
-            NSMakeRect(58, 39, 105, 18),
-            10,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
+    [stack addArrangedSubview:brand];
 
-    separator(self.sidebarView, 70, 180);
+    NSTextField *caption =
+        wfLabel(@"Preferences", 11.0, NSFontWeightMedium, [NSColor secondaryLabelColor]);
+    caption.edgeInsets = NSEdgeInsetsMake(0, 3, 0, 0);
+    [stack addArrangedSubview:caption];
 
-    NSArray<NSDictionary *> *items = @[
-        @{
-            @"title": @"General",
-            @"symbol": @"gearshape"
-        },
-        @{
-            @"title": @"Appearance",
-            @"symbol": @"paintpalette"
-        },
-        @{
-            @"title": @"Playback",
-            @"symbol": @"play.circle"
-        },
-        @{
-            @"title": @"Desktop",
-            @"symbol": @"rectangle.on.rectangle"
-        }
-    ];
+    NSBox *divider = [[NSBox alloc] initWithFrame:NSZeroRect];
+    divider.boxType = NSBoxSeparator;
+    divider.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:divider];
+
+    [divider.heightAnchor constraintEqualToConstant:1].active = YES;
 
     NSMutableArray<NSButton *> *buttons =
-        [NSMutableArray arrayWithCapacity:items.count];
+        [NSMutableArray arrayWithCapacity:self.pageDefinitions.count];
 
-    CGFloat y = 88.0;
+    for (NSInteger i = 0; i < (NSInteger)self.pageDefinitions.count; i++) {
+        WFPageDefinition *page = self.pageDefinitions[i];
 
-    for (NSDictionary *item in items) {
         NSButton *button =
-            [NSButton buttonWithTitle:item[@"title"]
+            [NSButton buttonWithTitle:page.title
                                target:self
                                action:@selector(sidebarButtonClicked:)];
 
-        button.tag = (NSInteger)buttons.count;
+        button.tag = i;
         button.bordered = NO;
         button.alignment = NSTextAlignmentLeft;
-        button.font =
-            [NSFont systemFontOfSize:13
-                              weight:NSFontWeightMedium];
-
+        button.font = [NSFont systemFontOfSize:13.5 weight:NSFontWeightMedium];
         button.image =
-            [NSImage imageWithSystemSymbolName:
-                item[@"symbol"]
-                accessibilityDescription:nil];
-
+            [NSImage imageWithSystemSymbolName:page.symbol
+                         accessibilityDescription:nil];
+        button.symbolConfiguration =
+            [NSImageSymbolConfiguration configurationWithPointSize:14
+                                                            weight:NSFontWeightMedium];
         button.imagePosition = NSImageLeft;
-        button.imageScaling =
-            NSImageScaleProportionallyDown;
-
-        button.contentTintColor =
-            [NSColor secondaryLabelColor];
-
-        button.frame =
-            NSMakeRect(
-                10,
-                y,
-                160,
-                36
-            );
-
+        button.contentTintColor = [NSColor secondaryLabelColor];
+        button.contentHuggingPriority = 1.0;
+        button.translatesAutoresizingMaskIntoConstraints = NO;
         button.wantsLayer = YES;
-        button.layer.cornerRadius = 8;
+        button.layer.cornerRadius = 8.0;
+        button.toolTip = page.title;
 
-        [self.sidebarView addSubview:button];
+        [stack addArrangedSubview:button];
+        [button.heightAnchor constraintEqualToConstant:34].active = YES;
         [buttons addObject:button];
-
-        y += 42;
     }
 
     self.sidebarButtons = buttons;
 
-    separator(self.sidebarView, 512, 180);
+    NSView *spacer = [[NSView alloc] initWithFrame:NSZeroRect];
+    spacer.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:spacer];
+    [spacer setContentHuggingPriority:1.0 forOrientation:NSLayoutConstraintOrientationVertical];
+    [spacer setContentCompressionResistancePriority:1.0
+                                   forOrientation:NSLayoutConstraintOrientationVertical];
 
-    [self.sidebarView addSubview:
-        label(
-            @"Native Metal",
-            NSMakeRect(18, 530, 140, 18),
-            10,
-            NSFontWeightMedium,
-            [NSColor tertiaryLabelColor]
-        )];
+    NSBox *bottomDivider = [[NSBox alloc] initWithFrame:NSZeroRect];
+    bottomDivider.boxType = NSBoxSeparator;
+    bottomDivider.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:bottomDivider];
+    [bottomDivider.heightAnchor constraintEqualToConstant:1].active = YES;
 
-    [self.sidebarView addSubview:
-        label(
-            @"AppKit • macOS",
-            NSMakeRect(18, 549, 140, 18),
-            10,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
+    NSTextField *status =
+        wfLabel(@"Native Metal  •  macOS", 10.5, NSFontWeightRegular,
+                [NSColor tertiaryLabelColor]);
+    status.maximumNumberOfLines = 1;
+    [stack addArrangedSubview:status];
 }
 
-#pragma mark Header
+#pragma mark Content
 
-- (void)buildHeader {
-    self.pageIconView =
-        [[NSImageView alloc]
-            initWithFrame:NSMakeRect(27, 20, 26, 26)];
+- (void)buildContent {
+    NSStackView *layout = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    layout.orientation = NSUserInterfaceLayoutOrientationVertical;
+    layout.alignment = NSLayoutAttributeFill;
+    layout.spacing = 0.0;
+    layout.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.contentView addSubview:layout];
 
-    self.pageIconView.symbolConfiguration =
-        [NSImageSymbolConfiguration
-            configurationWithPointSize:18
-            weight:NSFontWeightMedium];
+    [NSLayoutConstraint activateConstraints:@[
+        [layout.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+        [layout.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+        [layout.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
+        [layout.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
+    ]];
 
-    self.pageIconView.contentTintColor =
-        [NSColor controlAccentColor];
+    NSView *header = [[NSView alloc] initWithFrame:NSZeroRect];
+    header.translatesAutoresizingMaskIntoConstraints = NO;
+    [layout addArrangedSubview:header];
+    [header.heightAnchor constraintEqualToConstant:76].active = YES;
 
-    [self.contentView addSubview:self.pageIconView];
-
+    self.pageIconView = wfSymbolView(@"slider.horizontal.3", 20.0, NSFontWeightMedium);
     self.pageTitleLabel =
-        label(
-            @"General",
-            NSMakeRect(63, 16, 350, 32),
-            23,
-            NSFontWeightBold,
-            [NSColor labelColor]
-        );
+        wfLabel(@"General", 23.0, NSFontWeightBold, [NSColor labelColor]);
 
-    [self.contentView addSubview:self.pageTitleLabel];
+    [header addSubview:self.pageIconView];
+    [header addSubview:self.pageTitleLabel];
 
-    separator(self.contentView, 64, self.contentView.bounds.size.width);
-}
+    [NSLayoutConstraint activateConstraints:@[
+        [self.pageIconView.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:28],
+        [self.pageIconView.centerYAnchor constraintEqualToAnchor:header.centerYAnchor constant:-2],
+        [self.pageIconView.widthAnchor constraintEqualToConstant:25],
+        [self.pageIconView.heightAnchor constraintEqualToConstant:25],
 
-#pragma mark Scroll
+        [self.pageTitleLabel.leadingAnchor constraintEqualToAnchor:self.pageIconView.trailingAnchor constant:10],
+        [self.pageTitleLabel.centerYAnchor constraintEqualToAnchor:header.centerYAnchor constant:-2],
+        [self.pageTitleLabel.trailingAnchor constraintLessThanOrEqualToAnchor:header.trailingAnchor constant:-24],
+    ]];
 
-- (void)buildScrollView {
-    self.scrollView =
-        [[NSScrollView alloc]
-            initWithFrame:
-                NSMakeRect(
-                    16,
-                    76,
-                    self.contentView.bounds.size.width - 32,
-                    450
-                )];
+    NSBox *headerDivider = [[NSBox alloc] initWithFrame:NSZeroRect];
+    headerDivider.boxType = NSBoxSeparator;
+    headerDivider.translatesAutoresizingMaskIntoConstraints = NO;
+    [layout addArrangedSubview:headerDivider];
+    [headerDivider.heightAnchor constraintEqualToConstant:1].active = YES;
 
-    self.scrollView.autoresizingMask =
-        NSViewWidthSizable |
-        NSViewHeightSizable;
-
+    self.scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
     self.scrollView.hasVerticalScroller = YES;
     self.scrollView.autohidesScrollers = YES;
     self.scrollView.scrollerStyle = NSScrollerStyleOverlay;
     self.scrollView.drawsBackground = NO;
     self.scrollView.borderType = NSNoBorder;
+    self.scrollView.translatesAutoresizingMaskIntoConstraints = NO;
+    [layout addArrangedSubview:self.scrollView];
 
-    [self.contentView addSubview:self.scrollView];
-}
+    [self.scrollView.heightAnchor constraintGreaterThanOrEqualToConstant:1].active = YES;
 
-#pragma mark Footer
+    self.pageStack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    self.pageStack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    self.pageStack.alignment = NSLayoutAttributeFill;
+    self.pageStack.spacing = 0.0;
+    self.pageStack.edgeInsets = NSEdgeInsetsMake(26, 28, 34, 28);
+    self.pageStack.translatesAutoresizingMaskIntoConstraints = NO;
 
-- (void)buildFooter {
-    NSView *footer =
-        [[NSView alloc]
-            initWithFrame:
-                NSMakeRect(
-                    180,
-                    526,
-                    self.window.frame.size.width - 180,
-                    54
-                )];
+    [self.scrollView setDocumentView:self.pageStack];
 
-    footer.autoresizingMask =
-        NSViewWidthSizable |
-        NSViewMinYMargin;
+    [NSLayoutConstraint activateConstraints:@[
+        [self.pageStack.leadingAnchor constraintEqualToAnchor:self.scrollView.contentView.leadingAnchor],
+        [self.pageStack.trailingAnchor constraintEqualToAnchor:self.scrollView.contentView.trailingAnchor],
+        [self.pageStack.topAnchor constraintEqualToAnchor:self.scrollView.contentView.topAnchor],
+        [self.pageStack.bottomAnchor constraintEqualToAnchor:self.scrollView.contentView.bottomAnchor],
+        [self.pageStack.widthAnchor constraintEqualToAnchor:self.scrollView.contentView.widthAnchor],
+    ]];
 
-    [self.rootView addSubview:footer];
+    NSView *footer = [[NSView alloc] initWithFrame:NSZeroRect];
+    footer.translatesAutoresizingMaskIntoConstraints = NO;
+    [layout addArrangedSubview:footer];
+    [footer.heightAnchor constraintEqualToConstant:58].active = YES;
 
-    separator(
-        footer,
-        0,
-        footer.bounds.size.width
-    );
+    NSBox *footerDivider = [[NSBox alloc] initWithFrame:NSZeroRect];
+    footerDivider.boxType = NSBoxSeparator;
+    footerDivider.translatesAutoresizingMaskIntoConstraints = NO;
+    [footer addSubview:footerDivider];
 
-    NSButton *defaults =
-        actionButton(
-            @"Restore Defaults",
-            self,
-            @selector(restoreDefaultsClicked:)
-        );
+    [footerDivider.topAnchor constraintEqualToAnchor:footer.topAnchor].active = YES;
+    [footerDivider.leadingAnchor constraintEqualToAnchor:footer.leadingAnchor].active = YES;
+    [footerDivider.trailingAnchor constraintEqualToAnchor:footer.trailingAnchor].active = YES;
+    [footerDivider.heightAnchor constraintEqualToConstant:1].active = YES;
 
-    defaults.frame =
-        NSMakeRect(
-            18,
-            11,
-            128,
-            29
-        );
-
-    [footer addSubview:defaults];
+    NSButton *restore =
+        wfButton(@"Restore Defaults", self, @selector(restoreDefaultsClicked:));
+    restore.translatesAutoresizingMaskIntoConstraints = NO;
 
     NSButton *done =
-        [NSButton buttonWithTitle:@"Done"
-                           target:self
-                           action:@selector(doneClicked:)];
-
-    done.bezelStyle =
-        NSBezelStyleRounded;
-
-    done.font =
-        [NSFont systemFontOfSize:12
-                          weight:NSFontWeightSemibold];
-
+        wfButton(@"Done", self, @selector(doneClicked:));
     done.keyEquivalent = @"\r";
+    done.translatesAutoresizingMaskIntoConstraints = NO;
 
-    done.frame =
-        NSMakeRect(
-            footer.bounds.size.width - 92,
-            10,
-            74,
-            30
-        );
-
+    [footer addSubview:restore];
     [footer addSubview:done];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [restore.leadingAnchor constraintEqualToAnchor:footer.leadingAnchor constant:24],
+        [restore.centerYAnchor constraintEqualToAnchor:footer.centerYAnchor constant:1],
+        [done.trailingAnchor constraintEqualToAnchor:footer.trailingAnchor constant:-24],
+        [done.centerYAnchor constraintEqualToAnchor:footer.centerYAnchor constant:1],
+        [done.widthAnchor constraintGreaterThanOrEqualToConstant:76],
+    ]];
 }
 
-#pragma mark Pages
+#pragma mark Page rendering
 
-- (void)buildPages {
-    const CGFloat pageWidth = 500.0;
+- (NSControl *)makeControlForDefinition:(WFSettingDefinition *)definition {
+    switch (definition.type) {
+        case WFSettingTypeToggle: {
+            NSButton *button =
+                [NSButton buttonWithTitle:@""
+                                   target:self
+                                   action:@selector(toggleChanged:)];
+            button.buttonType = NSButtonTypeSwitch;
+            button.controlSize = NSControlSizeRegular;
+            button.tag = definition.key;
+            return button;
+        }
 
-    WallifyFlippedView *general =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(0, 0, pageWidth, 600)];
+        case WFSettingTypeSegments: {
+            NSSegmentedControl *control =
+                [NSSegmentedControl segmentedControlWithLabels:
+                    definition.options
+                    trackingMode:NSSegmentSwitchTrackingSelectOne
+                    target:self
+                    action:@selector(segmentChanged:)];
 
-    [self buildGeneralPage:general];
+            control.segmentDistribution = NSSegmentDistributionFillEqually;
+            control.controlSize = NSControlSizeRegular;
+            control.tag = definition.key;
+            return control;
+        }
 
-    WallifyFlippedView *appearance =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(0, 0, pageWidth, 760)];
+        case WFSettingTypePopup: {
+            NSPopUpButton *control =
+                [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
 
-    [self buildAppearancePage:appearance];
+            [control addItemsWithTitles:definition.options];
+            control.target = self;
+            control.action = @selector(popupChanged:);
+            control.tag = definition.key;
+            return control;
+        }
+    }
 
-    WallifyFlippedView *playback =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(0, 0, pageWidth, 840)];
-
-    [self buildPlaybackPage:playback];
-
-    WallifyFlippedView *desktop =
-        [[WallifyFlippedView alloc]
-            initWithFrame:
-                NSMakeRect(0, 0, pageWidth, 620)];
-
-    [self buildDesktopPage:desktop];
-
-    self.pages = @[
-        general,
-        appearance,
-        playback,
-        desktop
-    ];
+    return nil;
 }
 
-#pragma mark General page
+- (NSView *)makeSettingRow:(WFSettingDefinition *)definition last:(BOOL)last {
+    NSView *row = [[NSView alloc] initWithFrame:NSZeroRect];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
 
-- (void)buildGeneralPage:(WallifyFlippedView *)view {
-    const CGFloat width = 500.0;
+    NSStackView *labels = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    labels.orientation = NSUserInterfaceLayoutOrientationVertical;
+    labels.alignment = NSLayoutAttributeLeading;
+    labels.spacing = 3.0;
+    labels.translatesAutoresizingMaskIntoConstraints = NO;
 
-    [view addSubview:
-        label(
-            @"Widget",
-            NSMakeRect(4, 2, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
+    NSTextField *title =
+        wfLabel(definition.title, 13.0, NSFontWeightMedium, [NSColor labelColor]);
+    title.usesSingleLineMode = NO;
+    title.maximumNumberOfLines = 2;
 
-    NSBox *widget =
-        groupBox(NSMakeRect(0, 24, width, 150));
+    [labels addArrangedSubview:title];
 
-    [view addSubview:widget];
+    if (definition.subtitle.length > 0) {
+        NSTextField *subtitle =
+            wfLabel(definition.subtitle, 11.0, NSFontWeightRegular,
+                    [NSColor secondaryLabelColor]);
+        subtitle.usesSingleLineMode = NO;
+        subtitle.maximumNumberOfLines = 2;
+        [labels addArrangedSubview:subtitle];
+    }
 
-    addControlRow(
-        widget,
-        @"Form Factor",
-        @"Desktop footprint.",
-        self.modeSegment =
-            makeSegments(
-                @[@"1 × 1", @"2 × 1", @"3 × 1", @"1 × 2", @"2 × 2"],
-                14,
-                self,
-                @selector(segmentChanged:)
-            ),
-        0,
-        width,
-        300,
-        YES
-    );
+    NSControl *control = [self makeControlForDefinition:definition];
+    control.translatesAutoresizingMaskIntoConstraints = NO;
 
-    addControlRow(
-        widget,
-        @"Media Source",
-        @"Playback source.",
-        self.sourceSegment =
-            makeSegments(
-                @[@"Now Playing", @"Spotify", @"Spotifast", @"Auto"],
-                70,
-                self,
-                @selector(segmentChanged:)
-            ),
-        0,
-        width,
-        300,
-        NO
-    );
+    [row addSubview:labels];
+    [row addSubview:control];
 
-    [view addSubview:
-        label(
-            @"Idle",
-            NSMakeRect(4, 194, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
+    CGFloat minimumControlWidth = 72.0;
+    CGFloat maximumControlWidth = 320.0;
 
-    NSBox *idle =
-        groupBox(NSMakeRect(0, 216, width, 150));
+    if ([control isKindOfClass:[NSSegmentedControl class]]) {
+        NSInteger count = definition.options.count;
+        minimumControlWidth = MIN(320.0, MAX(120.0, count * 72.0));
+        maximumControlWidth = MAX(minimumControlWidth, 320.0);
+    } else if ([control isKindOfClass:[NSPopUpButton class]]) {
+        minimumControlWidth = 150.0;
+        maximumControlWidth = 230.0;
+    }
 
-    [view addSubview:idle];
+    [NSLayoutConstraint activateConstraints:@[
+        [labels.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:2],
+        [labels.topAnchor constraintEqualToAnchor:row.topAnchor constant:11],
+        [labels.bottomAnchor constraintEqualToAnchor:row.bottomAnchor constant:-11],
 
-    addControlRow(
-        idle,
-        @"Idle Companion",
-        @"Shown when nothing is playing.",
-        self.idleSegment =
-            makeSegments(
-                @[@"Pixel Cat", @"Banana Cat", @"Spotify"],
-                15,
-                self,
-                @selector(segmentChanged:)
-            ),
-        0,
-        width,
-        300,
-        YES
-    );
+        [control.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-2],
+        [control.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [control.widthAnchor constraintGreaterThanOrEqualToConstant:minimumControlWidth],
+        [control.widthAnchor constraintLessThanOrEqualToConstant:maximumControlWidth],
 
-    self.transitionPopup =
-        [[NSPopUpButton alloc]
-            initWithFrame:NSZeroRect
-            pullsDown:NO];
+        [labels.trailingAnchor constraintLessThanOrEqualToAnchor:control.leadingAnchor constant:-18],
 
-    [self.transitionPopup
-        addItemsWithTitles:@[
-            @"Default",
-            @"Cinematic",
-            @"Ripple",
-            @"Card Flip",
-            @"Vinyl",
-            @"Glitch"
+        [row.heightAnchor constraintGreaterThanOrEqualToConstant:59],
+    ]];
+
+    [control setContentHuggingPriority:250 forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [control setContentCompressionResistancePriority:750 forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [labels setContentCompressionResistancePriority:250
+                                  forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+    self.controlsByKey[@(definition.key)] = control;
+
+    if (!last) {
+        NSBox *line = [[NSBox alloc] initWithFrame:NSZeroRect];
+        line.boxType = NSBoxSeparator;
+        line.translatesAutoresizingMaskIntoConstraints = NO;
+        [row addSubview:line];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [line.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+            [line.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+            [line.bottomAnchor constraintEqualToAnchor:row.bottomAnchor],
+            [line.heightAnchor constraintEqualToConstant:1],
         ]];
+    }
 
-    self.transitionPopup.target = self;
-    self.transitionPopup.action =
-        @selector(transitionChanged:);
-
-    addControlRow(
-        idle,
-        @"Track Transition",
-        @"Effect used when artwork changes.",
-        self.transitionPopup,
-        70,
-        width,
-        300,
-        NO
-    );
-
-    [view addSubview:
-        label(
-            @"Media Keys",
-            NSMakeRect(4, 388, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSBox *keys =
-        groupBox(NSMakeRect(0, 410, width, 150));
-
-    [view addSubview:keys];
-
-    addControlRow(
-        keys,
-        @"Target",
-        @"Route F7 / F8 / F9 through Wallify.",
-        self.mediaKeySegment =
-            makeSegments(
-                @[@"Off", @"Active", @"Spotify", @"Spotifast"],
-                18,
-                self,
-                @selector(segmentChanged:)
-            ),
-        0,
-        width,
-        300,
-        NO
-    );
-
-    [keys addSubview:
-        label(
-            @"Accessibility permission is required.",
-            NSMakeRect(18, 88, 440, 18),
-            10,
-            NSFontWeightRegular,
-            [NSColor tertiaryLabelColor]
-        )];
+    return row;
 }
 
-#pragma mark Appearance page
+- (NSView *)makeSection:(WFSectionDefinition *)section {
+    NSStackView *sectionStack =
+        [[NSStackView alloc] initWithFrame:NSZeroRect];
 
-- (void)buildAppearancePage:(WallifyFlippedView *)view {
-    const CGFloat width = 500.0;
+    sectionStack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    sectionStack.alignment = NSLayoutAttributeFill;
+    sectionStack.spacing = 0.0;
+    sectionStack.translatesAutoresizingMaskIntoConstraints = NO;
 
-    [view addSubview:
-        label(
-            @"Material",
-            NSMakeRect(4, 2, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
+    NSTextField *header =
+        wfLabel(section.title, 11.0, NSFontWeightSemibold, [NSColor secondaryLabelColor]);
+    header.translatesAutoresizingMaskIntoConstraints = NO;
+    [sectionStack addArrangedSubview:header];
 
-    NSBox *material =
-        groupBox(NSMakeRect(0, 24, width, 290));
+    [header.topAnchor constraintEqualToAnchor:sectionStack.topAnchor].active = YES;
+    header.edgeInsets = NSEdgeInsetsMake(0, 2, 8, 2);
 
-    [view addSubview:material];
+    NSView *card = [[NSView alloc] initWithFrame:NSZeroRect];
+    card.wantsLayer = YES;
+    card.layer.cornerRadius = 11.0;
+    card.layer.masksToBounds = YES;
+    card.layer.backgroundColor =
+        [[NSColor controlBackgroundColor] colorWithAlphaComponent:0.48].CGColor;
+    card.translatesAutoresizingMaskIntoConstraints = NO;
 
-    addToggleRow(
-        material,
-        @"Native Glass",
-        @"Use the macOS Liquid Glass material.",
-        self.nativeGlassSwitch =
-            makeToggle(5, self, @selector(switchChanged:)),
-        0,
-        width,
-        YES
-    );
+    NSStackView *rows =
+        [[NSStackView alloc] initWithFrame:NSZeroRect];
 
-    addToggleRow(
-        material,
-        @"Artwork Glow",
-        @"Ambient color from album artwork.",
-        self.glowSwitch =
-            makeToggle(0, self, @selector(switchChanged:)),
-        70,
-        width,
-        YES
-    );
+    rows.orientation = NSUserInterfaceLayoutOrientationVertical;
+    rows.alignment = NSLayoutAttributeFill;
+    rows.spacing = 0.0;
+    rows.translatesAutoresizingMaskIntoConstraints = NO;
 
-    addControlRow(
-        material,
-        @"Glow Intensity",
-        @"Glow strength.",
-        self.intensitySegment =
-            makeSegments(
-                @[@"Low", @"Normal", @"High"],
-                11,
-                self,
-                @selector(segmentChanged:)
-            ),
-        140,
-        width,
-        230,
-        YES
-    );
+    [card addSubview:rows];
+    [wfPin(rows, card, 0, 0, 0, 0) self];
 
-    addToggleRow(
-        material,
-        @"Aurora",
-        @"Animated background gradient.",
-        self.auroraSwitch =
-            makeToggle(1, self, @selector(switchChanged:)),
-        210,
-        width,
-        NO
-    );
+    [sectionStack addArrangedSubview:card];
 
-    [view addSubview:
-        label(
-            @"Artwork",
-            NSMakeRect(4, 338, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
+    if (section.settings.count > 0) {
+        for (NSInteger i = 0; i < (NSInteger)section.settings.count; i++) {
+            [rows addArrangedSubview:
+                [self makeSettingRow:section.settings[i]
+                                last:i == (NSInteger)section.settings.count - 1]];
+        }
+    } else {
+        [self addSectionSpecificContent:card];
+    }
 
-    NSBox *artwork =
-        groupBox(NSMakeRect(0, 360, width, 220));
-
-    [view addSubview:artwork];
-
-    addToggleRow(
-        artwork,
-        @"Artwork Border",
-        @"Fine edge around album artwork.",
-        self.artworkBorderSwitch =
-            makeToggle(19, self, @selector(switchChanged:)),
-        0,
-        width,
-        YES
-    );
-
-    addControlRow(
-        artwork,
-        @"Corners",
-        @"Artwork radius.",
-        self.artworkRadiusSegment =
-            makeSegments(
-                @[@"Soft", @"Rounded", @"Large"],
-                21,
-                self,
-                @selector(segmentChanged:)
-            ),
-        70,
-        width,
-        230,
-        YES
-    );
-
-    addToggleRow(
-        artwork,
-        @"Compact Contrast",
-        @"Fade behind text in 1 × 1.",
-        self.compactGradientSwitch =
-            makeToggle(20, self, @selector(switchChanged:)),
-        140,
-        width,
-        NO
-    );
-
-    [view addSubview:
-        label(
-            @"Motion",
-            NSMakeRect(4, 604, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSBox *motion =
-        groupBox(NSMakeRect(0, 626, width, 220));
-
-    [view addSubview:motion];
-
-    addToggleRow(
-        motion,
-        @"Animations",
-        @"Animate resizing and state changes.",
-        self.animationsSwitch =
-            makeToggle(2, self, @selector(switchChanged:)),
-        0,
-        width,
-        YES
-    );
-
-    addControlRow(
-        motion,
-        @"Speed",
-        @"Animation speed.",
-        self.speedSegment =
-            makeSegments(
-                @[@"Slow", @"Normal", @"Fast"],
-                12,
-                self,
-                @selector(segmentChanged:)
-            ),
-        70,
-        width,
-        230,
-        YES
-    );
-
-    addControlRow(
-        motion,
-        @"Custom Border",
-        @"Border for the custom material.",
-        self.frameSegment =
-            makeSegments(
-                @[@"Off", @"Subtle", @"Strong"],
-                10,
-                self,
-                @selector(segmentChanged:)
-            ),
-        140,
-        width,
-        230,
-        NO
-    );
-
-    addToggleRow(
-        motion,
-        @"Dim When Paused",
-        @"Lower artwork brightness while paused.",
-        self.dimSwitch =
-            makeToggle(3, self, @selector(switchChanged:)),
-        210,
-        width,
-        NO
-    );
+    return sectionStack;
 }
 
-#pragma mark Playback page
+#pragma mark Section-specific content
 
-- (void)buildPlaybackPage:(WallifyFlippedView *)view {
-    const CGFloat width = 500.0;
+- (void)addSectionSpecificContent:(NSView *)card {
+    /*
+     * This is intentionally isolated from the generic setting renderer.
+     * Add another special section here only when a setting genuinely needs
+     * richer content than a normal toggle/segment/popup.
+     */
+    WFPageDefinition *page = self.pageDefinitions[self.selectedPageIndex];
 
-    [view addSubview:
-        label(
-            @"Visibility",
-            NSMakeRect(4, 2, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
+    if ([page.title isEqualToString:@"Desktop"]) {
+        if ([card.subviews.firstObject isKindOfClass:[NSStackView class]]) {
+            NSStackView *rows = (NSStackView *)card.subviews.firstObject;
 
-    NSBox *visibility =
-        groupBox(NSMakeRect(0, 24, width, 360));
+            WFSectionDefinition *positionSection = nil;
+            WFSectionDefinition *configSection = nil;
 
-    [view addSubview:visibility];
+            for (WFSectionDefinition *section in page.sections) {
+                if ([section.title isEqualToString:@"Position"])
+                    positionSection = section;
+                if ([section.title isEqualToString:@"Configuration"])
+                    configSection = section;
+            }
 
-    addToggleRow(
-        visibility,
-        @"Track Text",
-        @"Show title and artist.",
-        self.hideTextSwitch =
-            makeToggle(6, self, @selector(switchChanged:)),
-        0,
-        width,
-        YES
-    );
-
-    addToggleRow(
-        visibility,
-        @"Progress Bar",
-        @"Show playback progress.",
-        self.hideProgressSwitch =
-            makeToggle(7, self, @selector(switchChanged:)),
-        70,
-        width,
-        YES
-    );
-
-    addToggleRow(
-        visibility,
-        @"Playback Controls",
-        @"Show previous, play/pause, and next.",
-        self.showControlsSwitch =
-            makeToggle(8, self, @selector(switchChanged:)),
-        140,
-        width,
-        YES
-    );
-
-    addToggleRow(
-        visibility,
-        @"Time Labels",
-        @"Show elapsed and remaining time.",
-        self.showTimestampsSwitch =
-            makeToggle(9, self, @selector(switchChanged:)),
-        210,
-        width,
-        YES
-    );
-
-    addControlRow(
-        visibility,
-        @"Progress Thickness",
-        @"Visual weight of the progress bar.",
-        self.progressThicknessSegment =
-            makeSegments(
-                @[@"Thin", @"Standard", @"Thick"],
-                22,
-                self,
-                @selector(segmentChanged:)
-            ),
-        280,
-        width,
-        230,
-        NO
-    );
-
-    [view addSubview:
-        label(
-            @"Typography",
-            NSMakeRect(4, 408, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSBox *typography =
-        groupBox(NSMakeRect(0, 430, width, 80));
-
-    [view addSubview:typography];
-
-    addControlRow(
-        typography,
-        @"Font Size",
-        @"Scale track information.",
-        self.fontScaleSegment =
-            makeSegments(
-                @[@"Small", @"Normal", @"Large"],
-                17,
-                self,
-                @selector(segmentChanged:)
-            ),
-        0,
-        width,
-        230,
-        NO
-    );
+            if ([positionSection.title isEqualToString:@"Position"]) {
+                [rows addArrangedSubview:[self makePositionContent]];
+            } else if ([configSection.title isEqualToString:@"Configuration"]) {
+                [rows addArrangedSubview:[self makeConfigurationContent]];
+            }
+        }
+    }
 }
 
-#pragma mark Desktop page
+- (NSView *)makePositionContent {
+    NSStackView *stack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    stack.alignment = NSLayoutAttributeLeading;
+    stack.spacing = 7.0;
+    stack.edgeInsets = NSEdgeInsetsMake(14, 14, 14, 14);
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-- (void)buildDesktopPage:(WallifyFlippedView *)view {
-    const CGFloat width = 500.0;
+    NSTextField *value =
+        wfLabel(@"Checking…", 12.0, NSFontWeightRegular, [NSColor labelColor]);
+    value.font = [NSFont monospacedSystemFontOfSize:12.0 weight:NSFontWeightRegular];
+    self.positionStatusLabel = value;
 
-    [view addSubview:
-        label(
-            @"Position",
-            NSMakeRect(4, 2, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSBox *position =
-        groupBox(NSMakeRect(0, 24, width, 184));
-
-    [view addSubview:position];
-
-    [position addSubview:
-        label(
-            @"Current Position",
-            NSMakeRect(18, 16, 240, 20),
-            13,
-            NSFontWeightMedium,
-            [NSColor labelColor]
-        )];
-
-    self.gridStatusLabel =
-        label(
-            @"Checking…",
-            NSMakeRect(18, 45, 450, 20),
-            12,
+    NSTextField *hint =
+        wfLabel(
+            @"Drag the widget on the desktop to reposition it.",
+            11.0,
             NSFontWeightRegular,
             [NSColor secondaryLabelColor]
         );
-
-    self.gridStatusLabel.font =
-        [NSFont monospacedSystemFontOfSize:12
-                                    weight:NSFontWeightRegular];
-
-    [position addSubview:self.gridStatusLabel];
-
-    [position addSubview:
-        label(
-            @"Drag the widget on the desktop to reposition it.",
-            NSMakeRect(18, 73, 450, 20),
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
+    hint.usesSingleLineMode = NO;
+    hint.maximumNumberOfLines = 2;
 
     NSButton *reset =
-        actionButton(
-            @"Reset Position",
-            self,
-            @selector(resetPositionClicked:)
-        );
+        wfButton(@"Reset Position", self, @selector(resetPositionClicked:));
 
-    reset.frame =
-        NSMakeRect(18, 116, 120, 30);
+    [stack addArrangedSubview:value];
+    [stack addArrangedSubview:hint];
+    [stack addArrangedSubview:reset];
 
-    [position addSubview:reset];
+    return stack;
+}
 
-    [view addSubview:
-        label(
-            @"Diagnostics",
-            NSMakeRect(4, 232, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSBox *diagnostics =
-        groupBox(NSMakeRect(0, 254, width, 80));
-
-    [view addSubview:diagnostics];
-
-    addToggleRow(
-        diagnostics,
-        @"Snapping Diagnostics",
-        @"Show snap candidates and coordinates.",
-        self.debugSwitch =
-            makeToggle(4, self, @selector(switchChanged:)),
-        0,
-        width,
-        NO
-    );
-
-    [view addSubview:
-        label(
-            @"Configuration",
-            NSMakeRect(4, 358, width - 8, 18),
-            11,
-            NSFontWeightSemibold,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSBox *config =
-        groupBox(NSMakeRect(0, 380, width, 150));
-
-    [view addSubview:config];
-
-    [config addSubview:
-        label(
-            @"Settings File",
-            NSMakeRect(18, 16, 200, 20),
-            13,
-            NSFontWeightMedium,
-            [NSColor labelColor]
-        )];
+- (NSView *)makeConfigurationContent {
+    NSStackView *stack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    stack.alignment = NSLayoutAttributeLeading;
+    stack.spacing = 9.0;
+    stack.edgeInsets = NSEdgeInsetsMake(14, 14, 14, 14);
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
 
     NSString *path =
-        [NSString stringWithUTF8String:
-            wallify_settings_path()];
+        [NSString stringWithUTF8String:wallify_settings_path()];
 
     NSTextField *pathLabel =
-        label(
-            path,
-            NSMakeRect(18, 44, 450, 20),
-            10,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        );
+        wfLabel(path, 10.5, NSFontWeightRegular, [NSColor secondaryLabelColor]);
+    pathLabel.font = [NSFont monospacedSystemFontOfSize:10.5 weight:NSFontWeightRegular];
+    pathLabel.maximumNumberOfLines = 2;
+    pathLabel.usesSingleLineMode = NO;
+    pathLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
 
-    pathLabel.font =
-        [NSFont monospacedSystemFontOfSize:10
-                                    weight:NSFontWeightRegular];
+    NSStackView *buttons = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    buttons.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    buttons.alignment = NSLayoutAttributeCenterY;
+    buttons.spacing = 8.0;
 
-    pathLabel.lineBreakMode =
-        NSLineBreakByTruncatingMiddle;
+    [buttons addArrangedSubview:
+        wfButton(@"Reveal in Finder", self, @selector(revealConfigClicked:))];
 
-    [config addSubview:pathLabel];
+    [buttons addArrangedSubview:
+        wfButton(@"Open File", self, @selector(openConfigClicked:))];
 
-    NSButton *reveal =
-        actionButton(
-            @"Reveal in Finder",
-            self,
-            @selector(revealConfigClicked:)
-        );
+    [stack addArrangedSubview:pathLabel];
+    [stack addArrangedSubview:buttons];
 
-    reveal.frame =
-        NSMakeRect(18, 84, 130, 30);
+    return stack;
+}
 
-    [config addSubview:reveal];
+- (void)renderSelectedPage {
+    [self.pageStack.arrangedSubviews
+        enumerateObjectsUsingBlock:^(NSView *view, NSUInteger idx, BOOL *stop) {
+            (void)idx;
+            (void)stop;
+            [self.pageStack removeArrangedSubview:view];
+            [view removeFromSuperview];
+        }];
 
-    NSButton *open =
-        actionButton(
-            @"Open File",
-            self,
-            @selector(openConfigClicked:)
-        );
+    self.controlsByKey = [NSMutableDictionary dictionary];
 
-    open.frame =
-        NSMakeRect(158, 84, 104, 30);
+    WFPageDefinition *page = self.pageDefinitions[self.selectedPageIndex];
 
-    [config addSubview:open];
+    for (WFSectionDefinition *section in page.sections) {
+        [self.pageStack addArrangedSubview:[self makeSection:section]];
+    }
+
+    self.pageTitleLabel.stringValue = page.title;
+    self.pageIconView.image =
+        [NSImage imageWithSystemSymbolName:page.symbol
+                     accessibilityDescription:nil];
+
+    [self.scrollView.documentView
+        scrollPoint:NSMakePoint(0, CGFLOAT_MAX)];
+
+    [self refreshUIFromState];
 }
 
 #pragma mark Navigation
@@ -1300,27 +986,13 @@ static void addControlRow(
 }
 
 - (void)selectPage:(NSInteger)index {
-    if (index < 0 ||
-        index >= (NSInteger)self.pages.count)
+    if (index < 0 || index >= (NSInteger)self.pageDefinitions.count)
         return;
 
-    NSArray<NSString *> *titles = @[
-        @"General",
-        @"Appearance",
-        @"Playback",
-        @"Desktop"
-    ];
-
-    NSArray<NSString *> *symbols = @[
-        @"gearshape",
-        @"paintpalette",
-        @"play.circle",
-        @"rectangle.on.rectangle"
-    ];
+    self.selectedPageIndex = index;
 
     for (NSButton *button in self.sidebarButtons) {
-        BOOL selected =
-            button.tag == index;
+        BOOL selected = button.tag == index;
 
         button.layer.backgroundColor =
             selected
@@ -1333,39 +1005,12 @@ static void addControlRow(
                 : [NSColor secondaryLabelColor];
     }
 
-    self.pageTitleLabel.stringValue =
-        titles[index];
-
-    self.pageIconView.image =
-        [NSImage imageWithSystemSymbolName:
-            symbols[index]
-            accessibilityDescription:nil];
-
-    for (NSView *page in self.pages)
-        [page removeFromSuperview];
-
-    NSView *page = self.pages[index];
-
-    CGFloat width =
-        self.scrollView.contentView.bounds.size.width;
-
-    page.frame =
-        NSMakeRect(
-            0,
-            0,
-            MAX(500.0, width - 8.0),
-            page.frame.size.height
-        );
-
-    self.scrollView.documentView = page;
-
-    [self.scrollView.contentView
-        scrollToPoint:NSMakePoint(0, 0)];
+    [self renderSelectedPage];
 }
 
 #pragma mark Actions
 
-- (void)switchChanged:(NSButton *)sender {
+- (void)toggleChanged:(NSButton *)sender {
     wallify_settings_apply_bool(
         (int)sender.tag,
         sender.state == NSControlStateValueOn
@@ -1383,9 +1028,9 @@ static void addControlRow(
     [self refreshUIFromState];
 }
 
-- (void)transitionChanged:(NSPopUpButton *)sender {
+- (void)popupChanged:(NSPopUpButton *)sender {
     wallify_settings_apply_int(
-        16,
+        (int)sender.tag,
         (int)sender.indexOfSelectedItem
     );
 
@@ -1396,33 +1041,22 @@ static void addControlRow(
     (void)sender;
 
     wallify_settings_reset_position();
-
-    [self updateGridStatusLabel];
+    [self updatePositionStatus];
 }
 
 - (void)restoreDefaultsClicked:(id)sender {
     (void)sender;
 
-    NSAlert *alert =
-        [[NSAlert alloc] init];
-
-    alert.messageText =
-        @"Restore Default Settings?";
-
-    alert.informativeText =
-        @"All Wallify preferences will be reset.";
+    NSAlert *alert = [NSAlert new];
+    alert.messageText = @"Restore Default Settings?";
+    alert.informativeText = @"All Wallify preferences will be reset.";
+    alert.alertStyle = NSAlertStyleWarning;
 
     [alert addButtonWithTitle:@"Restore Defaults"];
     [alert addButtonWithTitle:@"Cancel"];
 
-    alert.alertStyle =
-        NSAlertStyleWarning;
-
-    if ([alert runModal] ==
-        NSAlertFirstButtonReturn) {
-
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
         wallify_settings_restore_defaults();
-
         [self refreshUIFromState];
     }
 }
@@ -1431,8 +1065,7 @@ static void addControlRow(
     (void)sender;
 
     NSString *path =
-        [NSString stringWithUTF8String:
-            wallify_settings_path()];
+        [NSString stringWithUTF8String:wallify_settings_path()];
 
     [[NSWorkspace sharedWorkspace]
         selectFile:path
@@ -1443,12 +1076,10 @@ static void addControlRow(
     (void)sender;
 
     NSString *path =
-        [NSString stringWithUTF8String:
-            wallify_settings_path()];
+        [NSString stringWithUTF8String:wallify_settings_path()];
 
     [[NSWorkspace sharedWorkspace]
-        openURL:
-            [NSURL fileURLWithPath:path]];
+        openURL:[NSURL fileURLWithPath:path]];
 }
 
 - (void)doneClicked:(id)sender {
@@ -1458,14 +1089,14 @@ static void addControlRow(
 
 #pragma mark State
 
-- (void)updateGridStatusLabel {
+- (void)updatePositionStatus {
+    if (!self.positionStatusLabel)
+        return;
+
     WallifySettingsSnapshot snapshot;
+    wallify_settings_get_snapshot(&snapshot);
 
-    wallify_settings_get_snapshot(
-        &snapshot
-    );
-
-    self.gridStatusLabel.stringValue =
+    self.positionStatusLabel.stringValue =
         [NSString stringWithFormat:
             @"Left %d pt   •   Top %d pt   •   Grid %d, %d",
             snapshot.margin_left,
@@ -1474,152 +1105,110 @@ static void addControlRow(
             snapshot.grid_y];
 }
 
+- (void)applyControlStateFromSnapshot:(WallifySettingsSnapshot)snapshot
+                            definition:(WFSettingDefinition *)definition
+                              control:(NSControl *)control {
+    NSInteger index = -1;
+
+    switch (definition.key) {
+        case 0: index = snapshot.glow; break;
+        case 1: index = snapshot.aurora; break;
+        case 2: index = snapshot.animations; break;
+        case 3: index = snapshot.dim_paused; break;
+        case 4: index = snapshot.debug_hud; break;
+        case 5: index = snapshot.native_glass; break;
+        case 6: index = snapshot.hide_text; break;
+        case 7: index = snapshot.hide_progress; break;
+        case 8: index = snapshot.show_controls; break;
+        case 9: index = snapshot.show_timestamps; break;
+        case 10: index = snapshot.frame_strength; break;
+        case 11: index = snapshot.glow_intensity; break;
+        case 12: index = snapshot.animation_speed; break;
+        case 13: index = snapshot.media_source; break;
+        case 14: index = snapshot.widget_mode; break;
+        case 15: index = snapshot.idle_style; break;
+        case 16: index = snapshot.track_transition; break;
+        case 17: index = snapshot.font_scale; break;
+        case 18: index = snapshot.media_key_target; break;
+        case 19: index = snapshot.artwork_border; break;
+        case 20: index = snapshot.compact_gradient; break;
+        case 21: index = snapshot.artwork_radius; break;
+        case 22: index = snapshot.progress_thickness; break;
+        default: break;
+    }
+
+    if ([control isKindOfClass:[NSButton class]] &&
+        definition.type == WFSettingTypeToggle) {
+        [(NSButton *)control setState:
+            index != 0
+                ? NSControlStateValueOn
+                : NSControlStateValueOff];
+    } else if ([control isKindOfClass:[NSSegmentedControl class]]) {
+        NSSegmentedControl *segments = (NSSegmentedControl *)control;
+        if (index >= 0 && index < segments.segmentCount)
+            segments.selectedSegment = index;
+    } else if ([control isKindOfClass:[NSPopUpButton class]]) {
+        NSPopUpButton *popup = (NSPopUpButton *)control;
+        if (index >= 0 && index < popup.numberOfItems)
+            popup.indexOfSelectedItem = index;
+    }
+
+    if (definition.enabledByBoolKey >= 0) {
+        BOOL enabled = YES;
+
+        NSNumber *dependencyValue =
+            @{
+                @0: @(snapshot.glow),
+                @2: @(snapshot.animations),
+                @5: @(snapshot.native_glass),
+            }[@(definition.enabledByBoolKey)];
+
+        if (dependencyValue)
+            enabled = dependencyValue.boolValue;
+
+        /*
+         * A disabled dependent control is allowed to remain stored in the
+         * configuration. This only changes whether it can be edited.
+         */
+        control.enabled = enabled;
+    }
+}
+
 - (void)refreshUIFromState {
     if (!self.window)
         return;
 
-    WallifySettingsSnapshot s;
+    WallifySettingsSnapshot snapshot;
+    wallify_settings_get_snapshot(&snapshot);
 
-    wallify_settings_get_snapshot(&s);
+    for (NSNumber *key in self.controlsByKey) {
+        NSControl *control = self.controlsByKey[key];
 
-    self.nativeGlassSwitch.state =
-        s.native_glass
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
+        WFSettingDefinition *definition = nil;
 
-    self.glowSwitch.state =
-        s.glow
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
+        for (WFPageDefinition *page in self.pageDefinitions) {
+            for (WFSectionDefinition *section in page.sections) {
+                for (WFSettingDefinition *candidate in section.settings) {
+                    if (candidate.key == key.integerValue) {
+                        definition = candidate;
+                        break;
+                    }
+                }
+                if (definition)
+                    break;
+            }
+            if (definition)
+                break;
+        }
 
-    self.auroraSwitch.state =
-        s.aurora
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.animationsSwitch.state =
-        s.animations
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.dimSwitch.state =
-        s.dim_paused
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.artworkBorderSwitch.state =
-        s.artwork_border
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.compactGradientSwitch.state =
-        s.compact_gradient
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.hideTextSwitch.state =
-        s.hide_text
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.hideProgressSwitch.state =
-        s.hide_progress
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.showControlsSwitch.state =
-        s.show_controls
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.showTimestampsSwitch.state =
-        s.show_timestamps
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.debugSwitch.state =
-        s.debug_hud
-            ? NSControlStateValueOn
-            : NSControlStateValueOff;
-
-    self.intensitySegment.selectedSegment =
-        (s.glow_intensity >= 0 &&
-         s.glow_intensity <= 2)
-            ? s.glow_intensity
-            : 1;
-
-    self.speedSegment.selectedSegment =
-        (s.animation_speed >= 0 &&
-         s.animation_speed <= 2)
-            ? s.animation_speed
-            : 1;
-
-    self.frameSegment.selectedSegment =
-        (s.frame_strength >= 0 &&
-         s.frame_strength <= 2)
-            ? s.frame_strength
-            : 1;
-
-    self.artworkRadiusSegment.selectedSegment =
-        (s.artwork_radius >= 0 &&
-         s.artwork_radius <= 2)
-            ? s.artwork_radius
-            : 1;
-
-    self.progressThicknessSegment.selectedSegment =
-        (s.progress_thickness >= 0 &&
-         s.progress_thickness <= 2)
-            ? s.progress_thickness
-            : 1;
-
-    self.fontScaleSegment.selectedSegment =
-        (s.font_scale >= 0 &&
-         s.font_scale <= 2)
-            ? s.font_scale
-            : 1;
-
-    self.modeSegment.selectedSegment =
-        (s.widget_mode >= 0 &&
-         s.widget_mode <= 4)
-            ? s.widget_mode
-            : 2;
-
-    self.sourceSegment.selectedSegment =
-        (s.media_source >= 0 &&
-         s.media_source <= 3)
-            ? s.media_source
-            : 0;
-
-    self.idleSegment.selectedSegment =
-        (s.idle_style >= 0 &&
-         s.idle_style <= 2)
-            ? s.idle_style
-            : 0;
-
-    self.mediaKeySegment.selectedSegment =
-        (s.media_key_target >= 0 &&
-         s.media_key_target <= 3)
-            ? s.media_key_target
-            : 0;
-
-    if (s.track_transition >= 0 &&
-        s.track_transition <
-            self.transitionPopup.numberOfItems) {
-        [self.transitionPopup
-            selectItemAtIndex:
-                s.track_transition];
+        if (definition) {
+            [self applyControlStateFromSnapshot:snapshot
+                                       definition:definition
+                                         control:control];
+        }
     }
 
-    /*
-     * Native Glass owns its material/rim.
-     */
-    self.auroraSwitch.enabled =
-        !s.native_glass;
-
-    self.frameSegment.enabled =
-        !s.native_glass;
-
-    [self updateGridStatusLabel];
+    [self updatePositionStatus];
 }
 
 #pragma mark Presentation
@@ -1632,7 +1221,6 @@ static void addControlRow(
 
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
-
     [NSApp activateIgnoringOtherApps:YES];
 }
 
@@ -1674,14 +1262,13 @@ void wallify_settings_notify_position_changed(void) {
         dispatch_get_main_queue(),
         ^{
             [[WallifySettingsWindowController sharedController]
-                updateGridStatusLabel];
+                updatePositionStatus];
         }
     );
 }
 
 bool wallify_has_settings_flag(void) {
-    NSArray *args =
-        [[NSProcessInfo processInfo] arguments];
+    NSArray *args = [NSProcessInfo processInfo].arguments;
 
     for (NSString *arg in args) {
         if ([arg isEqualToString:@"--settings"] ||
@@ -1699,9 +1286,7 @@ void wallify_refresh_settings_ui(void) {
         ^{
             if (sharedSettingsController &&
                 sharedSettingsController.window.isVisible) {
-
-                [sharedSettingsController
-                    refreshUIFromState];
+                [sharedSettingsController refreshUIFromState];
             }
         }
     );
