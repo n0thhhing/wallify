@@ -133,13 +133,14 @@ pub const Layout = struct {
 
         return switch (mode) {
             .compact => .{
+                // 1×1: artwork fills the card; metadata/control overlays sit over it.
                 .art_x = 8.0,
                 .art_y = 8.0,
                 .art_size = @min(card_w, card_h),
                 .art_radius = 26.0,
                 .bar_x = 16.0,
-                .bar_y = 26.0,
-                .bar_w = @max(80.0, card_w - 32.0),
+                .bar_y = 112.0,
+                .bar_w = @max(64.0, card_w - 32.0),
                 .bar_h = 5.0,
                 .text_x = 16.0,
                 .text_width = @max(64.0, card_w - 32.0),
@@ -152,7 +153,9 @@ pub const Layout = struct {
                     .{ .id = .Next, .name = "Action: Next", .x = width / 2.0 + 46.0, .y = 48.0, .size = 12.0 },
                 },
             },
+
             .two_by_one, .expanded => blk: {
+                // 2×1 and 3×1 share the native horizontal player composition.
                 const art_size = @min(132.0, @max(64.0, card_h - 32.0));
                 const art_x = 24.0;
                 const art_y = 8.0 + (card_h - art_size) / 2.0;
@@ -165,74 +168,74 @@ pub const Layout = struct {
                     .art_size = art_size,
                     .art_radius = 14.0,
                     .bar_x = bar_x,
-                    .bar_y = 8.0 + card_h / 2.0,
+                    .bar_y = 84.0,
                     .bar_w = bar_w,
                     .bar_h = 5.0,
                     .text_x = bar_x,
                     .text_width = bar_w,
-                    .title_y = art_y + 6.0,
-                    .artist_y = art_y + 30.0,
-                    .timestamp_y = 8.0 + card_h / 2.0 + 27.0,
+                    .title_y = 30.0,
+                    .artist_y = 54.0,
+                    .timestamp_y = 99.0,
                     .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 8.0 + 124.0, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 8.0 + 124.0, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 8.0 + 124.0, .size = 12.0 },
+                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 132.0, .size = 12.0 },
+                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 132.0, .size = 14.0 },
+                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 132.0, .size = 12.0 },
                     },
                 };
             },
+
             .one_by_two => blk: {
-                const art_size = @min(132.0, @max(64.0, card_w - 32.0));
+                // 1×2: artwork on top, metadata, progress, then controls.
+                const art_size = @min(148.0, card_w - 16.0);
                 const art_x = (width - art_size) / 2.0;
-                const art_y = height - 8.0 - 16.0 - art_size;
-                const bar_x = 16.0;
-                const bar_w = @max(min_bar_width, card_w - 16.0);
-                const center = bar_x + bar_w / 2.0;
+                const art_y = 16.0;
+                const center = width / 2.0;
                 break :blk .{
                     .art_x = art_x,
                     .art_y = art_y,
                     .art_size = art_size,
                     .art_radius = 18.0,
-                    .bar_x = bar_x,
-                    .bar_y = 96.0,
-                    .bar_w = bar_w,
+                    .bar_x = 16.0,
+                    .bar_y = 243.0,
+                    .bar_w = @max(64.0, card_w - 32.0),
                     .bar_h = 5.0,
                     .text_x = 16.0,
                     .text_width = @max(64.0, card_w - 32.0),
-                    .title_y = 154.0,
-                    .artist_y = 130.0,
-                    .timestamp_y = 111.0,
+                    .title_y = 183.0,
+                    .artist_y = 207.0,
+                    .timestamp_y = 225.0,
                     .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 61.0, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 61.0, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 61.0, .size = 12.0 },
+                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 286.0, .size = 12.0 },
+                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 286.0, .size = 14.0 },
+                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 286.0, .size = 12.0 },
                     },
                 };
             },
+
             .two_by_two => blk: {
-                const art_size = @min(200.0, @max(96.0, @min(card_w - 64.0, card_h - 32.0)));
+                // 2×2: centered artwork with a full-width player footer.
+                const art_size = @min(200.0, card_w - 32.0);
                 const art_x = (width - art_size) / 2.0;
-                const art_y = height - 8.0 - 16.0 - art_size;
-                const bar_x = 16.0;
-                const bar_w = @max(min_bar_width, card_w - 32.0);
-                const center = bar_x + bar_w / 2.0;
+                const art_y = 16.0;
+                const center = width / 2.0;
                 break :blk .{
                     .art_x = art_x,
                     .art_y = art_y,
                     .art_size = art_size,
                     .art_radius = 26.0,
-                    .bar_x = bar_x,
-                    .bar_y = 54.0,
-                    .bar_w = bar_w,
+                    .bar_x = 16.0,
+                    .bar_y = 283.0,
+                    .bar_w = @max(64.0, card_w - 32.0),
                     .bar_h = 5.0,
                     .text_x = 16.0,
                     .text_width = @max(64.0, card_w - 32.0),
-                    .title_y = 109.0,
-                    .artist_y = 85.0,
-                    .timestamp_y = 66.0,
+                    .title_y = 229.0,
+                    .artist_y = 253.0,
+                    .timestamp_y = 267.0,
                     .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 23.0, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 23.0, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 23.0, .size = 12.0 },
+                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 322.0, .size = 12.0 },
+                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 322.0, .size = 14.0 },
+                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 322.0, .size = 12.0 },
                     },
                 };
             },
@@ -266,8 +269,10 @@ pub const Layout = struct {
         self.height = panel_height;
 
         const t = std.math.clamp(mix, 0.0, 1.0);
-        const from = modeGeometry(from_mode, panel_width, panel_height);
-        const to = modeGeometry(to_mode, panel_width, panel_height);
+        const from_size = from_mode.dimensions();
+        const to_size = to_mode.dimensions();
+        const from = modeGeometry(from_mode, from_size.width, from_size.height);
+        const to = modeGeometry(to_mode, to_size.width, to_size.height);
 
         self.art_x = lerp(from.art_x, to.art_x, t);
         self.art_y = lerp(from.art_y, to.art_y, t);
