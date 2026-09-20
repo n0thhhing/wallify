@@ -824,6 +824,11 @@ static NSButton *makeActionButton(
 
     self.nativeGlassSwitch.state =
         s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
+
+    // Native Glass supplies its own material/rim, so the GPU-only Aurora
+    // layer and custom frame have no visual effect while it is enabled.
+    self.auroraSwitch.enabled = !s.native_glass;
+    self.frameSegment.enabled = !s.native_glass;
     self.glowSwitch.state =
         s.glow ? NSControlStateValueOn : NSControlStateValueOff;
     self.auroraSwitch.state =
