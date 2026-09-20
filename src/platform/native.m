@@ -166,17 +166,45 @@ static WallifyView* globalMetalView = nil;
 // Apply geometry after AppKit has created (or rebuilt) the material layers.
 // These private inputs were verified in the current runtime's filter graph.
 static void wallify_inset_glass_optics(CALayer* layer) {
-    for (id filter in layer.filters) {
+    NSArray* filters = layer.filters;
+    BOOL touched = NO;
+
+    for (id filter in filters) {
         @try {
             if (![[filter valueForKey:@"type"] isEqualToString:@"glassBackground"])
                 continue;
-            [filter setValue:@18.0 forKey:@"inputInnerRefractionHeight"];
-            [filter setValue:@(-2.0) forKey:@"inputKeyFillHighlightEffectOffset"];
-            [filter setValue:@0.25 forKey:@"inputKeyFillHighlightAmount"];
+
+            /*
+             * Liquid Glass refraction is controlled primarily by these two
+             * private glassBackground inputs:
+             *
+             *   Height = thickness of the refracting edge band.
+             *   Amount = how far the backdrop is displaced at that edge.
+             *
+             * The stock widget has a noticeably deeper lens than our old
+             * 18-point height with the system-selected amount, so explicitly
+             * set both to keep the optical profile consistent.
+             */
+            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputInnerRefractionHeight"])
+                [filter setValue:@24.0 forKey:@"inputInnerRefractionHeight"];
+            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputInnerRefractionAmount"])
+                [filter setValue:@32.0 forKey:@"inputInnerRefractionAmount"];
+
+            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputKeyFillHighlightEffectOffset"])
+                [filter setValue:@(-2.0) forKey:@"inputKeyFillHighlightEffectOffset"];
+            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputKeyFillHighlightAmount"])
+                [filter setValue:@0.25 forKey:@"inputKeyFillHighlightAmount"];
+
+            touched = YES;
         } @catch (__unused NSException* exception) {
             // Preserve the system material if a future runtime changes its inputs.
         }
     }
+
+    // Reassign the filter array so Core Animation picks up KVC changes reliably.
+    if (touched)
+        layer.filters = filters;
+
     for (CALayer* child in layer.sublayers)
         wallify_inset_glass_optics(child);
 }
