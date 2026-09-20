@@ -161,6 +161,7 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_animations = true;
     state.setting_dim = true;
     state.setting_debug = false;
+    window.widget_debug_window_hide();
     state.setting_frame = .subtle;
     state.setting_intensity = .normal;
     state.setting_speed = .normal;
@@ -185,15 +186,7 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     state.setting_font_scale = .normal;
     state.setting_media_key_target = .off;
     native.wallify_update_media_key_tap(0);
-    state.beginModeTransition(
-        .expanded,
-        @floatFromInt(native.wallify_width()),
-        @floatFromInt(native.wallify_height()),
-        state.setting_animations,
-    );
-    if (!state.mode_transition_active) {
-        native.resizeForMode(.expanded);
-    }
+
     state.saveWidgetSettings();
     state.requestFrame();
 }
