@@ -261,7 +261,6 @@ pub fn modeAnimationFinished() void {
 pub var animation_time: f64 = 0;
 pub var marquee_offset: f64 = 0;
 pub var marquee_direction: f64 = 1;
-pub var panel_resize_after_compact: bool = false;
 // Interpolates compact (0) to expanded (1), independently of the saved target.
 pub var mode_mix: f64 = 1.0;
 // Desktop-widget grid position. A cell is one small widget plus its gap.
