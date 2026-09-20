@@ -163,7 +163,7 @@ fn updateSnapDebug() void {
     const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
     const screen_frame = macos.send(Rect, screen, "frame", .{});
     var message: [512]u8 = undefined;
-    const text = std.fmt.bufPrint(&message, "WALLIFY SNAP DEBUG  •  one process\nDrag={s}  mode mix={d:.2}  card={d:.0}×{d:.0}\nPreview ≤180  commit ≤150  candidates={d}  distance²={d:.0}\nMargins: x={d:.0} y={d:.0}  visual: x={d:.0} y={d:.0}\nTarget CG:  x={d:.0} y={d:.0}  {d:.0}×{d:.0}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0} visible={s}\nOutline #{d} level={d}  screen={d:.0}×{d:.0}\nWallify CG #{d} layer={d}: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ if (snap_debug_dragging) "yes" else "no", snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, snap_candidate_count, snap_last_distance_sq, snap_last_margin.x, snap_last_margin.y, snap_last_visual.x, snap_last_visual.y, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, actual.origin.x, actual.origin.y, actual.size.width, actual.size.height, if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no", outline_number, outline_level, screen_frame.size.width, screen_frame.size.height, player.number, player.layer, player.frame.origin.x, player.frame.origin.y, player.frame.size.width, player.frame.size.height }) catch return;
+    const text = std.fmt.bufPrint(&message, "WALLIFY SNAP DEBUG  •  one process\nDrag={s}  mode mix={d:.2}  outer={d:.0}×{d:.0}  card={d:.0}×{d:.0}\nPreview ≤180  commit ≤150  candidates={d}  distance²={d:.0}\nMargins: x={d:.0} y={d:.0}  visual: x={d:.0} y={d:.0}\nTarget CG:  x={d:.0} y={d:.0}  {d:.0}×{d:.0}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0} visible={s}\nOutline #{d} level={d}  screen={d:.0}×{d:.0}\nWallify CG #{d} layer={d}: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ if (snap_debug_dragging) "yes" else "no", snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, snap_debug_card_width - 16.0, snap_debug_card_height - 16.0, snap_candidate_count, snap_last_distance_sq, snap_last_margin.x, snap_last_margin.y, snap_last_visual.x, snap_last_visual.y, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, actual.origin.x, actual.origin.y, actual.size.width, actual.size.height, if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no", outline_number, outline_level, screen_frame.size.width, screen_frame.size.height, player.number, player.layer, player.frame.origin.x, player.frame.origin.y, player.frame.size.width, player.frame.size.height }) catch return;
     setLabelText(snap_debug_text, text);
     if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
         macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
@@ -494,6 +494,37 @@ test "expanded 3-column panel snap calculates 524x164 card preview" {
     try std.testing.expectEqual(@as(f64, 229), snap_right.outline_y); // 221 + 8
     try std.testing.expectEqual(@as(f64, 524), snap_right.outline_width); // 540 - 16
     try std.testing.expectEqual(@as(f64, 164), snap_right.outline_height); // 180 - 16
+}
+
+test "panel snap preview matches every Wallify form factor card size" {
+    const modes = [_]state.WidgetMode{
+        .compact,
+        .two_by_one,
+        .expanded,
+        .one_by_two,
+        .two_by_two,
+    };
+
+    for (modes) |mode| {
+        const size = mode.dimensions();
+        const neighbor = rect(400, 400, 180, 180);
+        const candidates = [_]Rect{neighbor};
+        const result = calculatePanelSnap(
+            &candidates,
+            600,
+            580,
+            size.width,
+            size.height,
+            0,
+            0,
+            0,
+            0,
+        );
+
+        try std.testing.expect(result.found);
+        try std.testing.expectEqual(size.width - 16.0, result.outline_width);
+        try std.testing.expectEqual(size.height - 16.0, result.outline_height);
+    }
 }
 
 test "panel snap rejects candidates beyond distance threshold" {
