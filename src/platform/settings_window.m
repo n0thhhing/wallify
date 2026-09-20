@@ -224,8 +224,11 @@ static NSButton *makeActionButton(
     self.window.releasedWhenClosed = NO;
     self.window.tabbingMode = NSWindowTabbingModeDisallowed;
     self.window.minSize = NSMakeSize(760, 560);
+    self.window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenAuxiliary;
+    self.window.restorable = NO;
 
     self.rootView = [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)];
+    self.rootView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.rootView.material = NSVisualEffectMaterialUnderWindowBackground;
     self.rootView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
     self.rootView.state = NSVisualEffectStateActive;
@@ -233,6 +236,7 @@ static NSButton *makeActionButton(
 
     [self buildSidebar];
     [self buildMainContent];
+    [self buildFooter];
 
     [self selectPage:0];
 }
@@ -240,6 +244,7 @@ static NSButton *makeActionButton(
 - (void)buildSidebar {
     self.sidebarView =
         [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 198, 640)];
+    self.sidebarView.autoresizingMask = NSViewHeightSizable;
 
     self.sidebarView.material = NSVisualEffectMaterialSidebar;
     self.sidebarView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
@@ -271,6 +276,7 @@ static NSButton *makeActionButton(
 
         button.frame = NSMakeRect(12, y, 174, 38);
         button.bordered = NO;
+        button.autoresizingMask = NSViewMaxXMargin;
         button.alignment = NSTextAlignmentLeft;
         button.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
         button.image = [NSImage imageWithSystemSymbolName:item[@"symbol"]
@@ -303,11 +309,51 @@ static NSButton *makeActionButton(
     [self.sidebarView addSubview:engine];
 }
 
+- (void)buildFooter {
+    NSView *footer = [[NSView alloc] initWithFrame:NSMakeRect(198, 572, 622, 68)];
+    footer.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+    [self.rootView addSubview:footer];
+
+    NSBox *separator = [[NSBox alloc] initWithFrame:NSMakeRect(0, 0, 622, 1)];
+    separator.boxType = NSBoxSeparator;
+    [footer addSubview:separator];
+
+    NSButton *defaults = [NSButton buttonWithTitle:@"Restore Defaults"
+                                             target:self
+                                             action:@selector(restoreDefaultsClicked:)];
+    defaults.frame = NSMakeRect(36, 19, 132, 28);
+    defaults.bezelStyle = NSBezelStyleRounded;
+    defaults.font = [NSFont systemFontOfSize:12 weight:NSFontWeightMedium];
+    [footer addSubview:defaults];
+
+    NSTextField *hint = makeTextLabel(
+        @"Changes are applied immediately",
+        190,
+        25,
+        230,
+        16,
+        NSFontWeightRegular,
+        [NSColor tertiaryLabelColor]
+    );
+    hint.font = [NSFont systemFontOfSize:11 weight:NSFontWeightRegular];
+    [footer addSubview:hint];
+
+    NSButton *done = [NSButton buttonWithTitle:@"Done"
+                                         target:self
+                                         action:@selector(doneClicked:)];
+    done.frame = NSMakeRect(500, 18, 86, 30);
+    done.keyEquivalent = @"\r";
+    done.bezelStyle = NSBezelStyleRounded;
+    done.font = [NSFont systemFontOfSize:12 weight:NSFontWeightSemibold];
+    [footer addSubview:done];
+}
+
 - (void)buildMainContent {
     CGFloat sidebarWidth = 198;
 
     self.contentView =
-        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(sidebarWidth, 0, 622, 640)];
+        [[WallifyFlippedView alloc] initWithFrame:NSMakeRect(sidebarWidth, 0, 622, 572)];
+    self.contentView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.contentView.material = NSVisualEffectMaterialUnderPageBackground;
     self.contentView.blendingMode = NSVisualEffectBlendingModeWithinWindow;
     self.contentView.state = NSVisualEffectStateActive;
@@ -327,7 +373,8 @@ static NSButton *makeActionButton(
     [self.contentView addSubview:self.pageSubtitleLabel];
 
     self.scrollView =
-        [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 104, 582, 468)];
+        [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 104, 582, 448)];
+    self.scrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.scrollView.hasVerticalScroller = YES;
     self.scrollView.autohidesScrollers = YES;
     self.scrollView.borderType = NSNoBorder;
@@ -668,7 +715,7 @@ static NSButton *makeActionButton(
 
         button.contentTintColor =
             selected
-                ? [NSColor whiteColor]
+                ? [NSColor selectedControlTextColor]
                 : [NSColor secondaryLabelColor];
     }
 
