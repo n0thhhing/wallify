@@ -28,6 +28,10 @@ extern const char *wallify_settings_path(void);
 @property (nonatomic, strong) NSSegmentedControl *intensitySegment;
 @property (nonatomic, strong) NSButton *animationsSwitch;
 @property (nonatomic, strong) NSButton *dimSwitch;
+@property (nonatomic, strong) NSButton *artworkBorderSwitch;
+@property (nonatomic, strong) NSButton *compactGradientSwitch;
+@property (nonatomic, strong) NSSegmentedControl *artworkRadiusSegment;
+@property (nonatomic, strong) NSSegmentedControl *progressThicknessSegment;
 @property (nonatomic, strong) NSSegmentedControl *frameSegment;
 @property (nonatomic, strong) NSSegmentedControl *speedSegment;
 
@@ -38,6 +42,8 @@ extern const char *wallify_settings_path(void);
 @property (nonatomic, strong) NSPopUpButton *transitionPopup;
 @property (nonatomic, strong) NSButton *hideTextSwitch;
 @property (nonatomic, strong) NSButton *hideProgressSwitch;
+@property (nonatomic, strong) NSButton *showControlsSwitch;
+@property (nonatomic, strong) NSButton *showTimestampsSwitch;
 @property (nonatomic, strong) NSSegmentedControl *fontScaleSegment;
 @property (nonatomic, strong) NSSegmentedControl *mediaKeySegment;
 
@@ -404,7 +410,7 @@ static NSButton *makeActionButton(
 #pragma mark Pages
 
 - (void)buildAppearancePage:(WallifyFlippedView *)view {
-    NSBox *glassCard = makeCard(0, 0, 550, 235);
+    NSBox *glassCard = makeCard(0, 0, 550, 315);
     [view addSubview:glassCard];
 
     [view addSubview:makeSectionLabel(@"GLASS & ATMOSPHERE", 18, 18, 500)];
@@ -441,42 +447,66 @@ static NSButton *makeActionButton(
         makeSegments(@[@"Low", @"Normal", @"High"], 11, self, @selector(segmentChanged:), 165, 188, 250);
     [view addSubview:self.intensitySegment];
 
-    NSBox *motionCard = makeCard(0, 249, 550, 220);
+    self.artworkBorderSwitch =
+        makeToggle(@"Artwork Border", 19, self, @selector(switchChanged:), 18, 228, 220);
+    [view addSubview:self.artworkBorderSwitch];
+    [view addSubview:makeRowSubtitle(
+        @"Draw a fine highlight around the album artwork.",
+        43, 252, 470
+    )];
+
+    NSTextField *radiusLabel =
+        makeTextLabel(@"Artwork Corners", 18, 284, 140, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:radiusLabel];
+
+    self.artworkRadiusSegment =
+        makeSegments(@[@"Soft", @"Rounded", @"Large"], 21, self, @selector(segmentChanged:), 165, 278, 250);
+    [view addSubview:self.artworkRadiusSegment];
+
+    NSBox *motionCard = makeCard(0, 330, 550, 330);
     [view addSubview:motionCard];
 
-    [view addSubview:makeSectionLabel(@"MOTION", 18, 267, 500)];
+    [view addSubview:makeSectionLabel(@"MOTION", 18, 348, 500)];
 
     self.animationsSwitch =
-        makeToggle(@"Fluid Animations", 2, self, @selector(switchChanged:), 18, 292, 300);
+        makeToggle(@"Fluid Animations", 2, self, @selector(switchChanged:), 18, 373, 300);
     [view addSubview:self.animationsSwitch];
     [view addSubview:makeRowSubtitle(
         @"Animate resizing, title movement, and mascot reactions.",
-        43, 316, 470
+        43, 397, 470
     )];
 
     self.dimSwitch =
-        makeToggle(@"Dim Artwork When Paused", 3, self, @selector(switchChanged:), 18, 340, 300);
+        makeToggle(@"Dim Artwork When Paused", 3, self, @selector(switchChanged:), 18, 421, 300);
     [view addSubview:self.dimSwitch];
     [view addSubview:makeRowSubtitle(
         @"Lower artwork brightness while playback is paused.",
-        43, 364, 470
+        43, 445, 470
     )];
 
     NSTextField *frameLabel =
-        makeTextLabel(@"Glass Border", 18, 396, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
+        makeTextLabel(@"Glass Border", 18, 477, 120, 12, NSFontWeightMedium, [NSColor labelColor]);
     [view addSubview:frameLabel];
 
     self.frameSegment =
-        makeSegments(@[@"Off", @"Subtle", @"Strong"], 10, self, @selector(segmentChanged:), 165, 390, 250);
+        makeSegments(@[@"Off", @"Subtle", @"Strong"], 10, self, @selector(segmentChanged:), 165, 471, 250);
     [view addSubview:self.frameSegment];
 
     NSTextField *speedLabel =
-        makeTextLabel(@"Animation Speed", 18, 432, 130, 12, NSFontWeightMedium, [NSColor labelColor]);
+        makeTextLabel(@"Animation Speed", 18, 519, 130, 12, NSFontWeightMedium, [NSColor labelColor]);
     [view addSubview:speedLabel];
 
     self.speedSegment =
-        makeSegments(@[@"Slow", @"Normal", @"Fast"], 12, self, @selector(segmentChanged:), 165, 426, 250);
+        makeSegments(@[@"Slow", @"Normal", @"Fast"], 12, self, @selector(segmentChanged:), 165, 513, 250);
     [view addSubview:self.speedSegment];
+
+    self.compactGradientSwitch =
+        makeToggle(@"Compact Contrast Gradient", 20, self, @selector(switchChanged:), 18, 552, 290);
+    [view addSubview:self.compactGradientSwitch];
+    [view addSubview:makeRowSubtitle(
+        @"Adds a dark fade under compact-mode track text.",
+        43, 576, 470
+    )];
 }
 
 - (void)buildPlaybackPage:(WallifyFlippedView *)view {
@@ -547,7 +577,7 @@ static NSButton *makeActionButton(
         18, 339, 500
     )];
 
-    NSBox *visibilityCard = makeCard(0, 413, 550, 185);
+    NSBox *visibilityCard = makeCard(0, 413, 550, 310);
     [view addSubview:visibilityCard];
 
     [view addSubview:makeSectionLabel(@"VISIBILITY & TYPOGRAPHY", 18, 431, 500)];
@@ -560,20 +590,36 @@ static NSButton *makeActionButton(
         makeToggle(@"Hide Progress Bar", 7, self, @selector(switchChanged:), 280, 459, 220);
     [view addSubview:self.hideProgressSwitch];
 
+    self.showControlsSwitch =
+        makeToggle(@"Show Playback Controls", 8, self, @selector(switchChanged:), 18, 505, 230);
+    [view addSubview:self.showControlsSwitch];
+
+    self.showTimestampsSwitch =
+        makeToggle(@"Show Time Labels", 9, self, @selector(switchChanged:), 280, 505, 220);
+    [view addSubview:self.showTimestampsSwitch];
+
     [view addSubview:makeRowSubtitle(
-        @"Choose which playback details remain visible.",
-        43, 483, 470
+        @"Choose which playback controls and time information remain visible.",
+        43, 529, 470
     )];
 
     NSTextField *fontLabel =
-        makeTextLabel(@"Font Size", 18, 519, 90, 12, NSFontWeightMedium, [NSColor labelColor]);
+        makeTextLabel(@"Font Size", 18, 565, 90, 12, NSFontWeightMedium, [NSColor labelColor]);
     [view addSubview:fontLabel];
 
     self.fontScaleSegment =
-        makeSegments(@[@"Small", @"Normal", @"Large"], 17, self, @selector(segmentChanged:), 148, 513, 250);
+        makeSegments(@[@"Small", @"Normal", @"Large"], 17, self, @selector(segmentChanged:), 148, 559, 250);
     [view addSubview:self.fontScaleSegment];
 
-    NSBox *keysCard = makeCard(0, 612, 550, 150);
+    NSTextField *thicknessLabel =
+        makeTextLabel(@"Progress Thickness", 18, 606, 130, 12, NSFontWeightMedium, [NSColor labelColor]);
+    [view addSubview:thicknessLabel];
+
+    self.progressThicknessSegment =
+        makeSegments(@[@"Thin", @"Standard", @"Thick"], 22, self, @selector(segmentChanged:), 148, 600, 250);
+    [view addSubview:self.progressThicknessSegment];
+
+    NSBox *keysCard = makeCard(0, 738, 550, 150);
     [view addSubview:keysCard];
 
     [view addSubview:makeSectionLabel(@"MEDIA KEY REDIRECT", 18, 630, 500)];
@@ -583,12 +629,12 @@ static NSButton *makeActionButton(
     )];
 
     self.mediaKeySegment =
-        makeSegments(@[@"Off", @"Active", @"Spotify", @"Spotifast"], 18, self, @selector(segmentChanged:), 18, 685, 430);
+        makeSegments(@[@"Off", @"Active", @"Spotify", @"Spotifast"], 18, self, @selector(segmentChanged:), 18, 811, 430);
     [view addSubview:self.mediaKeySegment];
 
     [view addSubview:makeRowSubtitle(
         @"Accessibility permission is required to intercept hardware media keys.",
-        18, 720, 500
+        18, 846, 500
     )];
 }
 
@@ -844,6 +890,24 @@ static NSButton *makeActionButton(
         s.hide_text ? NSControlStateValueOn : NSControlStateValueOff;
     self.hideProgressSwitch.state =
         s.hide_progress ? NSControlStateValueOn : NSControlStateValueOff;
+    self.showControlsSwitch.state =
+        s.show_controls ? NSControlStateValueOn : NSControlStateValueOff;
+    self.showTimestampsSwitch.state =
+        s.show_timestamps ? NSControlStateValueOn : NSControlStateValueOff;
+    self.artworkBorderSwitch.state =
+        s.artwork_border ? NSControlStateValueOn : NSControlStateValueOff;
+    self.compactGradientSwitch.state =
+        s.compact_gradient ? NSControlStateValueOn : NSControlStateValueOff;
+
+    self.artworkRadiusSegment.selectedSegment =
+        (s.artwork_radius >= 0 && s.artwork_radius <= 2)
+            ? s.artwork_radius
+            : 1;
+
+    self.progressThicknessSegment.selectedSegment =
+        (s.progress_thickness >= 0 && s.progress_thickness <= 2)
+            ? s.progress_thickness
+            : 1;
 
     self.frameSegment.selectedSegment =
         (s.frame_strength >= 0 && s.frame_strength <= 2)
