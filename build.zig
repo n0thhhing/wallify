@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
     });
     linkMacos(mod);
     mod.addIncludePath(b.path("src/platform"));
-    const native = b.addSystemCommand(&.{ "clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
+    const native = b.addSystemCommand(&.{ "/usr/bin/clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
     native.addArg("-include");
     native.addFileArg(b.path("src/platform/gpu.h"));
     native.addFileArg(b.path("src/platform/native.m"));
@@ -79,6 +79,7 @@ pub fn build(b: *std.Build) void {
 
 fn linkMacos(module: *std.Build.Module) void {
     module.linkSystemLibrary("objc", .{});
+    module.linkFramework("Foundation", .{});
     module.linkFramework("CoreFoundation", .{});
     module.linkFramework("CoreText", .{});
     module.linkFramework("AppKit", .{});
