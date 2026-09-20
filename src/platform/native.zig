@@ -7,31 +7,24 @@ pub const DrawCommand = gpu.DrawCommand;
 pub extern fn wallify_present(width: f32, height: f32, cmds: [*]const DrawCommand, count: usize) void;
 extern fn wallify_create(width: c_int, height: c_int, margin_left: c_int, margin_top: c_int) bool;
 extern fn wallify_resize(width: c_int, height: c_int) void;
-fn formFactorSize(mode: state.WidgetMode) struct { width: f64, height: f64 } {
-    return switch (mode) {
-        .compact => .{ .width = state.Layout.compact_panel_width, .height = state.Layout.compact_panel_height },
-        .medium => .{ .width = state.Layout.medium_panel_width, .height = state.Layout.expanded_panel_height },
-        .expanded => .{ .width = state.Layout.expanded_panel_width, .height = state.Layout.expanded_panel_height },
-        .wide => .{ .width = state.Layout.wide_panel_width, .height = state.Layout.expanded_panel_height },
-    };
-}
 
-pub fn create(compact: bool, left: c_int, top: c_int) bool {
-    const mode = if (compact) state.WidgetMode.compact else state.setting_mode;
-    const size = formFactorSize(mode);
+pub fn create(mode: state.WidgetMode, left: c_int, top: c_int) bool {
+    const size = mode.dimensions();
     return wallify_create(@intFromFloat(size.width), @intFromFloat(size.height), left, top);
 }
 
-pub fn resize(compact: bool) void {
-    const mode = if (compact) state.WidgetMode.compact else state.setting_mode;
-    const size = formFactorSize(mode);
+pub fn resizeForMode(mode: state.WidgetMode) void {
+    const size = mode.dimensions();
     wallify_resize(@intFromFloat(size.width), @intFromFloat(size.height));
 }
 
-pub fn resizeForMode(mode: state.WidgetMode) void {
-    const size = formFactorSize(mode);
-    wallify_resize(@intFromFloat(size.width), @intFromFloat(size.height));
+pub fn resizeTo(width: f64, height: f64) void {
+    wallify_resize(
+        @intFromFloat(@max(1.0, @round(width))),
+        @intFromFloat(@max(1.0, @round(height))),
+    );
 }
+
 pub extern fn wallify_move(margin_left: c_int, margin_top: c_int) void;
 pub extern fn wallify_prepare() void;
 pub extern fn wallify_settings_path() [*c]const u8;
