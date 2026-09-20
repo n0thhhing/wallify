@@ -171,10 +171,55 @@ static void wallify_inset_glass_optics(CALayer *layer) {
 }
 
 @interface WallifyDesktopGlassView : NSGlassEffectView
+- (void)refreshDesktopActivity;
 @end
 
 @implementation WallifyDesktopGlassView
+- (instancetype)initWithFrame:(NSRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        [NSWorkspace.sharedWorkspace.notificationCenter addObserver:self
+            selector:@selector(desktopApplicationChanged:)
+            name:NSWorkspaceDidActivateApplicationNotification object:nil];
+    }
+    return self;
+}
+
+- (void)dealloc {
+    [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:self];
+}
+
+- (void)desktopApplicationChanged:(NSNotification *)notification {
+    // Workspace activation arrives for desktop clicks as well as app switches.
+    // Read the settled foreground app on the main queue, after key-window changes.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self refreshDesktopActivity];
+    });
+}
+
+- (void)refreshDesktopActivity {
+    NSRunningApplication *frontmost = NSWorkspace.sharedWorkspace.frontmostApplication;
+    BOOL desktopActive = [frontmost.bundleIdentifier isEqualToString:@"com.apple.finder"] ||
+        frontmost.processIdentifier == NSProcessInfo.processInfo.processIdentifier;
+    // Runtime probe: 1 forces subdued glass, 2 forces unsubdued glass.
+    // This is visual state only; never make the panel key or activate Wallify.
+    NSInteger desiredState = desktopActive ? 2 : 1;
+    SEL getter = NSSelectorFromString(@"_subduedState");
+    SEL setter = NSSelectorFromString(@"set_subduedState:");
+    if ([self respondsToSelector:getter] && [self respondsToSelector:setter] &&
+        ((NSInteger (*)(id, SEL))objc_msgSend)(self, getter) != desiredState) {
+        ((void (*)(id, SEL, NSInteger))objc_msgSend)(self, setter, desiredState);
+        self.needsLayout = YES;
+    }
+}
+
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    [self refreshDesktopActivity];
+}
+
 - (void)layout {
+    [self refreshDesktopActivity];
     [super layout];
     wallify_inset_glass_optics(self.layer);
     // AppKit may materialize its filters after the initial layout callback.
@@ -1519,13 +1564,6 @@ void wallify_update_glass_rect(
                     if ([globalGlassView respondsToSelector:widgetVariant]) {
                         ((void (*)(id, SEL, NSInteger))objc_msgSend)(
                             globalGlassView, widgetVariant, 4);
-                    }
-                    // Runtime probe: state 1 forces the more blurred subdued
-                    // material; state 2 disables it. Keep desktop glass unsubdued.
-                    SEL subduedState = NSSelectorFromString(@"set_subduedState:");
-                    if ([globalGlassView respondsToSelector:subduedState]) {
-                        ((void (*)(id, SEL, NSInteger))objc_msgSend)(
-                            globalGlassView, subduedState, 2);
                     }
                     // Keep the optical material neutral. tintColor changes the
                     // glass highlights as well as its fill; it is not a dimmer.
