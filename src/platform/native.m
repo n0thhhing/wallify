@@ -175,25 +175,34 @@ static void wallify_inset_glass_optics(CALayer* layer) {
                 continue;
 
             /*
-             * Liquid Glass refraction is controlled primarily by these two
-             * private glassBackground inputs:
+             * Match the values installed by Apple's macOS 27 widget
+             * material (_variant = 4), measured from a native
+             * NSGlassEffectView on build 26A428.
              *
-             *   Height = thickness of the refracting edge band.
-             *   Amount = how far the backdrop is displaced at that edge.
+             * Refraction:
+             *   inner height = 9.6
+             *   inner amount = -41.6
              *
-             * The stock widget has a noticeably deeper lens than our old
-             * 18-point height with the system-selected amount, so explicitly
-             * set both to keep the optical profile consistent.
+             * Supporting optical settings:
+             *   blur radius = 6.111111
+             *   key-fill highlight = 0.4
+             *   highlight offset = -0.5
+             *
+             * Leave the outer refraction/aberration settings at their
+             * system defaults; the native widget reports them as disabled.
              */
             if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputInnerRefractionHeight"])
-                [filter setValue:@24.0 forKey:@"inputInnerRefractionHeight"];
+                [filter setValue:@9.6 forKey:@"inputInnerRefractionHeight"];
             if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputInnerRefractionAmount"])
-                [filter setValue:@32.0 forKey:@"inputInnerRefractionAmount"];
+                [filter setValue:@(-41.6) forKey:@"inputInnerRefractionAmount"];
+
+            if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputBlurRadius"])
+                [filter setValue:@6.111111 forKey:@"inputBlurRadius"];
 
             if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputKeyFillHighlightEffectOffset"])
-                [filter setValue:@(-2.0) forKey:@"inputKeyFillHighlightEffectOffset"];
+                [filter setValue:@(-0.5) forKey:@"inputKeyFillHighlightEffectOffset"];
             if ([[filter valueForKey:@"inputKeys"] containsObject:@"inputKeyFillHighlightAmount"])
-                [filter setValue:@0.25 forKey:@"inputKeyFillHighlightAmount"];
+                [filter setValue:@0.4 forKey:@"inputKeyFillHighlightAmount"];
 
             touched = YES;
         } @catch (__unused NSException* exception) {
