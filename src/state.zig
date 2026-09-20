@@ -168,9 +168,27 @@ pub const MediaKeyTarget = enum(u8) {
     spotifast = 3, // Always send to Spotifast via IPC
 };
 
+pub const ArtworkRadius = enum(u8) {
+    soft = 0,
+    rounded = 1,
+    large = 2,
+};
+
+pub const ProgressThickness = enum(u8) {
+    thin = 0,
+    standard = 1,
+    thick = 2,
+};
+
 pub var setting_hide_text: bool = false;
 pub var setting_hide_progress: bool = false;
+pub var setting_show_controls: bool = true;
+pub var setting_show_timestamps: bool = true;
+pub var setting_artwork_border: bool = true;
+pub var setting_compact_gradient: bool = true;
 pub var setting_font_scale: FontScale = .normal;
+pub var setting_artwork_radius: ArtworkRadius = .rounded;
+pub var setting_progress_thickness: ProgressThickness = .standard;
 pub var setting_media_key_target: MediaKeyTarget = .off;
 
 pub var setting_glow: bool = true;
