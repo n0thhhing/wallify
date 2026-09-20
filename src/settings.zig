@@ -76,8 +76,7 @@ pub fn mediaSourceName(v: state.MediaSource) []const u8 {
 }
 
 pub fn parseWidgetMode(raw: []const u8) state.WidgetMode {
-    const s = std.mem.trim(u8, raw, " 	
-");
+    const s = std.mem.trim(u8, raw, " \t\r\n");
     if (std.ascii.eqlIgnoreCase(s, "compact") or
         std.ascii.eqlIgnoreCase(s, "1x1") or
         std.mem.eql(u8, s, "0")) return .compact;
