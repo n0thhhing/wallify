@@ -8,10 +8,6 @@ const icon_transition = @import("../icon_transition.zig");
 const labels = @import("labels.zig");
 
 
-fn lerp(a: f64, b: f64, t: f64) f64 {
-    return a + (b - a) * t;
-}
-
 pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
         state.global_elapsed
