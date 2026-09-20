@@ -15,7 +15,6 @@ const CLICK_TOLERANCE: f64 = 5.0;
 const PET_DURATION: f64 = 2.5;
 const RATE_LOCKED: u32 = 1;
 const RATE_LOCK_DURATION: f64 = 0.5;
-const COMPACT_MODE_THRESHOLD: f64 = 0.5;
 const ART_HIT_RADIUS: f64 = 14.0;
 const SEEK_HIT_RADIUS: f64 = 3.0;
 const PANEL_DRAG_TOP_MIN: i32 = state.Layout.margin_top_min;
