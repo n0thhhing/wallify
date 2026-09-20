@@ -474,6 +474,30 @@ test "parseConfigContent preserves backward compatibility with integer values" {
     try std.testing.expectEqual(state.TransitionStyle.vinyl, state.setting_transition);
 }
 
+test "parseWidgetMode supports all five form factors" {
+    const names = [_]struct {
+        raw: []const u8,
+        mode: state.WidgetMode,
+    }{
+        .{ .raw = "1x1", .mode = .compact },
+        .{ .raw = "2x1", .mode = .two_by_one },
+        .{ .raw = "3x1", .mode = .expanded },
+        .{ .raw = "1x2", .mode = .one_by_two },
+        .{ .raw = "2x2", .mode = .two_by_two },
+    };
+
+    for (names) |entry| {
+        try std.testing.expectEqual(entry.mode, parseWidgetMode(entry.raw));
+    }
+
+    try std.testing.expectEqual(state.WidgetMode.expanded, parseWidgetMode("1"));
+    try std.testing.expectEqualStrings("1x1", widgetModeName(.compact));
+    try std.testing.expectEqualStrings("2x1", widgetModeName(.two_by_one));
+    try std.testing.expectEqualStrings("3x1", widgetModeName(.expanded));
+    try std.testing.expectEqualStrings("1x2", widgetModeName(.one_by_two));
+    try std.testing.expectEqualStrings("2x2", widgetModeName(.two_by_two));
+}
+
 test "parseMediaSource handles spotifast and fastpotify" {
     try std.testing.expectEqual(state.MediaSource.spotifast, parseMediaSource("spotifast"));
     try std.testing.expectEqual(state.MediaSource.spotifast, parseMediaSource("Spotifast"));
