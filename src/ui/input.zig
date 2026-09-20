@@ -129,14 +129,16 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
         const visual_left: f64 = 0.0;
         const visual_top: f64 = 0.0;
-        const visual_width: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) state.Layout.compact_panel_width else state.Layout.expanded_panel_width;
-        const visual_height: f64 = @floatFromInt(@import("../platform/native.zig").wallify_height());
+        const native = @import("../platform/native.zig");
+        const visual_width: f64 = @floatFromInt(native.wallify_width());
+        const visual_height: f64 = @floatFromInt(native.wallify_height());
 
         window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, true);
         const live_snap = window.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, visual_left, visual_top, visual_width, visual_height);
 
-        const preview_radius: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) 180.0 else 240.0;
-        const commit_radius: f64 = if (state.mode_mix < COMPACT_MODE_THRESHOLD) 150.0 else 190.0;
+        const visual_span = @max(visual_width, visual_height);
+        const preview_radius: f64 = @max(180.0, visual_span * 0.45);
+        const commit_radius: f64 = @max(150.0, visual_span * 0.32);
         const show_snap_preview = live_snap.found and live_snap.distance_sq <= preview_radius * preview_radius;
 
         if (!is_release and show_snap_preview) {
