@@ -8,6 +8,12 @@ typedef NS_ENUM(NSInteger, WFSettingType) {
     WFSettingTypePopup,
 };
 
+typedef NS_ENUM(NSInteger, WFSectionType) {
+    WFSectionTypeSettings,
+    WFSectionTypePosition,
+    WFSectionTypeConfiguration,
+};
+
 @interface WFSettingDefinition : NSObject
 @property(nonatomic) WFSettingType type;
 @property(nonatomic) NSInteger key;
@@ -22,6 +28,7 @@ typedef NS_ENUM(NSInteger, WFSettingType) {
 @end
 
 @interface WFSectionDefinition : NSObject
+@property(nonatomic) WFSectionType type;
 @property(nonatomic, copy) NSString *title;
 @property(nonatomic, copy) NSArray<WFSettingDefinition *> *settings;
 @end
@@ -120,8 +127,19 @@ static WFSectionDefinition *wfSection(
     NSArray<WFSettingDefinition *> *settings
 ) {
     WFSectionDefinition *section = [WFSectionDefinition new];
+    section.type = WFSectionTypeSettings;
     section.title = title;
-    section.settings = settings;
+    section.settings = settings ?: @[];
+    return section;
+
+static WFSectionDefinition *wfSpecialSection(
+    WFSectionType type,
+    NSString *title
+) {
+    WFSectionDefinition *section = [WFSectionDefinition new];
+    section.type = type;
+    section.title = title;
+    section.settings = @[];
     return section;
 }
 
@@ -388,9 +406,9 @@ static NSButton *wfButton(
             @"Desktop",
             @"rectangle.on.rectangle",
             @[
-                wfSection(@"Position", @[]),
+                wfSpecialSection(WFSectionTypePosition, @"Position"),
                 wfSection(@"Diagnostics", @[debug]),
-                wfSection(@"Configuration", @[]),
+                wfSpecialSection(WFSectionTypeConfiguration, @"Configuration"),
             ]
         ),
     ];
@@ -839,51 +857,22 @@ static NSButton *wfButton(
 
     [sectionStack addArrangedSubview:card];
 
-    if (section.settings.count > 0) {
+    if (section.type == WFSectionTypeSettings) {
         for (NSInteger i = 0; i < (NSInteger)section.settings.count; i++) {
             [rows addArrangedSubview:
                 [self makeSettingRow:section.settings[i]
                                 last:i == (NSInteger)section.settings.count - 1]];
         }
-    } else {
-        [self addSectionSpecificContent:card];
+    } else if (section.type == WFSectionTypePosition) {
+        [rows addArrangedSubview:[self makePositionContent]];
+    } else if (section.type == WFSectionTypeConfiguration) {
+        [rows addArrangedSubview:[self makeConfigurationContent]];
     }
 
     return sectionStack;
 }
 
 #pragma mark Section-specific content
-
-- (void)addSectionSpecificContent:(NSView *)card {
-    /*
-     * This is intentionally isolated from the generic setting renderer.
-     * Add another special section here only when a setting genuinely needs
-     * richer content than a normal toggle/segment/popup.
-     */
-    WFPageDefinition *page = self.pageDefinitions[self.selectedPageIndex];
-
-    if ([page.title isEqualToString:@"Desktop"]) {
-        if ([card.subviews.firstObject isKindOfClass:[NSStackView class]]) {
-            NSStackView *rows = (NSStackView *)card.subviews.firstObject;
-
-            WFSectionDefinition *positionSection = nil;
-            WFSectionDefinition *configSection = nil;
-
-            for (WFSectionDefinition *section in page.sections) {
-                if ([section.title isEqualToString:@"Position"])
-                    positionSection = section;
-                if ([section.title isEqualToString:@"Configuration"])
-                    configSection = section;
-            }
-
-            if ([positionSection.title isEqualToString:@"Position"]) {
-                [rows addArrangedSubview:[self makePositionContent]];
-            } else if ([configSection.title isEqualToString:@"Configuration"]) {
-                [rows addArrangedSubview:[self makeConfigurationContent]];
-            }
-        }
-    }
-}
 
 - (NSView *)makePositionContent {
     NSStackView *stack = [[NSStackView alloc] initWithFrame:NSZeroRect];
