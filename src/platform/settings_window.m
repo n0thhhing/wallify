@@ -6,53 +6,57 @@ extern const char *wallify_settings_path(void);
 @end
 
 @implementation WallifyFlippedView
-- (BOOL)isFlipped { return YES; }
+- (BOOL)isFlipped {
+    return YES;
+}
 @end
 
-@interface WallifySettingsWindowController : NSObject <NSWindowDelegate>
+@interface WallifySettingsWindowController : NSObject <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate>
 
-@property (nonatomic, strong) NSWindow *window;
-@property (nonatomic, strong) WallifyFlippedView *rootView;
-@property (nonatomic, strong) WallifyFlippedView *sidebarView;
-@property (nonatomic, strong) NSScrollView *scrollView;
-@property (nonatomic, strong) WallifyFlippedView *contentView;
-@property (nonatomic, strong) NSArray<NSView *> *pages;
-@property (nonatomic, strong) NSArray<NSButton *> *sidebarButtons;
+@property(nonatomic, strong) NSWindow *window;
+@property(nonatomic, strong) WallifyFlippedView *rootView;
+@property(nonatomic, strong) WallifyFlippedView *sidebarView;
+@property(nonatomic, strong) NSScrollView *scrollView;
+@property(nonatomic, strong) WallifyFlippedView *contentView;
+@property(nonatomic, strong) NSArray<NSView *> *pages;
 
-@property (nonatomic, strong) NSTextField *pageTitleLabel;
-@property (nonatomic, strong) NSTextField *pageSubtitleLabel;
-@property (nonatomic, strong) NSImageView *pageIconView;
-@property (nonatomic, strong) NSTextField *applyLabel;
+@property(nonatomic, strong) NSTableView *sidebarTable;
+@property(nonatomic, strong) NSArray<NSDictionary *> *sidebarItems;
+
+@property(nonatomic, strong) NSTextField *pageTitleLabel;
+@property(nonatomic, strong) NSTextField *pageSubtitleLabel;
+@property(nonatomic, strong) NSImageView *pageIconView;
+@property(nonatomic, strong) NSTextField *applyLabel;
 
 // Appearance
-@property (nonatomic, strong) NSButton *nativeGlassSwitch;
-@property (nonatomic, strong) NSButton *glowSwitch;
-@property (nonatomic, strong) NSButton *auroraSwitch;
-@property (nonatomic, strong) NSSegmentedControl *intensitySegment;
-@property (nonatomic, strong) NSButton *animationsSwitch;
-@property (nonatomic, strong) NSButton *dimSwitch;
-@property (nonatomic, strong) NSButton *artworkBorderSwitch;
-@property (nonatomic, strong) NSButton *compactGradientSwitch;
-@property (nonatomic, strong) NSSegmentedControl *artworkRadiusSegment;
-@property (nonatomic, strong) NSSegmentedControl *progressThicknessSegment;
-@property (nonatomic, strong) NSSegmentedControl *frameSegment;
-@property (nonatomic, strong) NSSegmentedControl *speedSegment;
+@property(nonatomic, strong) NSButton *nativeGlassSwitch;
+@property(nonatomic, strong) NSButton *glowSwitch;
+@property(nonatomic, strong) NSButton *auroraSwitch;
+@property(nonatomic, strong) NSSegmentedControl *intensitySegment;
+@property(nonatomic, strong) NSButton *animationsSwitch;
+@property(nonatomic, strong) NSButton *dimSwitch;
+@property(nonatomic, strong) NSButton *artworkBorderSwitch;
+@property(nonatomic, strong) NSButton *compactGradientSwitch;
+@property(nonatomic, strong) NSSegmentedControl *artworkRadiusSegment;
+@property(nonatomic, strong) NSSegmentedControl *progressThicknessSegment;
+@property(nonatomic, strong) NSSegmentedControl *frameSegment;
+@property(nonatomic, strong) NSSegmentedControl *speedSegment;
 
 // Playback
-@property (nonatomic, strong) NSSegmentedControl *modeSegment;
-@property (nonatomic, strong) NSSegmentedControl *sourceSegment;
-@property (nonatomic, strong) NSSegmentedControl *idleSegment;
-@property (nonatomic, strong) NSPopUpButton *transitionPopup;
-@property (nonatomic, strong) NSButton *hideTextSwitch;
-@property (nonatomic, strong) NSButton *hideProgressSwitch;
-@property (nonatomic, strong) NSButton *showControlsSwitch;
-@property (nonatomic, strong) NSButton *showTimestampsSwitch;
-@property (nonatomic, strong) NSSegmentedControl *fontScaleSegment;
-@property (nonatomic, strong) NSSegmentedControl *mediaKeySegment;
+@property(nonatomic, strong) NSSegmentedControl *modeSegment;
+@property(nonatomic, strong) NSSegmentedControl *sourceSegment;
+@property(nonatomic, strong) NSSegmentedControl *idleSegment;
+@property(nonatomic, strong) NSPopUpButton *transitionPopup;
+@property(nonatomic, strong) NSButton *hideTextSwitch;
+@property(nonatomic, strong) NSButton *hideProgressSwitch;
+@property(nonatomic, strong) NSButton *showControlsSwitch;
+@property(nonatomic, strong) NSButton *showTimestampsSwitch;
+@property(nonatomic, strong) NSSegmentedControl *fontScaleSegment;
+@property(nonatomic, strong) NSSegmentedControl *mediaKeySegment;
 
-// Desktop
-@property (nonatomic, strong) NSTextField *gridStatusLabel;
-@property (nonatomic, strong) NSButton *debugSwitch;
+// General / desktop
+@property(nonatomic, strong) NSTextField *gridStatusLabel;
+@property(nonatomic, strong) NSButton *debugSwitch;
 
 + (instancetype)sharedController;
 - (void)showSettingsWindow;
@@ -71,71 +75,71 @@ static NSTextField *makeLabel(
     CGFloat y,
     CGFloat w,
     CGFloat h,
-    CGFloat fontSize,
+    CGFloat size,
     NSFontWeight weight,
     NSColor *color
 ) {
     NSTextField *label =
-        [[NSTextField alloc]
-            initWithFrame:NSMakeRect(x, y, w, h)];
+        [[NSTextField alloc] initWithFrame:NSMakeRect(x, y, w, h)];
 
     label.stringValue = text;
-    label.font = [NSFont systemFontOfSize:fontSize weight:weight];
+    label.font = [NSFont systemFontOfSize:size weight:weight];
     label.textColor = color;
     label.editable = NO;
     label.bezeled = NO;
     label.drawsBackground = NO;
     label.selectable = NO;
-    label.usesSingleLineMode = NO;
-    label.lineBreakMode = NSLineBreakByTruncatingTail;
 
     return label;
 }
 
-static NSTextField *makeTitleLabel(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
-    return makeLabel(
-        text,
-        x,
-        y,
-        w,
-        34,
-        27,
-        NSFontWeightBold,
-        [NSColor labelColor]
-    );
-}
-
-static NSTextField *makeSubtitleLabel(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
+static NSTextField *makeCaption(
+    NSString *text,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w
+) {
     NSTextField *label =
         makeLabel(
             text,
             x,
             y,
             w,
-            40,
-            13,
+            20,
+            11,
             NSFontWeightRegular,
             [NSColor secondaryLabelColor]
         );
 
-    label.lineBreakMode = NSLineBreakByWordWrapping;
+    label.lineBreakMode = NSLineBreakByTruncatingTail;
+
     return label;
 }
 
-static NSTextField *makeGroupTitle(NSString *text, CGFloat x, CGFloat y, CGFloat w) {
+static NSTextField *makeGroupHeader(
+    NSString *text,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w
+) {
     return makeLabel(
         text.uppercaseString,
         x,
         y,
         w,
-        20,
+        18,
         11,
         NSFontWeightSemibold,
-        [NSColor tertiaryLabelColor]
+        [NSColor secondaryLabelColor]
     );
 }
 
-static NSBox *makeGroup(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
+static NSBox *makeGroup(
+    CGFloat x,
+    CGFloat y,
+    CGFloat w,
+    CGFloat h
+) {
     NSBox *group =
         [[NSBox alloc]
             initWithFrame:NSMakeRect(x, y, w, h)];
@@ -143,37 +147,42 @@ static NSBox *makeGroup(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
     group.boxType = NSBoxCustom;
     group.transparent = NO;
     group.borderWidth = 0;
-    group.cornerRadius = 14;
+    group.cornerRadius = 12;
+
     group.fillColor =
         [[NSColor controlBackgroundColor]
-            colorWithAlphaComponent:0.48];
+            colorWithAlphaComponent:0.72];
 
     return group;
 }
 
-static void addSeparator(NSView *parent, CGFloat x, CGFloat y, CGFloat w) {
+static void addSeparator(
+    NSView *parent,
+    CGFloat x,
+    CGFloat y,
+    CGFloat w
+) {
     NSBox *separator =
         [[NSBox alloc]
             initWithFrame:NSMakeRect(x, y, w, 1)];
 
     separator.boxType = NSBoxSeparator;
+
     [parent addSubview:separator];
 }
 
 static NSButton *makeToggle(
-    NSString *title,
     int tag,
     id target,
     SEL action
 ) {
     NSButton *button =
-        [NSButton buttonWithTitle:title
+        [NSButton buttonWithTitle:@""
                            target:target
                            action:action];
 
-    button.tag = tag;
     button.buttonType = NSButtonTypeSwitch;
-    button.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+    button.tag = tag;
     button.controlSize = NSControlSizeRegular;
 
     return button;
@@ -198,19 +207,6 @@ static NSSegmentedControl *makeSegments(
     return control;
 }
 
-static NSSegmentedControl *makeCompactSegments(
-    NSArray<NSString *> *items,
-    int tag,
-    id target,
-    SEL action
-) {
-    NSSegmentedControl *control =
-        makeSegments(items, tag, target, action);
-
-    control.controlSize = NSControlSizeSmall;
-    return control;
-}
-
 static NSButton *makeActionButton(
     NSString *title,
     id target,
@@ -222,30 +218,31 @@ static NSButton *makeActionButton(
                            action:action];
 
     button.bezelStyle = NSBezelStyleRounded;
-    button.font = [NSFont systemFontOfSize:12 weight:NSFontWeightMedium];
+    button.font =
+        [NSFont systemFontOfSize:12
+                          weight:NSFontWeightMedium];
 
     return button;
 }
 
-static void addSettingRow(
+static void addToggleRow(
     NSView *parent,
     NSString *title,
     NSString *subtitle,
-    NSControl *control,
+    NSButton *control,
     CGFloat y,
     CGFloat width,
     BOOL separator
 ) {
-    const CGFloat left = 20.0;
-    const CGFloat controlWidth = 290.0;
-    const CGFloat right = width - 20.0;
+    const CGFloat left = 18.0;
+    const CGFloat right = width - 18.0;
 
     NSTextField *titleLabel =
         makeLabel(
             title,
             left,
-            y + 10,
-            right - controlWidth - 18.0,
+            y + 11,
+            280,
             20,
             13,
             NSFontWeightMedium,
@@ -255,88 +252,23 @@ static void addSettingRow(
     [parent addSubview:titleLabel];
 
     if (subtitle.length > 0) {
-        NSTextField *subtitleLabel =
-            makeLabel(
+        [parent addSubview:
+            makeCaption(
                 subtitle,
                 left,
-                y + 31,
-                right - controlWidth - 18.0,
-                24,
-                11,
-                NSFontWeightRegular,
-                [NSColor secondaryLabelColor]
-            );
-
-        subtitleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-        [parent addSubview:subtitleLabel];
+                y + 33,
+                420
+            )];
     }
 
-    NSRect frame = control.frame;
-    frame.origin.x = right - controlWidth;
-    frame.origin.y = y + 15;
-    frame.size.width = controlWidth;
-    frame.size.height = 26;
+    control.frame =
+        NSMakeRect(
+            right - 54.0,
+            y + 17,
+            54.0,
+            24.0
+        );
 
-    if ([control isKindOfClass:[NSButton class]]) {
-        frame.size.width = 300.0;
-        frame.origin.x = right - 300.0;
-        frame.size.height = 24;
-        frame.origin.y = y + 11;
-    }
-
-    control.frame = frame;
-    [parent addSubview:control];
-
-    if (separator) {
-        addSeparator(parent, left, y + 69, width - 40.0);
-    }
-}
-
-static void addCenteredControlRow(
-    NSView *parent,
-    NSString *title,
-    NSString *subtitle,
-    NSControl *control,
-    CGFloat y,
-    CGFloat width,
-    BOOL separator
-) {
-    const CGFloat left = 20.0;
-    const CGFloat right = width - 20.0;
-    const CGFloat controlWidth = 340.0;
-
-    [parent addSubview:
-        makeLabel(
-            title,
-            left,
-            y + 9,
-            180,
-            20,
-            13,
-            NSFontWeightMedium,
-            [NSColor labelColor]
-        )];
-
-    [parent addSubview:
-        makeLabel(
-            subtitle,
-            left,
-            y + 31,
-            300,
-            24,
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
-
-    NSRect frame = NSMakeRect(
-        right - controlWidth,
-        y + 14,
-        controlWidth,
-        28
-    );
-
-    control.frame = frame;
     [parent addSubview:control];
 
     if (separator) {
@@ -344,7 +276,64 @@ static void addCenteredControlRow(
             parent,
             left,
             y + 69,
-            width - 40.0
+            width - 36.0
+        );
+    }
+}
+
+static void addControlRow(
+    NSView *parent,
+    NSString *title,
+    NSString *subtitle,
+    NSControl *control,
+    CGFloat y,
+    CGFloat width,
+    CGFloat controlWidth,
+    BOOL separator
+) {
+    const CGFloat left = 18.0;
+    const CGFloat right = width - 18.0;
+
+    [parent addSubview:
+        makeLabel(
+            title,
+            left,
+            y + 10,
+            175,
+            20,
+            13,
+            NSFontWeightMedium,
+            [NSColor labelColor]
+        )];
+
+    if (subtitle.length > 0) {
+        [parent addSubview:
+            makeCaption(
+                subtitle,
+                left,
+                y + 33,
+                240
+            )];
+    }
+
+    NSRect frame =
+        NSMakeRect(
+            right - controlWidth,
+            y + 15,
+            controlWidth,
+            28
+        );
+
+    control.frame = frame;
+
+    [parent addSubview:control];
+
+    if (separator) {
+        addSeparator(
+            parent,
+            left,
+            y + 69,
+            width - 36.0
         );
     }
 }
@@ -367,22 +356,14 @@ static void addCenteredControlRow(
 #pragma mark - Window
 
 - (void)createWindow {
-    const CGFloat windowWidth = 920.0;
-    const CGFloat windowHeight = 680.0;
-    const CGFloat sidebarWidth = 220.0;
-    const CGFloat footerHeight = 64.0;
-
-    NSRect frame =
-        NSMakeRect(
-            0,
-            0,
-            windowWidth,
-            windowHeight
-        );
+    const CGFloat width = 760.0;
+    const CGFloat height = 620.0;
+    const CGFloat sidebarWidth = 190.0;
 
     self.window =
         [[NSWindow alloc]
-            initWithContentRect:frame
+            initWithContentRect:
+                NSMakeRect(0, 0, width, height)
                       styleMask:
                           NSWindowStyleMaskTitled |
                           NSWindowStyleMaskClosable |
@@ -390,24 +371,19 @@ static void addCenteredControlRow(
                         backing:NSBackingStoreBuffered
                           defer:NO];
 
-    self.window.title = @"Wallify Settings";
+    self.window.title = @"Wallify";
     self.window.delegate = self;
     self.window.releasedWhenClosed = NO;
     self.window.tabbingMode = NSWindowTabbingModeDisallowed;
     self.window.restorable = NO;
-    self.window.minSize = NSMakeSize(820.0, 600.0);
+    self.window.minSize = NSMakeSize(700, 560);
     self.window.collectionBehavior |=
         NSWindowCollectionBehaviorFullScreenAuxiliary;
 
     self.rootView =
         [[WallifyFlippedView alloc]
             initWithFrame:
-                NSMakeRect(
-                    0,
-                    0,
-                    windowWidth,
-                    windowHeight
-                )];
+                NSMakeRect(0, 0, width, height)];
 
     self.rootView.autoresizingMask =
         NSViewWidthSizable |
@@ -424,23 +400,9 @@ static void addCenteredControlRow(
 
     self.window.contentView = self.rootView;
 
-    [self buildSidebar:sidebarWidth];
-    [self buildMainContent:sidebarWidth footerHeight:footerHeight];
-
-    [self buildFooter:
-        sidebarWidth
-        footerHeight:footerHeight
-        windowHeight:windowHeight
-        windowWidth:windowWidth];
-
-    [self buildPages];
-
-    [self selectPage:0];
-}
-
-#pragma mark - Sidebar
-
-- (void)buildSidebar:(CGFloat)sidebarWidth {
+    /*
+     * Sidebar
+     */
     self.sidebarView =
         [[WallifyFlippedView alloc]
             initWithFrame:
@@ -448,7 +410,7 @@ static void addCenteredControlRow(
                     0,
                     0,
                     sidebarWidth,
-                    680
+                    height
                 )];
 
     self.sidebarView.autoresizingMask =
@@ -465,190 +427,17 @@ static void addCenteredControlRow(
 
     [self.rootView addSubview:self.sidebarView];
 
-    NSImageView *logo =
-        [[NSImageView alloc]
-            initWithFrame:
-                NSMakeRect(
-                    22,
-                    22,
-                    34,
-                    34
-                )];
-
-    logo.image =
-        [NSImage imageWithSystemSymbolName:
-            @"music.note"
-            accessibilityDescription:@"Wallify"];
-
-    logo.symbolConfiguration =
-        [NSImageSymbolConfiguration
-            configurationWithPointSize:20
-            weight:NSFontWeightSemibold];
-
-    logo.contentTintColor =
-        [NSColor controlAccentColor];
-
-    [self.sidebarView addSubview:logo];
-
-    [self.sidebarView addSubview:
-        makeLabel(
-            @"Wallify",
-            68,
-            18,
-            130,
-            26,
-            16,
-            NSFontWeightSemibold,
-            [NSColor labelColor]
-        )];
-
-    [self.sidebarView addSubview:
-        makeLabel(
-            @"Settings",
-            68,
-            41,
-            130,
-            18,
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
-
-    addSeparator(
-        self.sidebarView,
-        18,
-        79,
-        sidebarWidth - 36
-    );
-
-    NSArray<NSDictionary *> *items = @[
-        @{
-            @"title": @"Appearance",
-            @"subtitle": @"Material & visuals",
-            @"symbol": @"paintpalette.fill"
-        },
-        @{
-            @"title": @"Playback",
-            @"subtitle": @"Sources & controls",
-            @"symbol": @"play.circle.fill"
-        },
-        @{
-            @"title": @"Desktop",
-            @"subtitle": @"Placement & diagnostics",
-            @"symbol": @"rectangle.on.rectangle"
-        }
-    ];
-
-    NSMutableArray<NSButton *> *buttons =
-        [NSMutableArray arrayWithCapacity:items.count];
-
-    CGFloat y = 98.0;
-
-    for (NSDictionary *item in items) {
-        NSButton *button =
-            [NSButton buttonWithTitle:item[@"title"]
-                               target:self
-                               action:@selector(sidebarButtonClicked:)];
-
-        button.tag = (NSInteger)buttons.count;
-        button.bordered = NO;
-        button.alignment = NSTextAlignmentLeft;
-        button.image =
-            [NSImage imageWithSystemSymbolName:
-                item[@"symbol"]
-                accessibilityDescription:nil];
-
-        button.imagePosition = NSImageLeft;
-        button.imageScaling = NSImageScaleProportionallyDown;
-        button.font =
-            [NSFont systemFontOfSize:13
-                              weight:NSFontWeightMedium];
-
-        button.contentTintColor =
-            [NSColor secondaryLabelColor];
-
-        button.frame =
-            NSMakeRect(
-                12,
-                y,
-                sidebarWidth - 24,
-                46
-            );
-
-        button.wantsLayer = YES;
-        button.layer.cornerRadius = 10.0;
-
-        /*
-         * Give the selected state a clean macOS-style pill.
-         */
-        button.layer.masksToBounds = YES;
-
-        [self.sidebarView addSubview:button];
-        [buttons addObject:button];
-
-        y += 54.0;
-    }
-
-    self.sidebarButtons = buttons;
-
-    addSeparator(
-        self.sidebarView,
-        18,
-        520,
-        sidebarWidth - 36
-    );
-
-    [self.sidebarView addSubview:
-        makeLabel(
-            @"WALLIFY",
-            22,
-            545,
-            170,
-            16,
-            10,
-            NSFontWeightSemibold,
-            [NSColor tertiaryLabelColor]
-        )];
-
-    [self.sidebarView addSubview:
-        makeLabel(
-            @"Native Metal • AppKit Glass",
-            22,
-            566,
-            175,
-            18,
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
-
-    [self.sidebarView addSubview:
-        makeLabel(
-            @"Changes apply immediately",
-            22,
-            594,
-            175,
-            18,
-            10,
-            NSFontWeightRegular,
-            [NSColor tertiaryLabelColor]
-        )];
-}
-
-#pragma mark - Main
-
-- (void)buildMainContent:(CGFloat)sidebarWidth
-           footerHeight:(CGFloat)footerHeight {
-    CGFloat width = 920.0 - sidebarWidth;
-
+    /*
+     * Main content
+     */
     self.contentView =
         [[WallifyFlippedView alloc]
             initWithFrame:
                 NSMakeRect(
                     sidebarWidth,
                     0,
-                    width,
-                    680.0 - footerHeight
+                    width - sidebarWidth,
+                    height
                 )];
 
     self.contentView.autoresizingMask =
@@ -666,19 +455,169 @@ static void addCenteredControlRow(
 
     [self.rootView addSubview:self.contentView];
 
+    [self buildSidebar];
+    [self buildHeader];
+    [self buildScrollView];
+    [self buildPages];
+
+    [self selectPage:0];
+}
+
+#pragma mark - Sidebar
+
+- (void)buildSidebar {
+    NSImageView *logo =
+        [[NSImageView alloc]
+            initWithFrame:
+                NSMakeRect(18, 19, 28, 28)];
+
+    logo.image =
+        [NSImage imageWithSystemSymbolName:
+            @"music.note"
+            accessibilityDescription:@"Wallify"];
+
+    logo.symbolConfiguration =
+        [NSImageSymbolConfiguration
+            configurationWithPointSize:17
+            weight:NSFontWeightSemibold];
+
+    logo.contentTintColor =
+        [NSColor controlAccentColor];
+
+    [self.sidebarView addSubview:logo];
+
+    [self.sidebarView addSubview:
+        makeLabel(
+            @"Wallify",
+            54,
+            15,
+            120,
+            24,
+            15,
+            NSFontWeightSemibold,
+            [NSColor labelColor]
+        )];
+
+    [self.sidebarView addSubview:
+        makeLabel(
+            @"Preferences",
+            54,
+            37,
+            120,
+            18,
+            10,
+            NSFontWeightRegular,
+            [NSColor secondaryLabelColor]
+        )];
+
+    addSeparator(
+        self.sidebarView,
+        14,
+        68,
+        162
+    );
+
+    self.sidebarItems = @[
+        @{
+            @"title": @"General",
+            @"symbol": @"gear"
+        },
+        @{
+            @"title": @"Appearance",
+            @"symbol": @"eye"
+        },
+        @{
+            @"title": @"Playback",
+            @"symbol": @"play.laptopcomputer"
+        },
+        @{
+            @"title": @"Advanced",
+            @"symbol": @"gearshape.2"
+        }
+    ];
+
+    self.sidebarTable =
+        [[NSTableView alloc]
+            initWithFrame:
+                NSMakeRect(8, 82, 174, 190)];
+
+    self.sidebarTable.headerView = nil;
+    self.sidebarTable.rowHeight = 38;
+    self.sidebarTable.intercellSpacing = NSMakeSize(0, 3);
+    self.sidebarTable.selectionHighlightStyle =
+        NSTableViewSelectionHighlightStyleNone;
+    self.sidebarTable.focusRingType = NSFocusRingTypeNone;
+    self.sidebarTable.backgroundColor = NSColor.clearColor;
+    self.sidebarTable.dataSource = self;
+    self.sidebarTable.delegate = self;
+
+    NSTableColumn *column =
+        [[NSTableColumn alloc] initWithIdentifier:@"sidebar"];
+
+    column.width = 174;
+
+    [self.sidebarTable addTableColumn:column];
+
+    NSScrollView *sidebarScroll =
+        [[NSScrollView alloc]
+            initWithFrame:
+                NSMakeRect(8, 82, 174, 190)];
+
+    sidebarScroll.documentView =
+        self.sidebarTable;
+
+    sidebarScroll.hasVerticalScroller = NO;
+    sidebarScroll.hasHorizontalScroller = NO;
+    sidebarScroll.drawsBackground = NO;
+    sidebarScroll.borderType = NSNoBorder;
+
+    [self.sidebarView addSubview:sidebarScroll];
+
+    addSeparator(
+        self.sidebarView,
+        14,
+        540,
+        162
+    );
+
+    [self.sidebarView addSubview:
+        makeLabel(
+            @"WALLIFY",
+            18,
+            560,
+            150,
+            18,
+            9,
+            NSFontWeightSemibold,
+            [NSColor tertiaryLabelColor]
+        )];
+
+    [self.sidebarView addSubview:
+        makeLabel(
+            @"Native Metal • macOS",
+            18,
+            580,
+            150,
+            18,
+            10,
+            NSFontWeightRegular,
+            [NSColor secondaryLabelColor]
+        )];
+}
+
+#pragma mark - Header
+
+- (void)buildHeader {
+    const CGFloat headerHeight = 92.0;
+
     self.pageIconView =
         [[NSImageView alloc]
             initWithFrame:
-                NSMakeRect(
-                    30,
-                    25,
-                    30,
-                    30
-                )];
+                NSMakeRect(28, 24, 28, 28)];
 
     self.pageIconView.symbolConfiguration =
         [NSImageSymbolConfiguration
-            configurationWithPointSize:18
+            configurationWithPointSize:19
             weight:NSFontWeightMedium];
 
     self.pageIconView.contentTintColor =
@@ -687,21 +626,29 @@ static void addCenteredControlRow(
     [self.contentView addSubview:self.pageIconView];
 
     self.pageTitleLabel =
-        makeTitleLabel(
-            @"Appearance",
-            70,
-            20,
-            width - 110
+        makeLabel(
+            @"General",
+            66,
+            19,
+            300,
+            32,
+            24,
+            NSFontWeightBold,
+            [NSColor labelColor]
         );
 
     [self.contentView addSubview:self.pageTitleLabel];
 
     self.pageSubtitleLabel =
-        makeSubtitleLabel(
-            @"Control the look and behavior of the widget.",
-            70,
-            55,
-            width - 110
+        makeLabel(
+            @"Configure the basics of your Wallify widget.",
+            66,
+            49,
+            430,
+            20,
+            12,
+            NSFontWeightRegular,
+            [NSColor secondaryLabelColor]
         );
 
     [self.contentView addSubview:self.pageSubtitleLabel];
@@ -709,422 +656,118 @@ static void addCenteredControlRow(
     self.applyLabel =
         makeLabel(
             @"",
-            width - 215,
-            27,
-            175,
-            20,
+            260,
+            25,
+            250,
+            18,
             10,
             NSFontWeightMedium,
             [NSColor tertiaryLabelColor]
         );
 
-    self.applyLabel.alignment = NSTextAlignmentRight;
+    self.applyLabel.alignment =
+        NSTextAlignmentRight;
+
     [self.contentView addSubview:self.applyLabel];
 
+    addSeparator(
+        self.contentView,
+        24,
+        headerHeight - 1,
+        522
+    );
+}
+
+#pragma mark - Scroll view
+
+- (void)buildScrollView {
     self.scrollView =
         [[NSScrollView alloc]
             initWithFrame:
                 NSMakeRect(
+                    20,
                     18,
-                    104,
-                    width - 36,
-                    492
+                    530,
+                    488
                 )];
 
+    self.scrollView.hasVerticalScroller = YES;
+    self.scrollView.autohidesScrollers = YES;
+    self.scrollView.scrollerStyle = NSScrollerStyleOverlay;
+    self.scrollView.drawsBackground = NO;
+    self.scrollView.borderType = NSNoBorder;
     self.scrollView.autoresizingMask =
         NSViewWidthSizable |
         NSViewHeightSizable;
 
-    self.scrollView.hasVerticalScroller = YES;
-    self.scrollView.autohidesScrollers = YES;
-    self.scrollView.borderType = NSNoBorder;
-    self.scrollView.drawsBackground = NO;
-    self.scrollView.scrollerStyle = NSScrollerStyleOverlay;
-
     [self.contentView addSubview:self.scrollView];
-}
-
-- (void)buildFooter:
-    (CGFloat)sidebarWidth
-    footerHeight:(CGFloat)footerHeight
-    windowHeight:(CGFloat)windowHeight
-    windowWidth:(CGFloat)windowWidth {
-
-    CGFloat contentWidth = windowWidth - sidebarWidth;
-
-    NSView *footer =
-        [[NSView alloc]
-            initWithFrame:
-                NSMakeRect(
-                    sidebarWidth,
-                    680.0 - footerHeight,
-                    contentWidth,
-                    footerHeight
-                )];
-
-    footer.autoresizingMask =
-        NSViewWidthSizable |
-        NSViewMinYMargin;
-
-    [self.rootView addSubview:footer];
-
-    addSeparator(
-        footer,
-        0,
-        0,
-        contentWidth
-    );
-
-    NSButton *defaults =
-        makeActionButton(
-            @"Restore Defaults",
-            self,
-            @selector(restoreDefaultsClicked:)
-        );
-
-    defaults.frame =
-        NSMakeRect(
-            24,
-            18,
-            126,
-            28
-        );
-
-    [footer addSubview:defaults];
-
-    NSButton *done =
-        [NSButton buttonWithTitle:@"Done"
-                           target:self
-                           action:@selector(doneClicked:)];
-
-    done.frame =
-        NSMakeRect(
-            contentWidth - 104,
-            17,
-            80,
-            30
-        );
-
-    done.bezelStyle =
-        NSBezelStyleRounded;
-
-    done.font =
-        [NSFont systemFontOfSize:12
-                          weight:NSFontWeightSemibold];
-
-    done.keyEquivalent = @"\r";
-
-    [footer addSubview:done];
 }
 
 #pragma mark - Pages
 
 - (void)buildPages {
-    CGFloat pageWidth = 650.0;
+    const CGFloat pageWidth = 510.0;
+
+    WallifyFlippedView *general =
+        [[WallifyFlippedView alloc]
+            initWithFrame:
+                NSMakeRect(0, 0, pageWidth, 760)];
+
+    [self buildGeneralPage:general];
 
     WallifyFlippedView *appearance =
         [[WallifyFlippedView alloc]
             initWithFrame:
-                NSMakeRect(
-                    0,
-                    0,
-                    pageWidth,
-                    930
-                )];
+                NSMakeRect(0, 0, pageWidth, 900)];
 
     [self buildAppearancePage:appearance];
 
     WallifyFlippedView *playback =
         [[WallifyFlippedView alloc]
             initWithFrame:
-                NSMakeRect(
-                    0,
-                    0,
-                    pageWidth,
-                    1160
-                )];
+                NSMakeRect(0, 0, pageWidth, 1060)];
 
     [self buildPlaybackPage:playback];
 
-    WallifyFlippedView *desktop =
+    WallifyFlippedView *advanced =
         [[WallifyFlippedView alloc]
             initWithFrame:
-                NSMakeRect(
-                    0,
-                    0,
-                    pageWidth,
-                    820
-                )];
+                NSMakeRect(0, 0, pageWidth, 860)];
 
-    [self buildDesktopPage:desktop];
+    [self buildAdvancedPage:advanced];
 
     self.pages = @[
+        general,
         appearance,
         playback,
-        desktop
+        advanced
     ];
 }
 
-#pragma mark Appearance page
+#pragma mark General
 
-- (void)buildAppearancePage:(WallifyFlippedView *)view {
-    const CGFloat width = 650.0;
-
-    [view addSubview:
-        makeGroupTitle(
-            @"Material",
-            6,
-            0,
-            width - 12
-        )];
-
-    NSBox *material =
-        makeGroup(
-            0,
-            24,
-            width,
-            309
-        );
-
-    [view addSubview:material];
-
-    addSettingRow(
-        material,
-        @"Native Glass",
-        @"Use the macOS Liquid Glass material.",
-        self.nativeGlassSwitch =
-            makeToggle(
-                @"",
-                5,
-                self,
-                @selector(switchChanged:)
-            ),
-        0,
-        width,
-        YES
-    );
-
-    addSettingRow(
-        material,
-        @"Artwork Glow",
-        @"Ambient color pulled from the current artwork.",
-        self.glowSwitch =
-            makeToggle(
-                @"",
-                0,
-                self,
-                @selector(switchChanged:)
-            ),
-        70,
-        width,
-        YES
-    );
-
-    addCenteredControlRow(
-        material,
-        @"Glow Intensity",
-        @"Controls the strength of the artwork glow.",
-        self.intensitySegment =
-            makeCompactSegments(
-                @[@"Low", @"Normal", @"High"],
-                11,
-                self,
-                @selector(segmentChanged:)
-            ),
-        140,
-        width,
-        YES
-    );
-
-    addSettingRow(
-        material,
-        @"Aurora Background",
-        @"Animated color field behind the custom material.",
-        self.auroraSwitch =
-            makeToggle(
-                @"",
-                1,
-                self,
-                @selector(switchChanged:)
-            ),
-        210,
-        width,
-        YES
-    );
-
-    addCenteredControlRow(
-        material,
-        @"Glass Border",
-        @"Custom border used by the non-native material.",
-        self.frameSegment =
-            makeCompactSegments(
-                @[@"Off", @"Subtle", @"Strong"],
-                10,
-                self,
-                @selector(segmentChanged:)
-            ),
-        280 - 12,
-        width,
-        NO
-    );
+- (void)buildGeneralPage:(WallifyFlippedView *)view {
+    const CGFloat width = 510.0;
 
     [view addSubview:
-        makeGroupTitle(
-            @"Artwork",
-            6,
-            347,
-            width - 12
-        )];
-
-    NSBox *artwork =
-        makeGroup(
-            0,
-            371,
-            width,
-            239
-        );
-
-    [view addSubview:artwork];
-
-    addSettingRow(
-        artwork,
-        @"Artwork Border",
-        @"Add a fine highlight around the album art.",
-        self.artworkBorderSwitch =
-            makeToggle(
-                @"",
-                19,
-                self,
-                @selector(switchChanged:)
-            ),
-        0,
-        width,
-        YES
-    );
-
-    addCenteredControlRow(
-        artwork,
-        @"Artwork Corners",
-        @"Choose how strongly the artwork is rounded.",
-        self.artworkRadiusSegment =
-            makeCompactSegments(
-                @[@"Soft", @"Rounded", @"Large"],
-                21,
-                self,
-                @selector(segmentChanged:)
-            ),
-        70,
-        width,
-        YES
-    );
-
-    addSettingRow(
-        artwork,
-        @"Compact Contrast",
-        @"Adds a dark fade behind text in 1 × 1 mode.",
-        self.compactGradientSwitch =
-            makeToggle(
-                @"",
-                20,
-                self,
-                @selector(switchChanged:)
-            ),
-        140,
-        width,
-        NO
-    );
-
-    [view addSubview:
-        makeGroupTitle(
-            @"Motion",
-            6,
-            622,
-            width - 12
-        )];
-
-    NSBox *motion =
-        makeGroup(
-            0,
-            646,
-            width,
-            239
-        );
-
-    [view addSubview:motion];
-
-    addSettingRow(
-        motion,
-        @"Animations",
-        @"Animate artwork, resizing, and state changes.",
-        self.animationsSwitch =
-            makeToggle(
-                @"",
-                2,
-                self,
-                @selector(switchChanged:)
-            ),
-        0,
-        width,
-        YES
-    );
-
-    addCenteredControlRow(
-        motion,
-        @"Animation Speed",
-        @"Control how quickly transitions play.",
-        self.speedSegment =
-            makeCompactSegments(
-                @[@"Slow", @"Normal", @"Fast"],
-                12,
-                self,
-                @selector(segmentChanged:)
-            ),
-        70,
-        width,
-        YES
-    );
-
-    addSettingRow(
-        motion,
-        @"Dim When Paused",
-        @"Lower artwork brightness while playback is paused.",
-        self.dimSwitch =
-            makeToggle(
-                @"",
-                3,
-                self,
-                @selector(switchChanged:)
-            ),
-        140,
-        width,
-        NO
-    );
-}
-
-#pragma mark Playback page
-
-- (void)buildPlaybackPage:(WallifyFlippedView *)view {
-    const CGFloat width = 650.0;
-
-    [view addSubview:
-        makeGroupTitle(
+        makeGroupHeader(
             @"Widget",
             6,
             0,
-            width - 12
+            width
         )];
 
     NSBox *widget =
         makeGroup(
             0,
-            24,
+            22,
             width,
-            179
+            150
         );
 
     [view addSubview:widget];
 
-    addCenteredControlRow(
+    addControlRow(
         widget,
         @"Form Factor",
         @"Choose the desktop footprint.",
@@ -1135,51 +778,53 @@ static void addCenteredControlRow(
                 self,
                 @selector(segmentChanged:)
             ),
-        5,
+        0,
         width,
+        296,
         YES
     );
 
-    addCenteredControlRow(
+    addControlRow(
         widget,
         @"Media Source",
-        @"Choose where playback state comes from.",
+        @"Where playback state comes from.",
         self.sourceSegment =
-            makeCompactSegments(
+            makeSegments(
                 @[@"Now Playing", @"Spotify", @"Spotifast", @"Auto"],
                 13,
                 self,
                 @selector(segmentChanged:)
             ),
-        75,
+        70,
         width,
+        296,
         NO
     );
 
     [view addSubview:
-        makeGroupTitle(
-            @"Idle & Transitions",
+        makeGroupHeader(
+            @"Idle Behavior",
             6,
-            226,
-            width - 12
+            200,
+            width
         )];
 
-    NSBox *transitions =
+    NSBox *idle =
         makeGroup(
             0,
-            250,
+            222,
             width,
-            249
+            150
         );
 
-    [view addSubview:transitions];
+    [view addSubview:idle];
 
-    addCenteredControlRow(
-        transitions,
+    addControlRow(
+        idle,
         @"Idle Companion",
-        @"What appears when nothing is playing.",
+        @"Shown when nothing is playing.",
         self.idleSegment =
-            makeCompactSegments(
+            makeSegments(
                 @[@"Pixel Cat", @"Banana Cat", @"Spotify"],
                 15,
                 self,
@@ -1187,17 +832,23 @@ static void addCenteredControlRow(
             ),
         0,
         width,
+        296,
         YES
     );
 
-    self.transitionPopup =
-        [[NSPopUpButton alloc]
-            initWithFrame:NSZeroRect
-                      pullsDown:NO];
-
-    self.transitionPopup.target = self;
-    self.transitionPopup.action =
-        @selector(transitionChanged:);
+    addControlRow(
+        idle,
+        @"Track Transition",
+        @"Effect used when artwork changes.",
+        self.transitionPopup =
+            [[NSPopUpButton alloc]
+                initWithFrame:NSZeroRect
+                pullsDown:NO],
+        70,
+        width,
+        296,
+        NO
+    );
 
     [self.transitionPopup
         addItemsWithTitles:@[
@@ -1209,26 +860,211 @@ static void addCenteredControlRow(
             @"Cyber Glitch"
         ]];
 
-    addCenteredControlRow(
-        transitions,
-        @"Track Transition",
-        @"Animation used when the artwork changes.",
-        self.transitionPopup,
+    [view addSubview:
+        makeGroupHeader(
+            @"Playback",
+            6,
+            400,
+            width
+        )];
+
+    NSBox *playback =
+        makeGroup(
+            0,
+            422,
+            width,
+            150
+        );
+
+    [view addSubview:playback];
+
+    addControlRow(
+        playback,
+        @"Media Keys",
+        @"Route F7 / F8 / F9 through Wallify.",
+        self.mediaKeySegment =
+            makeSegments(
+                @[@"Off", @"Active", @"Spotify", @"Spotifast"],
+                18,
+                self,
+                @selector(segmentChanged:)
+            ),
+        0,
+        width,
+        296,
+        NO
+    );
+
+    [view addSubview:
+        makeCaption(
+            @"Accessibility permission is required to intercept hardware media keys.",
+            18,
+            585,
+            470
+        )];
+
+    NSButton *quit =
+        makeActionButton(
+            @"Quit Wallify",
+            self,
+            @selector(quitClicked:)
+        );
+
+    quit.frame =
+        NSMakeRect(
+            18,
+            622,
+            105,
+            30
+        );
+
+    [view addSubview:quit];
+}
+
+#pragma mark Appearance
+
+- (void)buildAppearancePage:(WallifyFlippedView *)view {
+    const CGFloat width = 510.0;
+
+    [view addSubview:
+        makeGroupHeader(
+            @"Material",
+            6,
+            0,
+            width
+        )];
+
+    NSBox *material =
+        makeGroup(
+            0,
+            22,
+            width,
+            295
+        );
+
+    [view addSubview:material];
+
+    addToggleRow(
+        material,
+        @"Native Glass",
+        @"Use the native macOS Liquid Glass material.",
+        self.nativeGlassSwitch =
+            makeToggle(
+                5,
+                self,
+                @selector(switchChanged:)
+            ),
+        0,
+        width,
+        YES
+    );
+
+    addToggleRow(
+        material,
+        @"Artwork Glow",
+        @"Ambient color pulled from the current artwork.",
+        self.glowSwitch =
+            makeToggle(
+                0,
+                self,
+                @selector(switchChanged:)
+            ),
         70,
         width,
         YES
     );
 
-    addCenteredControlRow(
-        transitions,
-        @"Media Key Target",
-        @"Route F7 / F8 / F9 through Wallify.",
-        self.mediaKeySegment =
-            makeCompactSegments(
-                @[@"Off", @"Active", @"Spotify", @"Spotifast"],
-                18,
+    addControlRow(
+        material,
+        @"Glow Intensity",
+        @"Strength of the artwork glow.",
+        self.intensitySegment =
+            makeSegments(
+                @[@"Low", @"Normal", @"High"],
+                11,
                 self,
                 @selector(segmentChanged:)
+            ),
+        140,
+        width,
+        240,
+        YES
+    );
+
+    addToggleRow(
+        material,
+        @"Aurora",
+        @"Animated gradient behind the widget.",
+        self.auroraSwitch =
+            makeToggle(
+                1,
+                self,
+                @selector(switchChanged:)
+            ),
+        210,
+        width,
+        NO
+    );
+
+    [view addSubview:
+        makeGroupHeader(
+            @"Artwork",
+            6,
+            340,
+            width
+        )];
+
+    NSBox *artwork =
+        makeGroup(
+            0,
+            362,
+            width,
+            220
+        );
+
+    [view addSubview:artwork];
+
+    addToggleRow(
+        artwork,
+        @"Artwork Border",
+        @"Fine highlight around album artwork.",
+        self.artworkBorderSwitch =
+            makeToggle(
+                19,
+                self,
+                @selector(switchChanged:)
+            ),
+        0,
+        width,
+        YES
+    );
+
+    addControlRow(
+        artwork,
+        @"Artwork Corners",
+        @"Choose the artwork radius.",
+        self.artworkRadiusSegment =
+            makeSegments(
+                @[@"Soft", @"Rounded", @"Large"],
+                21,
+                self,
+                @selector(segmentChanged:)
+            ),
+        70,
+        width,
+        240,
+        YES
+    );
+
+    addToggleRow(
+        artwork,
+        @"Compact Contrast",
+        @"Fade behind text in 1 × 1 mode.",
+        self.compactGradientSwitch =
+            makeToggle(
+                20,
+                self,
+                @selector(switchChanged:)
             ),
         140,
         width,
@@ -1236,42 +1072,102 @@ static void addCenteredControlRow(
     );
 
     [view addSubview:
-        makeLabel(
-            @"Accessibility permission is required to intercept hardware media keys.",
-            22,
-            473,
-            590,
-            18,
-            10,
-            NSFontWeightRegular,
-            [NSColor tertiaryLabelColor]
+        makeGroupHeader(
+            @"Motion",
+            6,
+            627,
+            width
         )];
 
+    NSBox *motion =
+        makeGroup(
+            0,
+            649,
+            width,
+            220
+        );
+
+    [view addSubview:motion];
+
+    addToggleRow(
+        motion,
+        @"Animations",
+        @"Animate resizing and state changes.",
+        self.animationsSwitch =
+            makeToggle(
+                2,
+                self,
+                @selector(switchChanged:)
+            ),
+        0,
+        width,
+        YES
+    );
+
+    addControlRow(
+        motion,
+        @"Animation Speed",
+        @"Control transition speed.",
+        self.speedSegment =
+            makeSegments(
+                @[@"Slow", @"Normal", @"Fast"],
+                12,
+                self,
+                @selector(segmentChanged:)
+            ),
+        70,
+        width,
+        240,
+        YES
+    );
+
+    addControlRow(
+        motion,
+        @"Glass Border",
+        @"Border used by the custom material.",
+        self.frameSegment =
+            makeSegments(
+                @[@"Off", @"Subtle", @"Strong"],
+                10,
+                self,
+                @selector(segmentChanged:)
+            ),
+        140,
+        width,
+        240,
+        NO
+    );
+}
+
+#pragma mark Playback
+
+- (void)buildPlaybackPage:(WallifyFlippedView *)view {
+    const CGFloat width = 510.0;
+
     [view addSubview:
-        makeGroupTitle(
+        makeGroupHeader(
             @"Visibility",
             6,
-            515,
-            width - 12
+            0,
+            width
         )];
 
     NSBox *visibility =
         makeGroup(
             0,
-            539,
+            22,
             width,
-            319
+            360
         );
 
     [view addSubview:visibility];
 
-    addSettingRow(
+    addToggleRow(
         visibility,
         @"Track Text",
         @"Show title and artist information.",
         self.hideTextSwitch =
             makeToggle(
-                @"",
                 6,
                 self,
                 @selector(switchChanged:)
@@ -1281,13 +1177,12 @@ static void addCenteredControlRow(
         YES
     );
 
-    addSettingRow(
+    addToggleRow(
         visibility,
         @"Progress Bar",
         @"Show the current playback position.",
         self.hideProgressSwitch =
             makeToggle(
-                @"",
                 7,
                 self,
                 @selector(switchChanged:)
@@ -1297,13 +1192,12 @@ static void addCenteredControlRow(
         YES
     );
 
-    addSettingRow(
+    addToggleRow(
         visibility,
         @"Playback Controls",
-        @"Show previous, play/pause, and next buttons.",
+        @"Show previous, play/pause, and next.",
         self.showControlsSwitch =
             makeToggle(
-                @"",
                 8,
                 self,
                 @selector(switchChanged:)
@@ -1313,13 +1207,12 @@ static void addCenteredControlRow(
         YES
     );
 
-    addSettingRow(
+    addToggleRow(
         visibility,
         @"Time Labels",
-        @"Show elapsed and remaining track time.",
+        @"Show elapsed and remaining time.",
         self.showTimestampsSwitch =
             makeToggle(
-                @"",
                 9,
                 self,
                 @selector(switchChanged:)
@@ -1329,46 +1222,47 @@ static void addCenteredControlRow(
         YES
     );
 
-    addCenteredControlRow(
+    addControlRow(
         visibility,
         @"Progress Thickness",
-        @"Choose the visual weight of the progress bar.",
+        @"Weight of the playback progress bar.",
         self.progressThicknessSegment =
-            makeCompactSegments(
+            makeSegments(
                 @[@"Thin", @"Standard", @"Thick"],
                 22,
                 self,
                 @selector(segmentChanged:)
             ),
-        280 - 12,
+        280,
         width,
+        240,
         NO
     );
 
     [view addSubview:
-        makeGroupTitle(
+        makeGroupHeader(
             @"Typography",
             6,
-            876,
-            width - 12
+            405,
+            width
         )];
 
     NSBox *type =
         makeGroup(
             0,
-            900,
+            427,
             width,
-            86
+            80
         );
 
     [view addSubview:type];
 
-    addCenteredControlRow(
+    addControlRow(
         type,
         @"Font Size",
-        @"Scale track text across all form factors.",
+        @"Scale track information.",
         self.fontScaleSegment =
-            makeCompactSegments(
+            makeSegments(
                 @[@"Small", @"Normal", @"Large"],
                 17,
                 self,
@@ -1376,39 +1270,73 @@ static void addCenteredControlRow(
             ),
         0,
         width,
+        240,
+        NO
+    );
+
+    [view addSubview:
+        makeGroupHeader(
+            @"Paused State",
+            6,
+            542,
+            width
+        )];
+
+    NSBox *paused =
+        makeGroup(
+            0,
+            564,
+            width,
+            80
+        );
+
+    [view addSubview:paused];
+
+    addToggleRow(
+        paused,
+        @"Dim Artwork",
+        @"Lower artwork brightness when paused.",
+        self.dimSwitch =
+            makeToggle(
+                3,
+                self,
+                @selector(switchChanged:)
+            ),
+        0,
+        width,
         NO
     );
 }
 
-#pragma mark Desktop page
+#pragma mark Advanced
 
-- (void)buildDesktopPage:(WallifyFlippedView *)view {
-    const CGFloat width = 650.0;
+- (void)buildAdvancedPage:(WallifyFlippedView *)view {
+    const CGFloat width = 510.0;
 
     [view addSubview:
-        makeGroupTitle(
-            @"Placement",
+        makeGroupHeader(
+            @"Desktop",
             6,
             0,
-            width - 12
+            width
         )];
 
-    NSBox *placement =
+    NSBox *desktop =
         makeGroup(
             0,
-            24,
+            22,
             width,
-            185
+            178
         );
 
-    [view addSubview:placement];
+    [view addSubview:desktop];
 
-    [placement addSubview:
+    [desktop addSubview:
         makeLabel(
             @"Current Position",
-            20,
-            17,
-            250,
+            18,
+            18,
+            220,
             20,
             13,
             NSFontWeightMedium,
@@ -1418,11 +1346,11 @@ static void addCenteredControlRow(
     self.gridStatusLabel =
         makeLabel(
             @"Checking position…",
-            20,
-            45,
-            585,
+            18,
+            46,
+            460,
             22,
-            13,
+            12,
             NSFontWeightRegular,
             [NSColor secondaryLabelColor]
         );
@@ -1431,18 +1359,14 @@ static void addCenteredControlRow(
         [NSFont monospacedSystemFontOfSize:12
                                     weight:NSFontWeightRegular];
 
-    [placement addSubview:self.gridStatusLabel];
+    [desktop addSubview:self.gridStatusLabel];
 
-    [placement addSubview:
-        makeLabel(
-            @"Drag the widget directly on the desktop or reset it to its default slot.",
-            20,
-            76,
-            585,
-            22,
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
+    [desktop addSubview:
+        makeCaption(
+            @"Drag the widget on the desktop or restore its default position.",
+            18,
+            72,
+            460
         )];
 
     NSButton *reset =
@@ -1454,72 +1378,71 @@ static void addCenteredControlRow(
 
     reset.frame =
         NSMakeRect(
-            20,
-            120,
-            126,
+            18,
+            116,
+            122,
             30
         );
 
-    [placement addSubview:reset];
+    [desktop addSubview:reset];
 
     [view addSubview:
-        makeGroupTitle(
+        makeGroupHeader(
             @"Diagnostics",
             6,
             228,
-            width - 12
+            width
         )];
 
     NSBox *diagnostics =
         makeGroup(
             0,
-            252,
+            250,
             width,
-            120
+            80
         );
 
     [view addSubview:diagnostics];
 
-    addSettingRow(
+    addToggleRow(
         diagnostics,
         @"Snapping Diagnostics",
-        @"Show snap candidates, coordinates, and live metrics.",
+        @"Show snap candidates and live coordinates.",
         self.debugSwitch =
             makeToggle(
-                @"",
                 4,
                 self,
                 @selector(switchChanged:)
             ),
-        15,
+        0,
         width,
         NO
     );
 
     [view addSubview:
-        makeGroupTitle(
+        makeGroupHeader(
             @"Configuration",
             6,
-            390,
-            width - 12
+            358,
+            width
         )];
 
     NSBox *configuration =
         makeGroup(
             0,
-            414,
+            380,
             width,
-            178
+            170
         );
 
     [view addSubview:configuration];
 
     [configuration addSubview:
         makeLabel(
-            @"Settings file",
-            20,
+            @"Settings File",
+            18,
             17,
-            150,
+            200,
             20,
             13,
             NSFontWeightMedium,
@@ -1533,9 +1456,9 @@ static void addCenteredControlRow(
     NSTextField *path =
         makeLabel(
             confPath,
-            20,
-            44,
-            585,
+            18,
+            45,
+            460,
             20,
             10,
             NSFontWeightRegular,
@@ -1560,9 +1483,9 @@ static void addCenteredControlRow(
 
     reveal.frame =
         NSMakeRect(
-            20,
-            91,
-            132,
+            18,
+            88,
+            128,
             30
         );
 
@@ -1577,28 +1500,36 @@ static void addCenteredControlRow(
 
     open.frame =
         NSMakeRect(
-            162,
-            91,
-            105,
+            154,
+            88,
+            102,
             30
         );
 
     [configuration addSubview:open];
 
+    [configuration addSubview:
+        makeCaption(
+            @"Changes are saved automatically.",
+            18,
+            130,
+            460
+        )];
+
     [view addSubview:
-        makeGroupTitle(
+        makeGroupHeader(
             @"About",
             6,
-            614,
-            width - 12
+            575,
+            width
         )];
 
     NSBox *about =
         makeGroup(
             0,
-            638,
+            597,
             width,
-            143
+            140
         );
 
     [view addSubview:about];
@@ -1606,9 +1537,9 @@ static void addCenteredControlRow(
     [about addSubview:
         makeLabel(
             @"Wallify",
-            20,
-            17,
-            250,
+            18,
+            16,
+            300,
             24,
             17,
             NSFontWeightSemibold,
@@ -1616,84 +1547,166 @@ static void addCenteredControlRow(
         )];
 
     [about addSubview:
-        makeLabel(
+        makeCaption(
             @"Native Metal rendering • AppKit Liquid Glass",
-            20,
-            48,
-            585,
-            20,
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
-
-    [about addSubview:
-        makeLabel(
-            @"Hardware accelerated and designed for the macOS desktop.",
-            20,
-            72,
-            585,
-            20,
-            11,
-            NSFontWeightRegular,
-            [NSColor secondaryLabelColor]
-        )];
-
-    [about addSubview:
-        makeLabel(
-            @"Changes are saved automatically.",
-            20,
-            101,
-            585,
             18,
-            10,
-            NSFontWeightRegular,
-            [NSColor tertiaryLabelColor]
+            48,
+            460
         )];
+
+    [about addSubview:
+        makeCaption(
+            @"Hardware accelerated and built for the macOS desktop.",
+            18,
+            72,
+            460
+        )];
+}
+
+#pragma mark - Sidebar table
+
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
+    (void)tableView;
+    return self.sidebarItems.count;
+}
+
+- (NSView *)tableView:(NSTableView *)tableView
+   viewForTableColumn:(NSTableColumn *)tableColumn
+                  row:(NSInteger)row {
+    (void)tableColumn;
+
+    if (row < 0 || row >= (NSInteger)self.sidebarItems.count)
+        return nil;
+
+    NSDictionary *item =
+        self.sidebarItems[row];
+
+    NSTableCellView *cell =
+        [tableView makeViewWithIdentifier:@"SidebarCell"
+                                    owner:self];
+
+    if (!cell) {
+        cell =
+            [[NSTableCellView alloc]
+                initWithFrame:
+                    NSMakeRect(0, 0, 174, 38)];
+
+        cell.identifier = @"SidebarCell";
+
+        NSImageView *icon =
+            [[NSImageView alloc]
+                initWithFrame:
+                    NSMakeRect(10, 7, 22, 22)];
+
+        icon.tag = 100;
+        icon.imageScaling =
+            NSImageScaleProportionallyDown;
+
+        [cell addSubview:icon];
+
+        NSTextField *label =
+            makeLabel(
+                @"",
+                42,
+                8,
+                120,
+                22,
+                13,
+                NSFontWeightMedium,
+                [NSColor labelColor]
+            );
+
+        label.tag = 101;
+
+        [cell addSubview:label];
+
+        cell.wantsLayer = YES;
+        cell.layer.cornerRadius = 8;
+    }
+
+    NSImageView *icon =
+        [cell viewWithTag:100];
+
+    NSTextField *label =
+        [cell viewWithTag:101];
+
+    icon.image =
+        [NSImage imageWithSystemSymbolName:
+            item[@"symbol"]
+            accessibilityDescription:nil];
+
+    icon.symbolConfiguration =
+        [NSImageSymbolConfiguration
+            configurationWithPointSize:14
+            weight:NSFontWeightMedium];
+
+    label.stringValue =
+        item[@"title"];
+
+    NSInteger selected =
+        self.sidebarTable.selectedRow;
+
+    BOOL active =
+        row == selected;
+
+    cell.layer.backgroundColor =
+        active
+            ? [NSColor selectedControlColor].CGColor
+            : NSColor.clearColor.CGColor;
+
+    icon.contentTintColor =
+        active
+            ? [NSColor selectedControlTextColor]
+            : [NSColor secondaryLabelColor];
+
+    label.textColor =
+        active
+            ? [NSColor selectedControlTextColor]
+            : [NSColor labelColor];
+
+    return cell;
+}
+
+- (void)tableViewSelectionDidChange:(NSNotification *)notification {
+    (void)notification;
+
+    [self selectPage:self.sidebarTable.selectedRow];
 }
 
 #pragma mark - Navigation
 
-- (void)sidebarButtonClicked:(NSButton *)sender {
-    [self selectPage:sender.tag];
-}
-
 - (void)selectPage:(NSInteger)index {
-    if (index < 0 || index >= (NSInteger)self.pages.count)
+    if (index < 0 ||
+        index >= (NSInteger)self.pages.count)
         return;
 
+    if (self.sidebarTable.selectedRow != index) {
+        [self.sidebarTable
+            selectRowIndexes:
+                [NSIndexSet indexSetWithIndex:index]
+                  byExtendingSelection:NO];
+    }
+
     NSArray<NSString *> *titles = @[
+        @"General",
         @"Appearance",
         @"Playback",
-        @"Desktop"
+        @"Advanced"
     ];
 
     NSArray<NSString *> *subtitles = @[
-        @"Shape the material, artwork, and motion of your widget.",
-        @"Choose the player source, controls, transitions, and typography.",
-        @"Manage placement, diagnostics, and your configuration file."
+        @"Configure the basics of your Wallify widget.",
+        @"Customize the material, artwork, and motion.",
+        @"Control visibility, typography, and playback presentation.",
+        @"Manage desktop placement, diagnostics, and configuration."
     ];
 
     NSArray<NSString *> *symbols = @[
-        @"paintpalette.fill",
-        @"play.circle.fill",
-        @"rectangle.on.rectangle"
+        @"gear",
+        @"eye",
+        @"play.laptopcomputer",
+        @"gearshape.2"
     ];
-
-    for (NSButton *button in self.sidebarButtons) {
-        BOOL selected =
-            button.tag == index;
-
-        button.layer.backgroundColor =
-            selected
-                ? [NSColor selectedControlColor].CGColor
-                : NSColor.clearColor.CGColor;
-
-        button.contentTintColor =
-            selected
-                ? [NSColor selectedControlTextColor]
-                : [NSColor secondaryLabelColor];
-    }
 
     self.pageTitleLabel.stringValue =
         titles[index];
@@ -1706,9 +1719,6 @@ static void addCenteredControlRow(
             symbols[index]
             accessibilityDescription:nil];
 
-    self.applyLabel.stringValue =
-        @"APPLIES IMMEDIATELY";
-
     for (NSView *page in self.pages) {
         [page removeFromSuperview];
     }
@@ -1716,54 +1726,36 @@ static void addCenteredControlRow(
     NSView *page =
         self.pages[index];
 
-    CGFloat viewportWidth =
+    CGFloat documentWidth =
         self.scrollView.contentView.bounds.size.width;
-
-    CGFloat pageWidth =
-        MAX(
-            620.0,
-            viewportWidth - 4.0
-        );
-
-    CGFloat documentHeight =
-        MAX(
-            page.frame.size.height,
-            self.scrollView.contentView.bounds.size.height
-        );
 
     page.frame =
         NSMakeRect(
             0,
             0,
-            pageWidth,
-            documentHeight
+            MAX(500.0, documentWidth - 8.0),
+            page.frame.size.height
         );
 
-    self.scrollView.documentView =
-        page;
+    self.scrollView.documentView = page;
 
     [self.scrollView.contentView
         scrollToPoint:
-            NSMakePoint(
-                0,
-                0
-            )];
+            NSMakePoint(0, 0)];
 
-    [self.scrollView reflectScrolledClipView:
-        self.scrollView.contentView];
+    [self.scrollView
+        reflectScrolledClipView:
+            self.scrollView.contentView];
 
     [self refreshUIFromState];
 }
 
-#pragma mark - Actions
+#pragma mark - Settings actions
 
 - (void)switchChanged:(NSButton *)sender {
-    BOOL value =
-        sender.state == NSControlStateValueOn;
-
     wallify_settings_apply_bool(
         (int)sender.tag,
-        value
+        sender.state == NSControlStateValueOn
     );
 
     [self refreshUIFromState];
@@ -1805,7 +1797,7 @@ static void addCenteredControlRow(
         @"Restore Default Settings?";
 
     alert.informativeText =
-        @"All Wallify appearance, playback, and desktop preferences will return to their defaults.";
+        @"Wallify's appearance, playback, and desktop preferences will be reset.";
 
     [alert addButtonWithTitle:@"Restore Defaults"];
     [alert addButtonWithTitle:@"Cancel"];
@@ -1820,6 +1812,11 @@ static void addCenteredControlRow(
 
         [self refreshUIFromState];
     }
+}
+
+- (void)quitClicked:(id)sender {
+    (void)sender;
+    [NSApp terminate:nil];
 }
 
 - (void)revealConfigClicked:(id)sender {
@@ -1848,7 +1845,6 @@ static void addCenteredControlRow(
 
 - (void)doneClicked:(id)sender {
     (void)sender;
-
     [self closeSettingsWindow];
 }
 
@@ -2003,16 +1999,12 @@ static void addCenteredControlRow(
     if (s.track_transition >= 0 &&
         s.track_transition <
             self.transitionPopup.numberOfItems) {
-
         [self.transitionPopup
-            selectItemAtIndex:
-                s.track_transition];
+            selectItemAtIndex:s.track_transition];
     }
 
     /*
-     * Native Glass owns the material and its rim.
-     * These controls remain visible but are disabled
-     * when they cannot affect the native material.
+     * Native Glass supplies its own material/rim.
      */
     self.auroraSwitch.enabled =
         !s.native_glass;
@@ -2024,6 +2016,8 @@ static void addCenteredControlRow(
         @"APPLIES IMMEDIATELY";
 
     [self updateGridStatusLabel];
+
+    [self.sidebarTable reloadData];
 }
 
 #pragma mark - Presentation
