@@ -210,9 +210,18 @@ pub fn togglePlayback() void {
 /// Routes the command based on setting_media_key_target, bypassing the normal
 /// active-source resolution so the user's explicit override is always honored.
 pub export fn wallify_media_key_event(keyCode: c_int) callconv(.c) void {
-    // Play/pause (keyCode 16) uses the full optimistic-clock toggle path
+    // Play/pause and track controls honor the same explicit target selection.
+    // The event tap should normally be absent while .off, but keep this safe
+    // if a stale event arrives during teardown.
+    if (state.setting_media_key_target == .off) return;
+
     if (keyCode == 16) {
-        togglePlayback();
+        switch (state.setting_media_key_target) {
+            .active => togglePlayback(),
+            .spotify => spotify.widget_spotify_control(.play_pause),
+            .spotifast => spotifast.widget_spotifast_control(.play_pause),
+            .off => {},
+        }
         return;
     }
 
