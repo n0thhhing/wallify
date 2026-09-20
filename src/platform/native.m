@@ -1482,13 +1482,17 @@ void wallify_update_glass_rect(
                 if (!globalGlassView) {
                     globalGlassView = [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
                     globalGlassView.style = NSGlassEffectViewStyleClear;
-                    // Match the dark clear desktop presentation without a gray
-                    // regular-material scrim or hand-tuned private filter graph.
+                    // Keep the optical material neutral. tintColor changes the
+                    // glass highlights as well as its fill; it is not a dimmer.
                     globalGlassView.appearance =
                         [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-                    globalGlassView.tintColor = [NSColor colorWithWhite:0.0 alpha:0.18];
+                    globalGlassView.tintColor = nil;
                     globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
                     globalGlassContentView.wantsLayer = YES;
+                    // Dark desktop backing sits above the refracted wallpaper,
+                    // below Metal content, so artwork and controls retain contrast.
+                    globalGlassContentView.layer.backgroundColor =
+                        [NSColor colorWithWhite:0.0 alpha:0.64].CGColor;
                     globalGlassContentView.layer.cornerCurve = kCACornerCurveContinuous;
                     globalGlassContentView.layer.masksToBounds = YES;
                     globalGlassContentView.clipsToBounds = YES;
