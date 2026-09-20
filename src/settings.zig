@@ -178,6 +178,14 @@ pub fn parseConfigContent(content: []const u8) void {
             if (parseBool(val)) |b| state.setting_hide_text = b;
         } else if (std.ascii.eqlIgnoreCase(key, "hide_progress")) {
             if (parseBool(val)) |b| state.setting_hide_progress = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "show_controls")) {
+            if (parseBool(val)) |b| state.setting_show_controls = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "show_timestamps")) {
+            if (parseBool(val)) |b| state.setting_show_timestamps = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "artwork_border")) {
+            if (parseBool(val)) |b| state.setting_artwork_border = b;
+        } else if (std.ascii.eqlIgnoreCase(key, "compact_gradient")) {
+            if (parseBool(val)) |b| state.setting_compact_gradient = b;
         } else if (std.ascii.eqlIgnoreCase(key, "font_scale")) {
             state.setting_font_scale = if (std.ascii.eqlIgnoreCase(val, "small"))
                 .small
@@ -185,6 +193,10 @@ pub fn parseConfigContent(content: []const u8) void {
                 .large
             else
                 .normal;
+        } else if (std.ascii.eqlIgnoreCase(key, "artwork_radius")) {
+            state.setting_artwork_radius = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
+        } else if (std.ascii.eqlIgnoreCase(key, "progress_thickness")) {
+            state.setting_progress_thickness = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
         } else if (std.ascii.eqlIgnoreCase(key, "media_key_target")) {
             state.setting_media_key_target = if (std.ascii.eqlIgnoreCase(val, "active"))
                 .active
@@ -322,6 +334,12 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
             transitionStyleName(state.setting_transition),
             if (state.setting_hide_text) "true" else "false",
             if (state.setting_hide_progress) "true" else "false",
+            if (state.setting_show_controls) "true" else "false",
+            if (state.setting_show_timestamps) "true" else "false",
+            if (state.setting_artwork_border) "true" else "false",
+            if (state.setting_compact_gradient) "true" else "false",
+            @intFromEnum(state.setting_artwork_radius),
+            @intFromEnum(state.setting_progress_thickness),
             switch (state.setting_font_scale) {
                 .small => "small",
                 .normal => "normal",
