@@ -21,22 +21,22 @@ pub fn drawIdle(canvas: *gpu.Canvas, card: gpu.Rect) void {
 }
 
 fn drawSpotifyLauncher(canvas: *gpu.Canvas, card: gpu.Rect) void {
-    const compact = state.mode_mix < 0.5;
-    const size = if (compact) card.w else L.art_size_expanded;
+    const compact = state.layout.compact_mix > 0.5;
+    const size = if (compact) card.w else state.layout.art_size;
     const padded = size * 128.0 / 104.0;
     const inset = (padded - size) / 2.0;
 
     const icon_rect = gpu.Rect{
-        .x = (if (compact) card.x else L.art_x_expanded) - inset,
-        .y = (if (compact) card.y else L.art_y_expanded) - inset,
+        .x = state.layout.art_x - inset,
+        .y = state.layout.art_y - inset,
         .w = padded,
         .h = padded,
     };
     canvas.image(.spotify, icon_rect, 1.0);
 
     if (!compact) {
-        text.draw(canvas, "Open Spotify", state.layout.bar_x, L.art_y_expanded + 36.0, state.layout.bar_w, 17.0, 1.0, true, primary_color, 0.0, false, true);
-        text.draw(canvas, "Click to launch", state.layout.bar_x, L.art_y_expanded + 63.0, state.layout.bar_w, 13.0, 1.0, false, subtitle_color, 0.0, false, true);
+        text.draw(canvas, "Open Spotify", state.layout.text_x, state.layout.title_y, state.layout.text_width, 17.0, 1.0, true, primary_color, 0.0, false, true);
+        text.draw(canvas, "Click to launch", state.layout.text_x, state.layout.artist_y, state.layout.text_width, 13.0, 1.0, false, subtitle_color, 0.0, false, true);
     }
 }
 
