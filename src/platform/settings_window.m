@@ -710,6 +710,7 @@ static NSImageView *wfSymbol(
 @property(nonatomic, strong) NSTextField *pageTitleLabel;
 @property(nonatomic, strong) NSTextField *positionStatusLabel;
 @property(nonatomic, strong) NSArray<NSButton *> *sidebarButtons;
+@property(nonatomic, strong) NSButton *restoreDefaultsButton;
 @property(nonatomic, strong) NSArray<WFPageDefinition *> *pageDefinitions;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, NSControl *> *controlsByKey;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, WFSettingDefinition *> *definitionsByKey;
@@ -1181,8 +1182,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
                           weight:NSFontWeightMedium];
     restore.contentTintColor = [NSColor secondaryLabelColor];
     [self.sidebarView addSubview:restore];
-
-    self.sidebarView.subviews[0].tag = 0;
+    self.restoreDefaultsButton = restore;
 }
 
 #pragma mark Main
@@ -1297,24 +1297,13 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
             );
     }
 
-    NSButton *restore = nil;
-    for (NSView *view in self.sidebarView.subviews) {
-        if ([view isKindOfClass:[NSButton class]] &&
-            view != self.sidebarButtons.firstObject &&
-            ![self.sidebarButtons containsObject:(NSButton *)view]) {
-            restore = (NSButton *)view;
-        }
-    }
-
-    if (restore) {
-        restore.frame =
-            NSMakeRect(
-                14,
-                bounds.size.height - 50,
-                sidebarWidth - 28,
-                30
-            );
-    }
+    self.restoreDefaultsButton.frame =
+        NSMakeRect(
+            14,
+            bounds.size.height - 50,
+            sidebarWidth - 28,
+            30
+        );
 
     self.mainView.frame =
         NSMakeRect(
@@ -1517,10 +1506,6 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
 - (void)updatePositionStatus {
     if (!self.currentPage)
         return;
-
-    for (WFView *view in @[]) {
-        (void)view;
-    }
 
     for (NSView *sectionView in self.currentPage.sections) {
         if (![sectionView isKindOfClass:[WFSectionView class]])
