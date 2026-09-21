@@ -53,19 +53,19 @@ static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
 static __strong NSEvent* pendingContextMenuEvent;
-static __weak NSMenuItem* statusAuroraItem;
-static __weak NSMenuItem* statusGlowItem;
-static __weak NSMenuItem* statusAnimationsItem;
-static __weak NSMenuItem* statusGlassItem;
-static __weak NSMenuItem* statusDimItem;
-static __weak NSMenuItem* statusTrackItem;
-static __weak NSMenuItem* statusPlayItem;
-static __weak NSMenuItem* statusSourceItems[4];
-static __weak NSMenuItem* statusModeItems[5];
-static __weak NSMenuItem* statusIdleItems[4];
-static __weak NSMenuItem* statusTransitionItems[6];
-static __weak NSMenuItem* statusFrameItems[3];
-extern void wallify_imgui_inspector_show(void) __attribute__((weak_import));
+static __strong NSMenuItem* statusAuroraItem;
+static __strong NSMenuItem* statusGlowItem;
+static __strong NSMenuItem* statusAnimationsItem;
+static __strong NSMenuItem* statusGlassItem;
+static __strong NSMenuItem* statusDimItem;
+static __strong NSMenuItem* statusTrackItem;
+static __strong NSMenuItem* statusPlayItem;
+static __strong NSMenuItem* statusSourceItems[4];
+static __strong NSMenuItem* statusModeItems[5];
+static __strong NSMenuItem* statusIdleItems[4];
+static __strong NSMenuItem* statusTransitionItems[6];
+static __strong NSMenuItem* statusFrameItems[3];
+extern void wallify_open_inspector(void);
 
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     *out = (WallifyRendererStats){0};
@@ -356,11 +356,7 @@ static WallifyView* globalMetalView = nil;
 
 - (void)statusOpenInspector:(id)sender {
     (void)sender;
-    if (wallify_imgui_inspector_show) {
-        wallify_imgui_inspector_show();
-    } else {
-        NSLog(@"Wallify: Inspector unavailable in this build (compile with -Ddebug-inspector=true)");
-    }
+    wallify_open_inspector();
 }
 
 - (void)refreshMenuState {
@@ -677,7 +673,7 @@ bool wallify_create(int width, int height, int left, int top) {
 
     NSMenuItem* inspector = [[NSMenuItem alloc] initWithTitle:@"Open Inspector" action:@selector(statusOpenInspector:) keyEquivalent:@""];
     inspector.target = menuTarget;
-    inspector.enabled = wallify_imgui_inspector_show != NULL;
+    inspector.enabled = YES;
     [menu addItem:inspector];
 
     NSMenuItem* settings = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(statusOpenSettings:) keyEquivalent:@","];
