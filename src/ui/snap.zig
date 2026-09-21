@@ -309,7 +309,6 @@ fn inspectorField(tag: isize, value: f64) Ref {
     macos.send(void, field, "setTag:", .{tag});
     macos.send(void, field, "setTarget:", .{getDebugTarget()});
     macos.send(void, field, "setAction:", .{macos.sel_registerName("debugInt:")});
-    macos.send(void, field, "setSendsActionOnEndEditing:", .{true});
     return field;
 }
 fn makeInspectorPage(index: usize, title_text: []const u8) Ref {
