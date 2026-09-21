@@ -492,7 +492,7 @@ static void encodeCommands(id<MTLCommandBuffer> command,
                            const DrawCommand* commands,
                            size_t count,
                            simd_float2 size,
-                           id<MTLTexture>* textures) {
+                           id<MTLTexture> const* textures) {
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
     pass.colorAttachments[0].texture = target;
     pass.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -817,7 +817,7 @@ void wallify_blur_texture(int source, int destination, float artSize) {
 
         // The glow is heavily blurred, so rendering it at half resolution is
         // visually stable while reducing the Gaussian workload by about 4x.
-        const bakeScale = WALLIFY_GLOW_BAKE_SCALE;
+        const float bakeScale = WALLIFY_GLOW_BAKE_SCALE;
         NSUInteger extent = (NSUInteger)ceilf(wallify_glow_extent(artSize) * bakeScale);
         NSUInteger artWidth = (NSUInteger)(artSize * WALLIFY_GLOW_SCALE_X * bakeScale);
         NSUInteger artHeight = (NSUInteger)(artSize * WALLIFY_GLOW_SCALE_Y * bakeScale);
