@@ -31,7 +31,7 @@ A native macOS music widget written in Zig with an AppKit window and Metal GPU r
 ./run -h                 # Show all options
 ```
 
-After building, open `zig-out/Wallify.app` from Finder. Drag to move, right-click for the full Settings panel, use the on-screen buttons and seek bar to control playback. Quit from the music-note menu-bar item.
+After building, open `zig-out/Wallify.app` from Finder. Drag to move, right-click for the full Settings panel, use the on-screen buttons and seek bar to control playback. The music-note menu-bar item provides quick playback, appearance, media-source, widget-mode, idle-style, transition, frame, Settings, and Inspector controls. Quit from that same menu.
 
 ## Configuration
 
@@ -87,6 +87,8 @@ bash scripts/package-app.sh
 If compiler caches are restricted, supply writable `--cache-dir` and `--global-cache-dir` paths. `zig build` without an optimization flag builds Debug; use ReleaseFast for performance measurements.
 
 Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, texture upload counters, and periodic renderer statistics. Native lifecycle logs also report cache rebuilds, texture uploads/swaps, resize requests, and visibility changes.
+
+Debug builds can enable the Dear ImGui Inspector with `-Ddebug-inspector=true`. It includes Widget, Renderer, Performance, Input, Layout, and Console / Events tabs. The Performance tab exposes scheduler tier, occlusion state, static-scene cache status and rebuilds, renderer timing, draw-call averages, and texture memory.
 
 ### Performance model
 
