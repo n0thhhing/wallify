@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     linkMacos(mod);
+    mod.linkFramework("ServiceManagement", .{});
     mod.addOptions("build_options", build_options);
     mod.addIncludePath(b.path("src/platform"));
     const native = b.addSystemCommand(&.{ "/usr/bin/clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
