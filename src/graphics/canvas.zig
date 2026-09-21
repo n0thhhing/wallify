@@ -61,7 +61,11 @@ pub const Canvas = struct {
     }
 
     pub fn image(self: *Canvas, texture: Texture, rect: Rect, opacity: f32) void {
-        _ = self.add(native.gpu.WALLIFY_TEXTURE, @intFromEnum(texture), rect, .{ 1, 1, 1, opacity });
+        self.imageTint(texture, rect, .{ 1, 1, 1, opacity });
+    }
+
+    pub fn imageTint(self: *Canvas, texture: Texture, rect: Rect, color: Color) void {
+        _ = self.add(native.gpu.WALLIFY_TEXTURE, @intFromEnum(texture), rect, color);
     }
 
     pub fn transition(
