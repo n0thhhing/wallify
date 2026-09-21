@@ -527,11 +527,7 @@ fn updateSnapDebug() void {
     }
 
     const actual = if (snap_outline) |panel| macos.send(Rect, panel, "frame", .{}) else rect(0, 0, 0, 0);
-    const outline_number = if (snap_outline) |value| macos.send(isize, value, "windowNumber", .{}) else 0;
-    const outline_level = if (snap_outline) |value| macos.send(isize, value, "level", .{}) else 0;
     const player = playerWindowInfo();
-    const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
-    const screen_frame = macos.send(Rect, screen, "frame", .{});
 
     snap_debug_tick += 1;
 
@@ -554,7 +550,7 @@ fn updateSnapDebug() void {
     if (snap_debug_controls[10] != null)
         macos.send(void, snap_debug_controls[10], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_transition)))});
     if (snap_debug_controls[11] != null)
-        macos.send(void, snap_debug_controls[11], "selectItemAtIndex:", .{@as(isize, @intCast(state.setting_media_key_target))});
+        macos.send(void, snap_debug_controls[11], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_media_key_target)))});
 
     if (snap_debug_readouts[0] != null)
         setInspectorText(snap_debug_readouts[0], if (snap_debug_dragging) "true" else "false");
