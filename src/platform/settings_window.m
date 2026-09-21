@@ -29,6 +29,8 @@ typedef NS_ENUM(NSInteger, WFSectionType) {
     WFSectionTypeSettings,
     WFSectionTypePosition,
     WFSectionTypeConfiguration,
+    WFSectionTypePerformance,
+    WFSectionTypeSystem,
 };
 
 @interface WFSettingDefinition : NSObject
