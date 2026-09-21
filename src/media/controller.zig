@@ -661,8 +661,6 @@ pub fn metadataLoop(io: std.Io) void {
                     state.requestFrame();
                 }
             }
-            watcher_running.store(false, .release);
-            if (watcher_thread) |t| t.join();
             spotify.widget_spotify_set_helper_pid(-1);
             _ = pclose(stream);
             sleep_ms(POLL_INTERVAL_MS); // Restart the helper if its stream closes.
