@@ -30,6 +30,9 @@ static id<MTLTexture> loadedTextures[WALLIFY_MAX_TEXTURES];
 static id<MTLTexture> latestTextures[WALLIFY_MAX_TEXTURES];
 static dispatch_semaphore_t inFlight;
 static BOOL profiling;
+static BOOL lastGlassUpdateValid;
+static BOOL lastGlassActive;
+static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
 
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
@@ -943,6 +946,25 @@ void wallify_update_glass_rect(double x, double y, double w, double h, double ra
     (void)tint_r;
     (void)tint_g;
     (void)tint_b;
+
+    // The renderer can call this once per scene. Avoid queueing identical AppKit work
+    // on the main thread when the glass geometry/material has not changed.
+    if (lastGlassUpdateValid &&
+        lastGlassActive == active &&
+        lastGlassX == x && lastGlassY == y &&
+        lastGlassW == w && lastGlassH == h &&
+        lastGlassRadius == radius) {
+        return;
+    }
+
+    lastGlassUpdateValid = YES;
+    lastGlassActive = active;
+    lastGlassX = x;
+    lastGlassY = y;
+    lastGlassW = w;
+    lastGlassH = h;
+    lastGlassRadius = radius;
+
     dispatch_async(dispatch_get_main_queue(), ^{
       if (!panel || !globalMetalView)
           return;
