@@ -529,62 +529,56 @@ static const char* mediaSourceName(int source) {
     return source >= 0 && source < IM_ARRAYSIZE(names) ? names[source] : "Unknown";
 }
 
-static void drawStatusMetric(const char* label, const char* value, const char* detail = nullptr,
-                             bool accent = false) {
+static void drawStatusMetric(const char* label, const char* value, bool accent = false) {
     ImGui::TableNextColumn();
     ImGui::TextDisabled("%s", label);
+
     if (accent) {
         ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
         ImGui::TextColored(color, "%s", value);
     } else {
-        ImGui::TextWrapped("%s", value);
-    }
-    if (detail) {
-        ImGui::TextDisabled("%s", detail);
+        ImGui::Text("%s", value);
     }
 }
 
 static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
     const ImGuiIO& io = ImGui::GetIO();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(11.0f, 8.0f));
-    if (ImGui::BeginChild("InspectorStatus", ImVec2(0, 72.0f), ImGuiChildFlags_Borders)) {
+    char modeText[32];
+    snprintf(modeText, sizeof(modeText), "%s  ·  %d × %d", modeName(s.mode), s.width, s.height);
+
+    const char* status =
+        s.transition_active ? "Transitioning" :
+        (s.frame_requested ? "Live" : "Idle");
+
+    char mediaText[160];
+    snprintf(mediaText, sizeof(mediaText), "%s  ·  %s",
+             s.title_len ? s.title : "Nothing playing",
+             mediaSourceName(s.source));
+
+    char frameText[32];
+    snprintf(frameText, sizeof(frameText), "%.0f FPS  ·  %.2f ms",
+             io.Framerate, io.DeltaTime * 1000.0f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(12.0f, 5.0f));
+
+    if (ImGui::BeginChild("InspectorStatus", ImVec2(0, 48.0f), ImGuiChildFlags_Borders)) {
         if (ImGui::BeginTable("InspectorStatusTable", 4,
                               ImGuiTableFlags_SizingStretchProp |
-                              ImGuiTableFlags_BordersInnerV)) {
-            drawStatusMetric(
-                "STATUS",
-                s.transition_active ? "Transitioning" :
-                (s.frame_requested ? "Live" : "Idle"),
-                s.transition_active ? "Mode transition active" : "Frame updates",
-                true);
-            char modeDetail[32];
-            if (s.width > 0 && s.height > 0)
-                snprintf(modeDetail, sizeof(modeDetail), "%d × %d pt", s.width, s.height);
-            else
-                snprintf(modeDetail, sizeof(modeDetail), "Size unavailable");
-
-            drawStatusMetric("MODE", modeName(s.mode), modeDetail);
-            drawStatusMetric(
-                "MEDIA",
-                s.title_len ? s.title : "Nothing playing",
-                mediaSourceName(s.source));
-            char frameRate[32];
-            if (io.Framerate > 0.0f)
-                snprintf(frameRate, sizeof(frameRate), "%.0f FPS", io.Framerate);
-            else
-                snprintf(frameRate, sizeof(frameRate), "—");
-
-            char frameDetail[32];
-            snprintf(frameDetail, sizeof(frameDetail), "%.2f ms", io.DeltaTime * 1000.0f);
-
-            drawStatusMetric("FRAME", frameRate, frameDetail);
+                              ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_NoPadOuterX)) {
+            drawStatusMetric("STATUS", status, true);
+            drawStatusMetric("MODE", modeText);
+            drawStatusMetric("MEDIA", mediaText);
+            drawStatusMetric("FRAME", frameText);
             ImGui::EndTable();
         }
     }
     ImGui::EndChild();
-    ImGui::PopStyleVar();
 
+    ImGui::PopStyleVar(3);
     ImGui::Spacing();
 }
 
