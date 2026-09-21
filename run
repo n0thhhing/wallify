@@ -130,17 +130,17 @@ if [[ "$DO_WATCH" == true ]]; then
     # Watch mode wraps the existing build/launch path instead of duplicating it.
     # Foreground/log mode is intentionally disabled for the child rebuilds so
     # this shell remains available to watch and restart the app.
-    WATCH_ARGS=()
+    WATCH_INITIAL_ARGS=()
     WATCH_REBUILD_ARGS=()
     for arg in "$@"; do
         case "$arg" in
             -w|--watch|-f|--foreground|-l|--logs)
                 ;;
             -t|--test|-c|-C|--clean)
-                WATCH_ARGS+=("$arg")
+                WATCH_INITIAL_ARGS+=("$arg")
                 ;;
             *)
-                WATCH_ARGS+=("$arg")
+                WATCH_INITIAL_ARGS+=("$arg")
                 WATCH_REBUILD_ARGS+=("$arg")
                 ;;
         esac
@@ -149,8 +149,14 @@ if [[ "$DO_WATCH" == true ]]; then
     echo -e "${BOLD}${CYAN}==>${RESET} ${BOLD}Watch mode enabled${RESET}"
     echo -e "  ${DIM}Rebuilds when files outside .git/.zig-cache/zig-out change.${RESET}"
 
-    if ! "$0" "${WATCH_ARGS[@]}"; then
-        echo -e "${YELLOW}Initial build failed. Watching for the next change...${RESET}"
+    if [[ ${#WATCH_INITIAL_ARGS[@]} -gt 0 ]]; then
+        if ! "$0" "${WATCH_INITIAL_ARGS[@]}"; then
+            echo -e "${YELLOW}Initial build failed. Watching for the next change...${RESET}"
+        fi
+    else
+        if ! "$0"; then
+            echo -e "${YELLOW}Initial build failed. Watching for the next change...${RESET}"
+        fi
     fi
 
     last_snapshot="$(source_snapshot)"
