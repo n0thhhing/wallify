@@ -296,10 +296,14 @@ pub var panel_save_after_snap = false;
 pub var global_hover_target: HitTarget = .none;
 pub var global_click_target: HitTarget = .none;
 
+const frame_wakeup = @import("frame_wakeup.zig");
+
 pub var frame_requested = std.atomic.Value(bool).init(true);
 
 pub fn requestFrame() void {
-    frame_requested.store(true, .release);
+    if (!frame_requested.swap(true, .acq_rel)) {
+        frame_wakeup.wake();
+    }
 }
 
 pub var artwork_refresh_pending = true;
