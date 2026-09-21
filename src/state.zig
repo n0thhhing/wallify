@@ -216,8 +216,6 @@ pub fn isPlaceholderTitle(title: []const u8) bool {
 }
 
 pub fn spotifyIdle() bool {
-    const now = std.time.microTimestamp() / 1_000_000.0;
-    if (now < spotify_event_until) return false;
     if (spotify_closed.load(.acquire)) return true;
     const title_len = global_title_len;
     if (title_len == 0) return true;
