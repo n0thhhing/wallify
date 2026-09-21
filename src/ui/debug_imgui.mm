@@ -532,14 +532,14 @@ static const char* mediaSourceName(int source) {
 static void drawStatusMetric(const char* label, const char* value, bool accent = false) {
     ImGui::TableNextColumn();
     ImGui::TextDisabled("%s", label);
-    ImGui::SameLine(7.0f);
-
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetColumnWidth() - 12.0f);
     if (accent) {
         ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
         ImGui::TextColored(color, "%s", value);
     } else {
         ImGui::Text("%s", value);
     }
+    ImGui::PopTextWrapPos();
 }
 
 static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
@@ -552,23 +552,35 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
         s.transition_active ? "Transitioning" :
         (s.frame_requested ? "Live" : "Idle");
 
-    char mediaText[160];
+    char titleText[48];
+    if (s.title_len) {
+        snprintf(titleText, sizeof(titleText), "%.28s%s",
+                 s.title, s.title_len > 28 ? "…" : "");
+    } else {
+        snprintf(titleText, sizeof(titleText), "Nothing playing");
+    }
+
+    char mediaText[96];
     snprintf(mediaText, sizeof(mediaText), "%s  ·  %s",
-             s.title_len ? s.title : "Nothing playing",
-             mediaSourceName(s.source));
+             titleText, mediaSourceName(s.source));
 
     char frameText[32];
     snprintf(frameText, sizeof(frameText), "%.0f FPS  ·  %.2f ms",
              io.Framerate, io.DeltaTime * 1000.0f);
 
-    // Keep the summary in the root window, not a child window. A child becomes
-    // its own scroll container when its contents are even slightly too tall.
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(12.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 2.0f));
 
     if (ImGui::BeginTable("InspectorStatusTable", 4,
                           ImGuiTableFlags_SizingStretchProp |
                           ImGuiTableFlags_BordersInnerV |
-                          ImGuiTableFlags_NoPadOuterX)) {
+                          ImGuiTableFlags_NoPadOuterX |
+                          ImGuiTableFlags_NoPadInnerX)) {
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+        ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthFixed, 190.0f);
+        ImGui::TableSetupColumn("Media", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Frame", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+
         drawStatusMetric("STATUS", status, true);
         drawStatusMetric("MODE", modeText);
         drawStatusMetric("MEDIA", mediaText);
@@ -576,7 +588,7 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
         ImGui::EndTable();
     }
 
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar(2);
     ImGui::Spacing();
 }
 
