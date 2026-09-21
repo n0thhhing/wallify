@@ -184,7 +184,7 @@ fn makeInspectorPage(title_text: []const u8) Ref {
 
     const body = macos.send(
         Ref,
-        macos.send(Ref, macos.objc_getClass(label_cls), "alloc", .{}),
+        macos.send(Ref, label_cls, "alloc", .{}),
         "initWithFrame:",
         .{rect(18, 18, DEBUG_PANEL_WIDTH - 36.0, DEBUG_PANEL_HEIGHT - 108.0)},
     );
