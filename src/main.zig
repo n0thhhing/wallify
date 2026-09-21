@@ -14,6 +14,10 @@ extern fn wallify_imgui_inspector_show() void;
 extern fn wallify_debug_console_install() void;
 pub const settings_window = @import("ui/settings_window.zig");
 
+export fn wallify_set_window_visible(visible: c_int) void {
+    state.setWindowVisible(visible != 0);
+}
+
 pub fn main() !void {
     if (build_options.debug_inspector and builtin.mode == .Debug) {
         wallify_debug_console_install();
