@@ -1,7 +1,10 @@
 #import "settings_window.h"
+#import "debug_stats.h"
 #import <objc/message.h>
 #import <QuartzCore/QuartzCore.h>
 #import <ServiceManagement/ServiceManagement.h>
+
+extern void wallify_imgui_inspector_show(void) __attribute__((weak_import));
 
 extern const char *wallify_settings_path(void);
 
@@ -1127,11 +1130,20 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         ),
 
         wfPage(
+            @"Performance",
+            @"gauge.with.dots.needle.67percent",
+            @[
+                wfSpecialSection(WFSectionTypePerformance, @"Renderer"),
+            ]
+        ),
+
+        wfPage(
             @"Desktop",
             @"rectangle.on.rectangle",
             @[
                 wfSpecialSection(WFSectionTypePosition, @"Position"),
                 wfSection(@"Diagnostics", @[debug]),
+                wfSpecialSection(WFSectionTypeSystem, @"System"),
                 wfSpecialSection(WFSectionTypeConfiguration, @"Configuration"),
             ]
         ),
@@ -1682,6 +1694,27 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         openURL:[NSURL fileURLWithPath:path]];
 }
 
+- (void)openInspectorClicked:(id)sender {
+    (void)sender;
+    if (wallify_imgui_inspector_show)
+        wallify_imgui_inspector_show();
+}
+
+- (void)launchAtLoginChanged:(NSButton *)sender {
+    const BOOL enabled = sender.state == NSControlStateValueOn;
+    if (!wallify_launch_at_login_set(enabled)) {
+        sender.state = wallify_launch_at_login_enabled()
+            ? NSControlStateValueOn
+            : NSControlStateValueOff;
+    }
+}
+
+- (void)openLoginItemsSettingsClicked:(id)sender {
+    (void)sender;
+    if (@available(macOS 13.0, *))
+        [SMAppService openSystemSettingsLoginItems];
+}
+
 #pragma mark State
 
 - (WFSettingDefinition *)definitionForKey:(NSInteger)key {
@@ -1816,6 +1849,30 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     }
 
     [self updatePositionStatus];
+
+    for (WFSectionView *section in self.currentPage.sections) {
+        if (section.type == WFSectionTypePerformance && section.specialContent.subviews.count >= 3) {
+            WallifyRendererStats stats = {0};
+            wallify_debug_renderer_stats(&stats);
+            NSTextField *status = (NSTextField *)section.specialContent.subviews[0];
+            NSTextField *detail = (NSTextField *)section.specialContent.subviews[1];
+            NSButton *inspector = (NSButton *)section.specialContent.subviews[2];
+
+            status.stringValue = stats.ready
+                ? [NSString stringWithFormat:@"Metal ready • %s", stats.device_name]
+                : @"Metal renderer unavailable";
+            detail.stringValue = stats.profiling
+                ? [NSString stringWithFormat:@"Scene %.3f ms • GPU %.3f ms • %.2f MiB textures",
+                    stats.scene_ms, stats.gpu_ms, stats.texture_bytes / 1048576.0]
+                : @"Timing disabled • run WALLIFY_PROFILE=1 ./run -d -f for CPU/GPU measurements";
+            inspector.enabled = wallify_imgui_inspector_show != NULL;
+        } else if (section.type == WFSectionTypeSystem && section.specialContent.subviews.count >= 2) {
+            NSButton *login = (NSButton *)section.specialContent.subviews[0];
+            login.state = wallify_launch_at_login_enabled()
+                ? NSControlStateValueOn
+                : NSControlStateValueOff;
+        }
+    }
 }
 
 #pragma mark Presentation
