@@ -203,8 +203,15 @@ fi
 # 4. Compile & Package Application
 echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Building ${APP_NAME} (${OPTIMIZE})...${RESET}"
 
+# Debug mode is the only mode that opts into the Dear ImGui inspector.
+BUILD_ARGS=(-Doptimize="${OPTIMIZE}")
+if [[ "${OPTIMIZE}" == "Debug" ]]; then
+    ./scripts/fetch-imgui.sh
+    BUILD_ARGS+=(-Ddebug-inspector=true)
+fi
+
 # Build with requested optimization level before stopping the existing process
-if ! zig build -Doptimize="${OPTIMIZE}"; then
+if ! zig build "${BUILD_ARGS[@]}"; then
     echo -e "${RED}✗ Compilation failed. Preserving existing running instance.${RESET}" >&2
     exit 1
 fi
