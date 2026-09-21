@@ -13,7 +13,8 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     else
         state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
 
-    const ease = 1.0 - std.math.pow(f64, 1.0 - state.global_anim_art_t, 3);
+    const inverse_art_mix = 1.0 - state.global_anim_art_t;
+    const ease = 1.0 - inverse_art_mix * inverse_art_mix * inverse_art_mix;
     const inset = 10.0 * (1.0 - ease);
     const radius_delta: f64 = switch (state.setting_artwork_radius) {
         .soft => -8.0,
