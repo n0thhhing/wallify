@@ -177,6 +177,91 @@ static NSView *wfMakeGlassView(NSRect frame) {
 
 #pragma mark - Generic controls
 
+@interface WFSidebarButton : NSButton
+@property(nonatomic, strong) NSImageView *iconView;
+@property(nonatomic, strong) NSTextField *textLabel;
+@end
+
+@implementation WFSidebarButton
+
+- (instancetype)initWithTitle:(NSString *)title
+                         symbol:(NSString *)symbol
+                         target:(id)target
+                         action:(SEL)action {
+    self = [super initWithFrame:NSZeroRect];
+    if (!self)
+        return nil;
+
+    self.target = target;
+    self.action = action;
+    self.title = @"";
+    self.bordered = NO;
+    self.wantsLayer = YES;
+    self.layer.cornerRadius = 8.0;
+    self.layer.masksToBounds = YES;
+
+    self.iconView = [[NSImageView alloc] initWithFrame:NSZeroRect];
+    self.iconView.image =
+        [NSImage imageWithSystemSymbolName:symbol
+                     accessibilityDescription:nil];
+    self.iconView.symbolConfiguration =
+        [NSImageSymbolConfiguration
+            configurationWithPointSize:14.0
+                                 weight:NSFontWeightMedium];
+    self.iconView.contentTintColor = [NSColor secondaryLabelColor];
+
+    self.textLabel =
+        wfLabel(
+            title,
+            13.5,
+            NSFontWeightMedium,
+            [NSColor labelColor]
+        );
+
+    [self addSubview:self.iconView];
+    [self addSubview:self.textLabel];
+
+    return self;
+}
+
+- (void)layout {
+    [super layout];
+
+    const CGFloat horizontalInset = 12.0;
+    const CGFloat gap = 10.0;
+    const CGFloat iconSize = 18.0;
+
+    self.iconView.frame =
+        NSMakeRect(
+            horizontalInset,
+            floor((self.bounds.size.height - iconSize) * 0.5),
+            iconSize,
+            iconSize
+        );
+
+    self.textLabel.frame =
+        NSMakeRect(
+            horizontalInset + iconSize + gap,
+            0,
+            MAX(
+                0.0,
+                self.bounds.size.width -
+                (horizontalInset * 2.0) -
+                iconSize -
+                gap
+            ),
+            self.bounds.size.height
+        );
+}
+
+- (void)setEnabled:(BOOL)enabled {
+    [super setEnabled:enabled];
+    self.iconView.alphaValue = enabled ? 1.0 : 0.5;
+    self.textLabel.alphaValue = enabled ? 1.0 : 0.5;
+}
+
+@end
+
 static NSTextField *wfLabel(
     NSString *text,
     CGFloat size,
@@ -1142,33 +1227,14 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         [NSMutableArray arrayWithCapacity:titles.count];
 
     for (NSInteger i = 0; i < (NSInteger)titles.count; i++) {
-        NSButton *button =
-            [NSButton buttonWithTitle:titles[i]
-                               target:self
-                               action:@selector(sidebarButtonClicked:)];
+        WFSidebarButton *button =
+            [[WFSidebarButton alloc]
+                initWithTitle:titles[i]
+                symbol:symbols[i]
+                target:self
+                action:@selector(sidebarButtonClicked:)];
 
         button.tag = i;
-        button.bordered = NO;
-        button.alignment = NSTextAlignmentLeft;
-        button.imageHugsTitle = NO;
-        button.font =
-            [NSFont systemFontOfSize:13.5
-                              weight:NSFontWeightMedium];
-
-        button.image =
-            [NSImage imageWithSystemSymbolName:
-                symbols[i]
-                accessibilityDescription:nil];
-
-        button.symbolConfiguration =
-            [NSImageSymbolConfiguration
-                configurationWithPointSize:14
-                                     weight:NSFontWeightMedium];
-
-        button.imagePosition = NSImageLeft;
-        button.contentTintColor = [NSColor secondaryLabelColor];
-        button.wantsLayer = YES;
-        button.layer.cornerRadius = 8.0;
 
         [self.sidebarView addSubview:button];
         [buttons addObject:button];
