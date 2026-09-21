@@ -42,6 +42,7 @@ static simd_float2 cachedStaticSize;
 static CGFloat cachedStaticScale;
 static BOOL staticCacheValid;
 static id<MTLTexture> staticSceneTexture;
+static atomic_uint staticCacheRebuilds;
 
 static id<MTLTexture> loadedTextures[WALLIFY_MAX_TEXTURES];
 static id<MTLTexture> latestTextures[WALLIFY_MAX_TEXTURES];
@@ -92,6 +93,10 @@ void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     out->drawable_width = surface.drawableSize.width;
     out->drawable_height = surface.drawableSize.height;
     out->scale = surface.contentsScale;
+    out->static_cache_valid = staticCacheValid ? 1 : 0;
+    out->static_cache_rebuilds = atomic_load(&staticCacheRebuilds);
+    out->static_cache_width = staticSceneTexture ? staticSceneTexture.width : 0.0;
+    out->static_cache_height = staticSceneTexture ? staticSceneTexture.height : 0.0;
 }
 
 void wallify_profile_scene(double seconds) {
@@ -840,6 +845,7 @@ static void presentLatest(void) {
         }
 
         if (cacheChanged || !staticCacheValid || textureRecreated) {
+            atomic_fetch_add(&staticCacheRebuilds, 1);
             NSLog(@"Wallify: rebuilding static cache cmds=%lu size=%.0fx%.0f%@",
                   (unsigned long)staticCount, size.x, size.y,
                   textureRecreated ? @" [texture recreated]" : @"");
