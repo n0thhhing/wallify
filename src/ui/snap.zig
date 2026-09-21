@@ -17,6 +17,8 @@ const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
 const MIN_CANDIDATE_SIZE: f64 = 80.0;
 const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
 const DEBUG_PANEL_LEVEL: isize = 101;
+const DEBUG_PANEL_WIDTH: f64 = 420.0;
+const DEBUG_PANEL_HEIGHT: f64 = 300.0;
 const OUTLINE_LEVEL_FALLBACK: isize = -2;
 
 pub const PanelSnap = extern struct {
@@ -67,7 +69,7 @@ fn stringEquals(value: Ref, expected: []const u8) bool {
 fn isPlayerWindow(info: Ref) bool {
     const name = macos.CFDictionaryGetValue(info, macos.kCGWindowName);
     if (name) |n| {
-        if (stringEquals(n, "Wallify Snap Debug") or
+        if (stringEquals(n, "Wallify Debug Console") or
             stringEquals(n, "Wallify Snap Outline") or
             stringEquals(n, "Wallify Settings")) return false;
     }
@@ -130,10 +132,10 @@ fn updateSnapDebug() void {
     }
     if (snap_debug_panel == null) {
         const panel_cls = macos.objc_getClass("NSPanel");
-        const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ rect(24, 60, 340, 240), @as(usize, 1 | 2), @as(usize, 2), false });
+        const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ rect(24, 60, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT), @as(usize, 1 | 2 | 32), @as(usize, 2), false });
         if (panel == null) return;
         snap_debug_panel = panel;
-        const title = macos.string("Wallify Snap Debug");
+        const title = macos.string("Wallify Debug Console");
         defer macos.CFRelease(title);
         macos.send(void, panel, "setTitle:", .{title});
         macos.send(void, panel, "setFloatingPanel:", .{true});
@@ -142,7 +144,7 @@ fn updateSnapDebug() void {
         macos.send(void, panel, "setReleasedWhenClosed:", .{false});
 
         const label_cls = macos.objc_getClass("NSTextField");
-        const label = macos.send(Ref, macos.send(Ref, label_cls, "alloc", .{}), "initWithFrame:", .{rect(12, 12, 316, 216)});
+        const label = macos.send(Ref, macos.send(Ref, label_cls, "alloc", .{}), "initWithFrame:", .{rect(14, 14, DEBUG_PANEL_WIDTH - 28.0, DEBUG_PANEL_HEIGHT - 28.0)});
         if (label == null) return;
         snap_debug_text = label;
         macos.send(void, label, "setEditable:", .{false});
@@ -163,7 +165,7 @@ fn updateSnapDebug() void {
     const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
     const screen_frame = macos.send(Rect, screen, "frame", .{});
     var message: [512]u8 = undefined;
-    const text = std.fmt.bufPrint(&message, "WALLIFY SNAP DEBUG  •  one process\nDrag={s}  mode mix={d:.2}  outer={d:.0}×{d:.0}  card={d:.0}×{d:.0}\nPreview ≤180  commit ≤150  candidates={d}  distance²={d:.0}\nMargins: x={d:.0} y={d:.0}  visual: x={d:.0} y={d:.0}\nTarget CG:  x={d:.0} y={d:.0}  {d:.0}×{d:.0}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0} visible={s}\nOutline #{d} level={d}  screen={d:.0}×{d:.0}\nWallify CG #{d} layer={d}: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ if (snap_debug_dragging) "yes" else "no", snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, snap_debug_card_width - 16.0, snap_debug_card_height - 16.0, snap_candidate_count, snap_last_distance_sq, snap_last_margin.x, snap_last_margin.y, snap_last_visual.x, snap_last_visual.y, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, actual.origin.x, actual.origin.y, actual.size.width, actual.size.height, if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no", outline_number, outline_level, screen_frame.size.width, screen_frame.size.height, player.number, player.layer, player.frame.origin.x, player.frame.origin.y, player.frame.size.width, player.frame.size.height }) catch return;
+    const text = std.fmt.bufPrint(&message, "WALLIFY DEBUG CONSOLE  •  live runtime\nPlayback: title={s}  artist={s}  elapsed={d:.1}s / {d:.1}s\nWidget: mode={d}  mix={d:.2}  size={d:.0}×{d:.0}  dragging={s}\nMaterial: glass={s}  glow={s}  aurora={s}  animations={s}  speed={d}\nMedia: source={d}  track_transition={d}  artwork={s}\nPosition: margin={d:.0},{d:.0}  visual={d:.0},{d:.0}\nWindow: Wallify #{d} layer={d}  screen={d:.0}×{d:.0}\n--- SNAP / WINDOW SERVER ---\nCandidates={d}  distance²={d:.0}  outline={s}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0}  #{d} level={d}\nTarget CG: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ state.global_title[0..state.global_title_len], state.global_artist[0..state.global_artist_len], state.global_elapsed, state.global_duration, @intFromEnum(state.setting_mode), snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, if (snap_debug_dragging) "yes" else "no", if (state.setting_native_glass) "on" else "off", if (state.setting_glow) "on" else "off", if (state.setting_aurora) "on" else "off", if (state.setting_animations) "on" else "off", @intFromEnum(state.setting_speed), @intFromEnum(state.setting_source), @intFromEnum(state.setting_transition), if (state.global_has_artwork) "yes" else "no", snap_last_margin.x, snap_last_margin.y, player.frame.origin.x, player.frame.origin.y, player.number, player.layer, screen_frame.size.width, screen_frame.size.height, snap_candidate_count, snap_last_distance_sq, if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no", snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, outline_number, outline_level, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height }) catch return;
     setLabelText(snap_debug_text, text);
     if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
         macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
