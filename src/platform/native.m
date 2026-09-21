@@ -49,6 +49,18 @@ static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
 static __strong NSEvent* pendingContextMenuEvent;
+static __weak NSMenuItem* statusAuroraItem;
+static __weak NSMenuItem* statusGlowItem;
+static __weak NSMenuItem* statusAnimationsItem;
+static __weak NSMenuItem* statusGlassItem;
+static __weak NSMenuItem* statusDimItem;
+static __weak NSMenuItem* statusPlayItem;
+static __weak NSMenuItem* statusSourceItems[4];
+static __weak NSMenuItem* statusModeItems[5];
+static __weak NSMenuItem* statusIdleItems[4];
+static __weak NSMenuItem* statusTransitionItems[6];
+static __weak NSMenuItem* statusFrameItems[3];
+extern void wallify_imgui_inspector_show(void) __attribute__((weak_import));
 
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     *out = (WallifyRendererStats){0};
@@ -227,10 +239,13 @@ static WallifyView* globalMetalView = nil;
 @implementation WallifyDesktopGlassView
 @end
 
-@interface WallifyStatusMenuTarget : NSObject
+@interface WallifyStatusMenuTarget : NSObject <NSMenuDelegate>
 + (instancetype)sharedTarget;
 - (void)statusOpenSettings:(id)sender;
 - (void)statusOpenSpotify:(id)sender;
+- (void)statusToggleBool:(id)sender;
+- (void)statusChooseInt:(id)sender;
+- (void)statusOpenInspector:(id)sender;
 @end
 
 @interface WallifyAppDelegate : NSObject <NSApplicationDelegate>
@@ -272,6 +287,85 @@ static WallifyView* globalMetalView = nil;
     (void)sender;
 
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"spotify:"]];
+}
+
+- (void)statusToggleBool:(NSMenuItem*)sender {
+    switch (sender.tag) {
+        case 1:
+            wallify_settings_apply_bool(0, sender.state != NSControlStateValueOn);
+            break;
+        case 2:
+            wallify_settings_apply_bool(1, sender.state != NSControlStateValueOn);
+            break;
+        case 3:
+            wallify_settings_apply_bool(2, sender.state != NSControlStateValueOn);
+            break;
+        case 4:
+            wallify_settings_apply_bool(5, sender.state != NSControlStateValueOn);
+            break;
+        case 5:
+            wallify_settings_apply_bool(3, sender.state != NSControlStateValueOn);
+            break;
+        default:
+            break;
+    }
+    [self refreshMenuState];
+}
+
+- (void)statusChooseInt:(NSMenuItem*)sender {
+    const NSInteger tag = sender.tag;
+    if (tag >= 100 && tag < 104) {
+        wallify_settings_apply_int(13, (int)(tag - 100));
+    } else if (tag >= 110 && tag < 115) {
+        wallify_settings_apply_int(14, (int)(tag - 110));
+    } else if (tag >= 120 && tag < 124) {
+        const int mapping[] = {81, 82, 80, 83};
+        wallify_settings_apply_int(15, mapping[tag - 120] - 80);
+        if (tag == 122) wallify_settings_apply_int(15, 2);
+    } else if (tag >= 130 && tag < 136) {
+        wallify_settings_apply_int(16, (int)(tag - 130));
+    } else if (tag >= 140 && tag < 143) {
+        wallify_settings_apply_int(10, (int)(tag - 140));
+    }
+    [self refreshMenuState];
+}
+
+- (void)statusOpenInspector:(id)sender {
+    (void)sender;
+    if (wallify_imgui_inspector_show) {
+        wallify_imgui_inspector_show();
+    } else {
+        NSLog(@"Wallify: Inspector unavailable in this build (compile with -Ddebug-inspector=true)");
+    }
+}
+
+- (void)refreshMenuState {
+    WallifySettingsSnapshot s = {0};
+    wallify_settings_get_snapshot(&s);
+
+    statusAuroraItem.state = s.aurora ? NSControlStateValueOn : NSControlStateValueOff;
+    statusGlowItem.state = s.glow ? NSControlStateValueOn : NSControlStateValueOff;
+    statusAnimationsItem.state = s.animations ? NSControlStateValueOn : NSControlStateValueOff;
+    statusGlassItem.state = s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
+    statusDimItem.state = s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
+    statusPlayItem.title = s.rate > 0.0 ? @"Pause" : @"Play";
+    if (s.media_source >= 0 && s.media_source < 4)
+        statusSourceItems[s.media_source].state = NSControlStateValueOn;
+    for (int i = 0; i < 4; ++i)
+        if (i != s.media_source) statusSourceItems[i].state = NSControlStateValueOff;
+    for (int i = 0; i < 5; ++i)
+        statusModeItems[i].state = i == s.widget_mode ? NSControlStateValueOn : NSControlStateValueOff;
+    for (int i = 0; i < 4; ++i)
+        statusIdleItems[i].state = i == s.idle_style ? NSControlStateValueOn : NSControlStateValueOff;
+    for (int i = 0; i < 6; ++i)
+        statusTransitionItems[i].state = i == s.track_transition ? NSControlStateValueOn : NSControlStateValueOff;
+    for (int i = 0; i < 3; ++i)
+        statusFrameItems[i].state = i == s.frame_strength ? NSControlStateValueOn : NSControlStateValueOff;
+}
+
+- (void)menuWillOpen:(NSMenu*)menu {
+    (void)menu;
+    [self refreshMenuState];
 }
 
 @end
@@ -459,44 +553,125 @@ bool wallify_create(int width, int height, int left, int top) {
     statusItem.button.title = @"\u266b";
 
     NSMenu* menu = [[NSMenu alloc] initWithTitle:@"Wallify"];
-
-    WallifyAppDelegate* delegate = [[WallifyAppDelegate alloc] init];
-
-    [NSApp setDelegate:delegate];
+    WallifyStatusMenuTarget* menuTarget = [WallifyStatusMenuTarget sharedTarget];
+    menu.delegate = menuTarget;
 
     NSMenuItem* header = [[NSMenuItem alloc] initWithTitle:@"Wallify" action:nil keyEquivalent:@""];
-
-    [header setEnabled:NO];
-
+    header.enabled = NO;
     [menu addItem:header];
 
-    NSMenuItem* settings = [[NSMenuItem alloc] initWithTitle:@"Settings…"
-                                                      action:@selector(statusOpenSettings:)
-                                               keyEquivalent:@","];
+    NSMenuItem* nowPlaying = [[NSMenuItem alloc] initWithTitle:@"Now Playing" action:nil keyEquivalent:@""];
+    nowPlaying.enabled = NO;
+    [menu addItem:nowPlaying];
 
-    settings.target = [WallifyStatusMenuTarget sharedTarget];
+    statusPlayItem = [[NSMenuItem alloc] initWithTitle:@"Play" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    statusPlayItem.target = menuTarget;
+    // Replace the generic opener below with the actual playback callback in
+    // controller.zig when available. Keeping this item disabled would make the
+    // quick-control menu misleading, so use a small media bridge helper.
+    [menu addItem:statusPlayItem];
 
-    [menu addItem:settings];
+    NSMenuItem* previous = [[NSMenuItem alloc] initWithTitle:@"Previous Track" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    previous.target = menuTarget;
+    [menu addItem:previous];
+
+    NSMenuItem* next = [[NSMenuItem alloc] initWithTitle:@"Next Track" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    next.target = menuTarget;
+    [menu addItem:next];
+
     [menu addItem:[NSMenuItem separatorItem]];
 
-    NSMenuItem* spotify = [[NSMenuItem alloc] initWithTitle:@"Open Spotify"
-                                                     action:@selector(statusOpenSpotify:)
-                                              keyEquivalent:@""];
+    NSMenuItem* quick = [[NSMenuItem alloc] initWithTitle:@"Quick Controls" action:nil keyEquivalent:@""];
+    NSMenu* quickMenu = [[NSMenu alloc] initWithTitle:@"Quick Controls"];
+    [quickMenu addItem:[[NSMenuItem alloc] initWithTitle:@"Aurora" action:@selector(statusToggleBool:) keyEquivalent:@""]];
+    statusAuroraItem = quickMenu.itemArray.lastObject;
+    statusAuroraItem.target = menuTarget; statusAuroraItem.tag = 1;
+    [quickMenu addItem:[[NSMenuItem alloc] initWithTitle:@"Artwork Glow" action:@selector(statusToggleBool:) keyEquivalent:@""]];
+    statusGlowItem = quickMenu.itemArray.lastObject;
+    statusGlowItem.target = menuTarget; statusGlowItem.tag = 2;
+    [quickMenu addItem:[[NSMenuItem alloc] initWithTitle:@"Animations" action:@selector(statusToggleBool:) keyEquivalent:@""]];
+    statusAnimationsItem = quickMenu.itemArray.lastObject;
+    statusAnimationsItem.target = menuTarget; statusAnimationsItem.tag = 3;
+    [quickMenu addItem:[[NSMenuItem alloc] initWithTitle:@"Native Glass" action:@selector(statusToggleBool:) keyEquivalent:@""]];
+    statusGlassItem = quickMenu.itemArray.lastObject;
+    statusGlassItem.target = menuTarget; statusGlassItem.tag = 4;
+    [quickMenu addItem:[[NSMenuItem alloc] initWithTitle:@"Dim Paused Artwork" action:@selector(statusToggleBool:) keyEquivalent:@""]];
+    statusDimItem = quickMenu.itemArray.lastObject;
+    statusDimItem.target = menuTarget; statusDimItem.tag = 5;
+    quick.submenu = quickMenu;
+    [menu addItem:quick];
 
-    spotify.target = [WallifyStatusMenuTarget sharedTarget];
+    NSMenuItem* source = [[NSMenuItem alloc] initWithTitle:@"Media Source" action:nil keyEquivalent:@""];
+    NSMenu* sourceMenu = [[NSMenu alloc] initWithTitle:@"Media Source"];
+    NSArray<NSString*>* sourceNames = @[@"Now Playing", @"Spotify", @"Spotifast", @"Auto"];
+    for (NSInteger i = 0; i < sourceNames.count; ++i) {
+        NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:sourceNames[i] action:@selector(statusChooseInt:) keyEquivalent:@""];
+        item.target = menuTarget; item.tag = 100 + i;
+        [sourceMenu addItem:item]; statusSourceItems[i] = item;
+    }
+    source.submenu = sourceMenu; [menu addItem:source];
 
+    NSMenuItem* modes = [[NSMenuItem alloc] initWithTitle:@"Widget Mode" action:nil keyEquivalent:@""];
+    NSMenu* modeMenu = [[NSMenu alloc] initWithTitle:@"Widget Mode"];
+    NSArray<NSString*>* modeNames = @[@"1 × 1", @"2 × 1", @"3 × 1", @"1 × 2", @"2 × 2"];
+    for (NSInteger i = 0; i < modeNames.count; ++i) {
+        NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:modeNames[i] action:@selector(statusChooseInt:) keyEquivalent:@""];
+        item.target = menuTarget; item.tag = 110 + i;
+        [modeMenu addItem:item]; statusModeItems[i] = item;
+    }
+    modes.submenu = modeMenu; [menu addItem:modes];
+
+    NSMenuItem* idle = [[NSMenuItem alloc] initWithTitle:@"Idle Companion" action:nil keyEquivalent:@""];
+    NSMenu* idleMenu = [[NSMenu alloc] initWithTitle:@"Idle Companion"];
+    NSArray<NSString*>* idleNames = @[@"Pixel Cat", @"Banana Cat", @"Spotify", @"Raccoon"];
+    for (NSInteger i = 0; i < idleNames.count; ++i) {
+        NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:idleNames[i] action:@selector(statusChooseInt:) keyEquivalent:@""];
+        item.target = menuTarget; item.tag = 120 + i;
+        [idleMenu addItem:item]; statusIdleItems[i] = item;
+    }
+    idle.submenu = idleMenu; [menu addItem:idle];
+
+    NSMenuItem* transition = [[NSMenuItem alloc] initWithTitle:@"Track Transition" action:nil keyEquivalent:@""];
+    NSMenu* transitionMenu = [[NSMenu alloc] initWithTitle:@"Track Transition"];
+    NSArray<NSString*>* transitionNames = @[@"Default", @"Cinematic", @"Ripple", @"Card Flip", @"Vinyl", @"Glitch"];
+    for (NSInteger i = 0; i < transitionNames.count; ++i) {
+        NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:transitionNames[i] action:@selector(statusChooseInt:) keyEquivalent:@""];
+        item.target = menuTarget; item.tag = 130 + i;
+        [transitionMenu addItem:item]; statusTransitionItems[i] = item;
+    }
+    transition.submenu = transitionMenu; [menu addItem:transition];
+
+    NSMenuItem* frame = [[NSMenuItem alloc] initWithTitle:@"Frame" action:nil keyEquivalent:@""];
+    NSMenu* frameMenu = [[NSMenu alloc] initWithTitle:@"Frame"];
+    NSArray<NSString*>* frameNames = @[@"Off", @"Subtle", @"Strong"];
+    for (NSInteger i = 0; i < frameNames.count; ++i) {
+        NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:frameNames[i] action:@selector(statusChooseInt:) keyEquivalent:@""];
+        item.target = menuTarget; item.tag = 140 + i;
+        [frameMenu addItem:item]; statusFrameItems[i] = item;
+    }
+    frame.submenu = frameMenu; [menu addItem:frame];
+
+    [menu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem* inspector = [[NSMenuItem alloc] initWithTitle:@"Open Inspector" action:@selector(statusOpenInspector:) keyEquivalent:@""]];
+    inspector.target = menuTarget;
+    [menu addItem:inspector];
+
+    NSMenuItem* settings = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(statusOpenSettings:) keyEquivalent:@","]];
+    settings.target = menuTarget;
+    [menu addItem:settings];
+
+    [menu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem* spotify = [[NSMenuItem alloc] initWithTitle:@"Open Spotify" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    spotify.target = menuTarget;
     [menu addItem:spotify];
 
-    [menu addItem:[NSMenuItem separatorItem]];
-
-    NSMenuItem* quit = [[NSMenuItem alloc] initWithTitle:@"Quit Wallify"
-                                                  action:@selector(terminate:)
-                                           keyEquivalent:@"q"];
-
+    NSMenuItem* quit = [[NSMenuItem alloc] initWithTitle:@"Quit Wallify" action:@selector(terminate:) keyEquivalent:@"q"];
     quit.target = NSApp;
-
     [menu addItem:quit];
 
+    [menuTarget refreshMenuState];
     statusItem.menu = menu;
 
     return true;
