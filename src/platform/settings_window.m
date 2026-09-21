@@ -1867,7 +1867,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
                 ? [NSString stringWithFormat:@"Scene %.3f ms • GPU %.3f ms • %.2f MiB textures",
                     stats.scene_ms, stats.gpu_ms, stats.texture_bytes / 1048576.0]
                 : @"Timing disabled • run WALLIFY_PROFILE=1 ./run -d -f for CPU/GPU measurements";
-            inspector.enabled = wallify_imgui_inspector_show != NULL;
+            inspector.enabled = YES;
         } else if (section.type == WFSectionTypeSystem && section.specialContent.subviews.count >= 2) {
             NSButton *login = (NSButton *)section.specialContent.subviews[0];
             login.state = wallify_launch_at_login_enabled()
