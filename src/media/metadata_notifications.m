@@ -67,6 +67,6 @@ int mrc_wait_for_notification(void) {
     if (!g_metadata_notification_semaphore)
         return 0;
 
-    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 500 * NSEC_PER_MSEC);
+    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 2000 * NSEC_PER_MSEC);
     return dispatch_semaphore_wait(g_metadata_notification_semaphore, timeout) == 0 ? 1 : 0;
 }
