@@ -92,7 +92,7 @@ pub fn drawUIFrame() void {
 
     // Active media player or idle view
     if (state.idle_mix < 1.0) player.drawPlayer(&canvas, card);
-    if (state.idle_mix > 0.0) idle.drawIdle(&canvas, card);
+    if (state.idle_mix > 0.0 and !@import("idle_compositor.zig").active) idle.drawIdle(&canvas, card);
 
     // Optional border frame outline
     canvas.opacity = 1.0;
