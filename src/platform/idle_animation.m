@@ -41,8 +41,10 @@ static void idleKeyframes(CALayer* layer, NSString* property, NSArray* values,
     }
     if (constant)
         return;
-    NSMutableArray* times = [NSMutableArray arrayWithCapacity:values.count + 1];
-    for (NSUInteger i = 0; i <= values.count; ++i)
+    // One key time per value. Keeping the last keyframe below 1.0 gives
+    // every discrete frame an equal slice of the loop before it repeats.
+    NSMutableArray* times = [NSMutableArray arrayWithCapacity:values.count];
+    for (NSUInteger i = 0; i < values.count; ++i)
         [times addObject:@((double)i / values.count)];
     CAKeyframeAnimation* animation = [CAKeyframeAnimation animationWithKeyPath:property];
     animation.values = values;
