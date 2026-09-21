@@ -28,6 +28,7 @@ static CAMetalLayer* surface;
 static atomic_int surfaceWidth, surfaceHeight;
 static NSLock* frameLock;
 static BOOL scheduled;
+// Renderer handoff buffers stay fixed-size and are protected by frameLock; no per-frame heap allocation is needed.
 static DrawCommand latestCommands[WALLIFY_MAX_COMMANDS];
 static size_t latestCount;
 static DrawCommand latestStaticCommands[WALLIFY_MAX_COMMANDS];
@@ -44,6 +45,7 @@ static BOOL staticCacheValid;
 static id<MTLTexture> staticSceneTexture;
 static atomic_uint staticCacheRebuilds;
 
+// ARC owns these Metal textures. Replacing a slot releases the previous texture once no in-flight GPU work retains it.
 static id<MTLTexture> loadedTextures[WALLIFY_MAX_TEXTURES];
 static id<MTLTexture> latestTextures[WALLIFY_MAX_TEXTURES];
 static dispatch_semaphore_t inFlight;
@@ -52,7 +54,7 @@ static BOOL lastGlassUpdateValid;
 static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
-static __strong NSEvent* pendingContextMenuEvent;
+// Menu items and the pending event are intentionally process-lifetime UI state; AppKit owns the actual menu hierarchy.
 static __strong NSMenuItem* statusAuroraItem;
 static __strong NSMenuItem* statusGlowItem;
 static __strong NSMenuItem* statusAnimationsItem;
@@ -556,6 +558,7 @@ bool wallify_create(int width, int height, int left, int top) {
      * widget that contributes no visible pixels does not need animation or
      * Metal work, so let the Zig animation loop sleep until visibility returns.
      */
+    // This observer is intentionally process-lifetime: the Wallify panel lives for the lifetime of the app.
     [[NSNotificationCenter defaultCenter]
         addObserverForName:NSWindowDidChangeOcclusionStateNotification
                     object:panel
@@ -863,6 +866,7 @@ static void presentLatest(void) {
             atomic_fetch_add(&drawCalls, (cacheChanged || !staticCacheValid || textureRecreated) ? 2 : 1);
         }
 
+        // Metal owns the command buffer/completion block until it finishes; the handler then drops the in-flight permit.
         [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
           if (completed.status == MTLCommandBufferStatusError) {
               NSLog(@"Wallify GPU error: %@", completed.error);
@@ -990,6 +994,7 @@ void wallify_load_texture(int textureID, const unsigned int* pixels, size_t widt
 
         desc.usage = MTLTextureUsageShaderRead;
 
+        // The new texture becomes the strong owner of this slot. The old slot value is released by ARC here.
         id<MTLTexture> texture = [device newTextureWithDescriptor:desc];
 
         if (!texture) {
@@ -1055,6 +1060,7 @@ void wallify_blur_texture(int source, int destination, float artSize) {
 
         desc.storageMode = MTLStorageModePrivate;
 
+        // These intermediates are retained by the command buffer until GPU completion, then released by ARC.
         id<MTLTexture> padded = [device newTextureWithDescriptor:desc];
 
         id<MTLTexture> output = [device newTextureWithDescriptor:desc];
