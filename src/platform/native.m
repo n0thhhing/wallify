@@ -11,6 +11,7 @@
 #include <simd/simd.h>
 #include <stdatomic.h>
 #include <unistd.h>
+#include <math.h>
 
 extern void wallify_pointer(double, double, int);
 
