@@ -1025,9 +1025,13 @@ static void showInspectorOnMain(void) {
 }
 
 extern "C" void wallify_imgui_inspector_show(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    if ([NSThread isMainThread]) {
         showInspectorOnMain();
-    });
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            showInspectorOnMain();
+        });
+    }
 }
 
 extern "C" void wallify_imgui_inspector_hide(void) {
