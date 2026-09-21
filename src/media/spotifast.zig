@@ -49,6 +49,8 @@ const c = struct {
     extern "c" fn write(fd: c_int, buf: [*]const u8, nbytes: usize) isize;
 };
 
+// One persistent loopback socket is reused for metadata polling to avoid connect/close churn.
+// It is process-lifetime state and is closed/replaced whenever the peer breaks the connection.
 var query_socket: c_int = -1;
 var query_socket_lock: std.atomic.Mutex = .unlocked;
 
@@ -63,6 +65,7 @@ fn unlockQuerySocket() void {
 }
 
 fn closeQuerySocket() void {
+    // This is the single ownership point for the persistent descriptor.
     if (query_socket >= 0) {
         _ = c.close(query_socket);
         query_socket = -1;
@@ -141,6 +144,7 @@ fn sendPersistentQuery(verb: []const u8, buf: []u8) !usize {
 // Talking to the Spotifast daemon over a local TCP socket gives us sub-millisecond latency
 // without having to mess with macOS IPC or C bindings.
 pub fn sendSocketRequest(verb: []const u8, buf: []u8) !usize {
+    // One-shot commands deliberately use their own descriptor so the persistent metadata connection cannot be disturbed.
     const sock = c.socket(c.AF_INET, c.SOCK_STREAM, 0);
     if (sock < 0) return error.SocketCreationFailed;
     defer _ = c.close(sock);
