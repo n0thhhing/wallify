@@ -130,11 +130,6 @@ pub fn drawUIFrame() void {
     const static_key = staticSceneKey(card);
     const rebuild_static = !cached_static_valid or cached_static_key != static_key;
 
-    if (rebuild_static) {
-        cached_static_canvas = gpu.Canvas{ .clip = clip };
-        const static_canvas = &cached_static_canvas;
-
-
     const ambient_intensity: f32 = if (state.global_has_artwork and assets.has_art and state.setting_glow) 0.12 else 0.0;
     native.wallify_update_glass_rect(
         card.x,
@@ -149,6 +144,8 @@ pub fn drawUIFrame() void {
     );
 
     if (rebuild_static) {
+        cached_static_canvas = gpu.Canvas{ .clip = clip };
+
         if (!state.setting_native_glass) {
             cached_static_canvas.glass(
                 card,
