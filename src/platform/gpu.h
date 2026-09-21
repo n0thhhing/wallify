@@ -3,6 +3,7 @@
 // Shared verbatim by Zig (@cImport), Objective-C, and Metal. Logical points.
 #define WALLIFY_MAX_COMMANDS 128
 #define WALLIFY_MAX_TEXTURES 64
+#define WALLIFY_CACHED_SCENE_TEXTURE (WALLIFY_MAX_TEXTURES - 1)
 #define WALLIFY_SOLID 0
 #define WALLIFY_TEXTURE 1
 #define WALLIFY_GRADIENT 2
