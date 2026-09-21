@@ -39,6 +39,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     const point = hitbox.Point{ .x = px, .y = py };
 
     if (is_right) {
+        std.log.info("input: context menu at {d:.1},{d:.1}", .{ px, py });
         state.global_is_dragging = false;
         state.global_panel_dragging = false;
         window.widget_hide_snap_outline();
@@ -99,12 +100,14 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         }
 
         if (state.global_duration > 0 and new_hover_target == .bar) {
+            std.log.info("input: seek start at {d:.2}s", .{state.global_elapsed});
             state.global_is_dragging = true;
             state_changed = true;
         }
 
         const card_bounds = state.layout.card(state.mode_mix);
         if (card_bounds.contains(point) and pressed == null and !state.global_is_dragging) {
+            std.log.info("input: panel drag start at {d:.1},{d:.1}", .{ px, py });
             const mouse = window.widget_mouse_location();
             state.global_panel_dragging = true;
             state.widget_drag_start_mouse_x = mouse.x;
@@ -153,11 +156,19 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
             const mouse = window.widget_mouse_location();
             const idle_click = state.spotifyIdle() and @abs(mouse.x - state.widget_drag_start_mouse_x) < CLICK_TOLERANCE and @abs(mouse.y - state.widget_drag_start_mouse_y) < CLICK_TOLERANCE;
             if (idle_click) {
+                std.log.info("input: idle click at {d:.1},{d:.1}", .{ px, py });
                 if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else openIdlePlayer();
             }
 
             const snap_target = live_snap;
             if (!idle_click and snap_target.found and snap_target.distance_sq <= commit_radius * commit_radius) {
+                std.log.info("input: snap commit {d},{d} -> {d},{d}, distance²={d:.0}", .{
+                    state.widget_margin_left,
+                    state.widget_margin_top,
+                    snap_target.margin_left,
+                    snap_target.margin_top,
+                    snap_target.distance_sq,
+                });
                 state.panel_snap_active = true;
                 state.panel_snap_elapsed = 0;
                 state.panel_snap_start_left = state.widget_margin_left;
@@ -168,6 +179,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
             }
 
             state.global_panel_dragging = false;
+            std.log.info("input: panel drag end at {d},{d}", .{ state.widget_margin_left, state.widget_margin_top });
             window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, false);
             window.widget_hide_snap_outline();
             if (!state.panel_snap_active) state.saveWidgetSettings();
@@ -185,6 +197,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     if (is_release and !state.global_is_dragging) {
         if (state.global_click_target == new_hover_target) {
+            std.log.info("input: release target={s}", .{@tagName(new_hover_target)});
             if (new_hover_target.toActionId()) |action| {
                 switch (action) {
                     .PlayPause => media.togglePlayback(),
@@ -203,6 +216,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         const target = state.global_duration * (x_offs / state.layout.bar_w);
 
         if (is_release) {
+            std.log.info("input: seek end at {d:.2}s", .{target});
             state.global_is_dragging = false;
             state.global_elapsed = target;
             state_changed = true;
