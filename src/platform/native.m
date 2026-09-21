@@ -14,6 +14,7 @@
 #include <math.h>
 
 extern void wallify_pointer(double, double, int);
+extern void wallify_set_window_visible(int visible);
 
 static NSPanel* panel;
 static NSStatusItem* statusItem;
@@ -434,6 +435,24 @@ bool wallify_create(int width, int height, int left, int top) {
     movePanel(left, top);
 
     [panel makeKeyAndOrderFront:nil];
+
+    /*
+     * AppKit reports when a desktop window becomes fully occluded. A Wallify
+     * widget that contributes no visible pixels does not need animation or
+     * Metal work, so let the Zig animation loop sleep until visibility returns.
+     */
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:NSWindowDidChangeOcclusionStateNotification
+                    object:panel
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification* note) {
+                    NSWindow* window = note.object;
+                    BOOL visible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+                    wallify_set_window_visible(visible ? 1 : 0);
+                }];
+
+    wallify_set_window_visible(
+        (panel.occlusionState & NSWindowOcclusionStateVisible) != 0 ? 1 : 0);
 
     statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
 
