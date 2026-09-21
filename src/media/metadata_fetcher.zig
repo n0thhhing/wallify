@@ -28,6 +28,8 @@ extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 extern "c" fn dispatch_time(when: u64, delta: i64) u64;
 extern "c" fn _dispatch_main_q() *anyopaque;
 extern "c" fn dispatch_get_global_queue(identifier: isize, flags: usize) *anyopaque;
+extern "c" fn mrc_notifications_init() void;
+extern "c" fn mrc_wait_for_notification() c_int;
 fn sleep_us(us: u64) void {
     const ts = std.posix.timespec{
         .sec = @intCast(us / 1_000_000),
@@ -67,6 +69,12 @@ var sema: ?*anyopaque = null;
 var is_playing_sema: ?*anyopaque = null;
 var is_playing_val: bool = false;
 var last_mrc_art_hash: u64 = 0;
+var last_mrc_title = std.mem.zeroes([256]u8);
+var last_mrc_artist = std.mem.zeroes([256]u8);
+var last_mrc_title_len: usize = 0;
+var last_mrc_artist_len: usize = 0;
+var last_mrc_track_valid = false;
+var last_mrc_has_artwork = false;
 
 fn getMRLib() ?*std.DynLib {
     if (mr_lib == null) {
@@ -186,39 +194,53 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
             }
         }
 
-        if (CFDictionaryGetValue(dict, artworkKey)) |artworkRef| {
-            if (CFGetTypeID(artworkRef) == CFDataGetTypeID()) {
-                const len = CFDataGetLength(artworkRef);
-                const ptr = CFDataGetBytePtr(artworkRef);
-                if (len > 0 and ptr != null) {
-                    const art_slice = ptr[0..@intCast(len)];
-                    const art_hash = std.hash.Wyhash.hash(0, art_slice);
-                    if (art_hash == last_mrc_art_hash) {
-                        has_artwork = true;
-                    } else {
-                        // Write to a tmp file and rename atomically so the UI thread doesn't accidentally
-                        // read half-written image data when it polls `/tmp/mrc_artwork`.
-                        const art_fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/mrc_artwork_tmp", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch -1;
-                        if (art_fd >= 0) {
-                            defer _ = std.posix.system.close(art_fd);
-                            var written: usize = 0;
-                            const target_len: usize = @intCast(len);
-                            var write_err = false;
-                            while (written < target_len) {
-                                const res = std.posix.system.write(art_fd, ptr + written, target_len - written);
-                                if (res <= 0) {
-                                    write_err = true;
-                                    break;
+        const title_len = std.mem.indexOfScalar(u8, &current_title, 0) orelse 256;
+        const artist_len = std.mem.indexOfScalar(u8, &current_artist, 0) orelse 256;
+        const track_changed = !last_mrc_track_valid or
+            title_len != last_mrc_title_len or
+            artist_len != last_mrc_artist_len or
+            !std.mem.eql(u8, current_title[0..title_len], last_mrc_title[0..last_mrc_title_len]) or
+            !std.mem.eql(u8, current_artist[0..artist_len], last_mrc_artist[0..last_mrc_artist_len]);
+
+        // Album art is expensive to hash/copy and normally does not change on
+        // play/pause/seek events. Only touch the artwork payload when the track
+        // identity changes; reuse the cached result otherwise.
+        if (track_changed) {
+            last_mrc_has_artwork = false;
+            if (CFDictionaryGetValue(dict, artworkKey)) |artworkRef| {
+                if (CFGetTypeID(artworkRef) == CFDataGetTypeID()) {
+                    const len = CFDataGetLength(artworkRef);
+                    const ptr = CFDataGetBytePtr(artworkRef);
+                    if (len > 0 and ptr != null) {
+                        const art_slice = ptr[0..@intCast(len)];
+                        const art_hash = std.hash.Wyhash.hash(0, art_slice);
+                        if (art_hash == last_mrc_art_hash) {
+                            last_mrc_has_artwork = true;
+                        } else {
+                            const art_fd = std.posix.openatZ(std.posix.AT.FDCWD, "/tmp/mrc_artwork_tmp", .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch -1;
+                            if (art_fd >= 0) {
+                                defer _ = std.posix.system.close(art_fd);
+                                var written: usize = 0;
+                                const target_len: usize = @intCast(len);
+                                var write_err = false;
+                                while (written < target_len) {
+                                    const res = std.posix.system.write(art_fd, ptr + written, target_len - written);
+                                    if (res <= 0) {
+                                        write_err = true;
+                                        break;
+                                    }
+                                    written += @intCast(res);
                                 }
-                                written += @intCast(res);
-                            }
-                            if (!write_err and written == target_len) {
-                                if (std.posix.system.rename("/tmp/mrc_artwork_tmp", "/tmp/mrc_artwork") == 0) {
-                                    last_mrc_art_hash = art_hash;
-                                    has_artwork = true;
+                                if (!write_err and written == target_len) {
+                                    if (std.posix.system.rename("/tmp/mrc_artwork_tmp", "/tmp/mrc_artwork") == 0) {
+                                        last_mrc_art_hash = art_hash;
+                                        last_mrc_has_artwork = true;
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        last_mrc_art_hash = 0;
                     }
                 } else {
                     last_mrc_art_hash = 0;
@@ -226,21 +248,27 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
             } else {
                 last_mrc_art_hash = 0;
             }
-        } else {
-            last_mrc_art_hash = 0;
         }
+        has_artwork = last_mrc_has_artwork;
 
         // Keys are cached globally, no release needed.
 
         if (has_title or has_artist) {
-            const title_len = std.mem.indexOfScalar(u8, &current_title, 0) orelse 256;
-            const artist_len = std.mem.indexOfScalar(u8, &current_artist, 0) orelse 256;
-
             var buf: [1024]u8 = undefined;
             const msg = std.fmt.bufPrint(&buf, "{s}|||{s}|||{}|||{d:.2}|||{d:.2}|||{d:.2}\n", .{ current_title[0..title_len], current_artist[0..artist_len], @as(u8, if (has_artwork) 1 else 0), rate, elapsed, duration }) catch "\n";
             writeStdoutAndCheck(msg);
         } else {
             writeStdoutAndCheck("\n");
+        }
+
+        if (has_title or has_artist) {
+            const copy_title_len = @min(title_len, last_mrc_title.len);
+            const copy_artist_len = @min(artist_len, last_mrc_artist.len);
+            if (copy_title_len > 0) @memcpy(last_mrc_title[0..copy_title_len], current_title[0..copy_title_len]);
+            if (copy_artist_len > 0) @memcpy(last_mrc_artist[0..copy_artist_len], current_artist[0..copy_artist_len]);
+            last_mrc_title_len = copy_title_len;
+            last_mrc_artist_len = copy_artist_len;
+            last_mrc_track_valid = true;
         }
     } else {
         writeStdoutAndCheck("\n");
@@ -258,6 +286,7 @@ const get_block = BlockLiteral{
 };
 
 export fn mrc_printNowPlayingInfo() void {
+    mrc_notifications_init();
     if (MRGetNowPlayingInfo == null) {
         if (getMRLib()) |lib| {
             MRGetNowPlayingInfo = lib.lookup(*const fn (*anyopaque, *const BlockLiteral) callconv(.c) void, "MRMediaRemoteGetNowPlayingInfo");
@@ -269,20 +298,16 @@ export fn mrc_printNowPlayingInfo() void {
         }
     }
 
-    if (MRGetNowPlayingIsPlaying) |MRIsPlaying| {
-        if (is_playing_sema == null) is_playing_sema = dispatch_semaphore_create(0);
-        is_playing_val = false;
-        MRIsPlaying(dispatch_get_global_queue(0, 0), &is_playing_block);
-        const timeout_playing = dispatch_time(0, 50_000_000); // 50ms
-        _ = dispatch_semaphore_wait(is_playing_sema.?, timeout_playing);
-    }
-
+    // Playback rate is normally present in the Now Playing dictionary.
+    // Avoid a second MediaRemote round-trip on every update; the cached value
+    // is only used when the dictionary omits the rate.
     if (MRGetNowPlayingInfo) |MRGet| {
         if (sema == null) sema = dispatch_semaphore_create(0);
         MRGet(dispatch_get_global_queue(0, 0), &get_block);
 
-        // 250ms timeout using dispatch_time(DISPATCH_TIME_NOW, 250_000_000)
-        const timeout = dispatch_time(0, 250_000_000);
+        // Give MediaRemote a generous fallback timeout. Normal track/playback
+        // changes wake the helper through the native notification bridge.
+        const timeout = dispatch_time(0, 100_000_000);
         if (dispatch_semaphore_wait(sema.?, timeout) != 0) {
             writeStdoutAndCheck("\n");
         }
