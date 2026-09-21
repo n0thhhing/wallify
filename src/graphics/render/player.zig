@@ -67,7 +67,9 @@ pub fn drawPlayerDynamic(canvas: *gpu.Canvas, elapsed: f64) void {
         if (state.layout.progressVisible(state.setting_hide_progress)) {
             drawProgressBar(canvas, elapsed);
         }
-        drawButtonHoverStates(canvas);
+        if (state.layout.controlsVisible(state.setting_show_controls)) {
+            drawButtonHoverStates(canvas);
+        }
     }
 
     labels.drawLabels(canvas, elapsed);
