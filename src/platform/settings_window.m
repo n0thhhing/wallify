@@ -1,5 +1,6 @@
 #import "settings_window.h"
 #import <objc/message.h>
+#import <QuartzCore/QuartzCore.h>
 
 extern const char *wallify_settings_path(void);
 
@@ -1042,8 +1043,8 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     WFSettingDefinition *debug =
         wfToggle(
             4,
-            @"Snapping Diagnostics",
-            @"Show snap candidates and coordinates."
+            @"Debug Console",
+            @"Show live Wallify runtime and diagnostics."
         );
 
     self.pageDefinitions = @[
@@ -1469,8 +1470,10 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
 #pragma mark Page rendering
 
 - (void)renderSelectedPage {
-    if (self.currentPage) {
-        [self.currentPage removeFromSuperview];
+    WFPageView *oldPage = self.currentPage;
+
+    if (oldPage) {
+        [oldPage removeFromSuperview];
         self.currentPage = nil;
     }
 
@@ -1490,19 +1493,39 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         [sections addObject:section];
     }
 
-    self.currentPage =
+    WFPageView *newPage =
         [[WFPageView alloc]
             initWithSections:sections];
 
-    self.scrollView.documentView = self.currentPage;
+    self.currentPage = newPage;
+    self.scrollView.documentView = newPage;
 
     self.pageTitleLabel.stringValue = page.title;
     self.pageIconView.image =
         [NSImage imageWithSystemSymbolName:
             page.symbol
-            accessibilityDescription:nil];
+                     accessibilityDescription:nil];
 
     [self layoutContent];
+
+    NSRect frame = newPage.frame;
+    frame.origin.x += 12.0;
+    newPage.frame = frame;
+    newPage.alphaValue = 0.0;
+
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+        context.duration = 0.18;
+        context.timingFunction =
+            [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+
+        NSRect targetFrame = newPage.frame;
+        targetFrame.origin.x -= 12.0;
+
+        [[newPage animator] setFrame:targetFrame];
+        [[newPage animator] setAlphaValue:1.0];
+    } completionHandler:^{
+        [newPage setAlphaValue:1.0];
+    }];
 }
 
 #pragma mark Navigation
