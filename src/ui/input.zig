@@ -32,6 +32,8 @@ fn openIdlePlayer() void {
     }
 }
 
+// Pointer input is the highest-priority redraw source: hover, dragging, snapping, and seeking
+// all feed the same coalesced frame request instead of owning separate render loops.
 pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     const is_click = kind == POINTER_CLICK;
     const is_release = kind == POINTER_RELEASE;
@@ -89,6 +91,8 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         }
     }
 
+    // Track only interaction state that affects presentation; redundant pointer samples should not
+    // wake the renderer when the visible hit target has not changed.
     var state_changed = false;
     if (state.global_hover_target != new_hover_target) {
         state.global_hover_target = new_hover_target;
