@@ -8,6 +8,7 @@ const menu = @import("../ui/menu.zig");
 const spotify = @import("../media/spotify.zig");
 const spotifast = @import("../media/spotifast.zig");
 const text_cache = @import("text_cache.zig");
+const frame_wakeup = @import("../frame_wakeup.zig");
 
 const FRAME_TIME_LIMIT: f64 = 0.1;
 const TARGET_FPS: f64 = 60.0;
@@ -27,7 +28,6 @@ const HOVER_SPEED: f64 = 10.0;
 const ART_FADE_DURATION: f64 = 0.3;
 const ARTWORK_WAKE_GRACE: f64 = 0.1;
 const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 30.0;
-const IDLE_LOOP_SLEEP_US: u64 = 100_000;
 
 fn sleep_us(us: u64) void {
     const ts = std.posix.timespec{
@@ -344,7 +344,9 @@ pub fn animationLoop() void {
             const remaining = frame_interval - (after - last_draw_time);
             if (remaining > 0) sleep_us(@intFromFloat(remaining * 1_000_000));
         } else {
-            sleep_us(IDLE_LOOP_SLEEP_US);
+            // Nothing is animating and no progress frame is due. Sleep until
+            // another subsystem explicitly requests a frame instead of polling.
+            frame_wakeup.wait();
         }
     }
 }
