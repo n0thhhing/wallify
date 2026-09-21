@@ -218,7 +218,8 @@ pub fn animationLoop() void {
                 state.mode_mix = @min(1.0, state.mode_mix + dt * 5.5);
 
                 // Ease the physical window and renderer with the same curve.
-                const eased = 1.0 - std.math.pow(f64, 1.0 - state.mode_mix, 3.0);
+                const inverse_mix = 1.0 - state.mode_mix;
+                const eased = 1.0 - inverse_mix * inverse_mix * inverse_mix;
                 const width = state.mode_start_width +
                     (state.mode_target_width - state.mode_start_width) * eased;
                 const height = state.mode_start_height +
