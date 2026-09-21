@@ -87,6 +87,18 @@ pub fn animationLoop() void {
     var marquee_cached_title_len: usize = 0;
     var marquee_cached_width: f64 = 0.0;
     while (true) {
+        const now = window.widget_monotonic_time();
+        if (!state.window_visible.load(.acquire)) {
+            // A fully occluded desktop widget cannot contribute visible pixels.
+            // Keep animation time anchored to the current clock and sleep until
+            // AppKit reports that some part of the window is visible again.
+            previous_time = now;
+            last_draw_time = now;
+            _ = state.frame_requested.swap(false, .acq_rel);
+            frame_wakeup.wait();
+            continue;
+        }
+
         var high_rate_animation = false;
         var visual_animation = false;
         var ambient_animation = false;
@@ -94,7 +106,6 @@ pub fn animationLoop() void {
         const columns = @import("../platform/native.zig").wallify_width();
         var needs_draw = state.frame_requested.swap(false, .acq_rel) or columns != previous_columns;
         previous_columns = columns;
-        const now = window.widget_monotonic_time();
         if (state.animation_time < state.art_transition_until) {
             // Track artwork transitions are visual-only. Give them a 30 FPS
             // budget so the morph feels smoother without paying for 60 FPS.
