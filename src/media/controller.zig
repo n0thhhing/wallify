@@ -58,6 +58,8 @@ var action_queue: [ACTION_QUEUE_CAPACITY]MediaAction = undefined;
 var queue_tail: usize = 0;
 var queue_count: usize = 0;
 var queue_lock: std.atomic.Mutex = .unlocked;
+// The command worker is intentionally detached and lives for the process lifetime; the semaphore has the same lifetime.
+// Actions themselves remain bounded in a fixed 32-entry queue.
 var command_sema: ?*anyopaque = null;
 var worker_started = std.atomic.Value(bool).init(false);
 
@@ -302,11 +304,13 @@ pub const SpotifyPayload = struct {
     artwork_url: []const u8,
 };
 
-var spotify_download_gen = std.atomic.Value(u32).init(0);
+// A monotonically increasing generation prevents an older async download from publishing stale artwork.
 
 fn spotifyDownloadWorker(url: []const u8, gen: u32, _: std.Io) void {
+    // metadataLoop allocates this URL specifically for this worker; ownership transfers here.
     defer std.heap.page_allocator.free(url);
 
+    // All temporary path formatting in this worker is arena-backed and dies together at return.
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
