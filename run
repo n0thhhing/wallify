@@ -59,6 +59,9 @@ ${BOLD}EXAMPLES:${RESET}
   ./run -k               # Stop running Wallify widget"
 }
 
+# Preserve the original arguments because option parsing below shifts "$@".
+ORIGINAL_ARGS=("$@")
+
 # Parse command line options
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -132,7 +135,7 @@ if [[ "$DO_WATCH" == true ]]; then
     # this shell remains available to watch and restart the app.
     WATCH_INITIAL_ARGS=()
     WATCH_REBUILD_ARGS=()
-    for arg in "$@"; do
+    for arg in "${ORIGINAL_ARGS[@]}"; do
         case "$arg" in
             -w|--watch|-f|--foreground|-l|--logs)
                 ;;
