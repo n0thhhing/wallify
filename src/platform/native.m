@@ -34,6 +34,7 @@ static BOOL lastGlassUpdateValid;
 static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
+static NSEvent* pendingContextMenuEvent;
 
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     *out = (WallifyRendererStats){0};
@@ -150,9 +151,16 @@ void wallify_profile_scene(double seconds) {
     wallify_pointer(-1, -1, 0);
 }
 
-- (void)rightMouseUp:(NSEvent*)e {
+- (void)rightMouseDown:(NSEvent*)e {
+    pendingContextMenuEvent = e;
     [self pointer:e kind:3];
 }
+
+- (void)rightMouseUp:(NSEvent*)e {
+    (void)e;
+}
+
+
 
 @end
 
@@ -613,6 +621,14 @@ static void presentLatest(void) {
 
         [CATransaction commit];
     }
+}
+
+void* wallify_context_menu_event(void) {
+    return (__bridge void*)pendingContextMenuEvent;
+}
+
+void wallify_clear_context_menu_event(void) {
+    pendingContextMenuEvent = nil;
 }
 
 void wallify_swap_textures(int src, int dest) {
