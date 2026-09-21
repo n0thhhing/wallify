@@ -14,9 +14,9 @@ extern "c" fn dispatch_semaphore_create(value: isize) ?*anyopaque;
 extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
 extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 
-const SPOTIFY_POLL_INTERVAL_MS: u64 = 1000;
-const SPOTIFAST_POLL_INTERVAL_MS: u64 = 500;
-const QUERY_FAILURE_RETRY_MS: u64 = 500;
+const SPOTIFY_POLL_INTERVAL_MS: u64 = 2000;
+const SPOTIFAST_POLL_INTERVAL_MS: u64 = 1000;
+const QUERY_FAILURE_RETRY_MS: u64 = 2000;
 const METADATA_HELPER_FALLBACK_INTERVAL_US: []const u8 = "2000000";
 const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
@@ -27,7 +27,7 @@ const RATE_PLAYING: f64 = 1.0;
 const RATE_STOPPED: f64 = 0.0;
 const RATE_LOCKED: u32 = 1;
 const RATE_LOCK_DURATION: f64 = 1.5;
-const AUTO_SOURCE_RECHECK_US: u64 = 250_000;
+const AUTO_SOURCE_RECHECK_US: u64 = 2_000_000;
 
 var cached_auto_source = std.atomic.Value(c_int).init(@intFromEnum(state.MediaSource.now_playing));
 var cached_auto_source_checked_us = std.atomic.Value(u64).init(0);
