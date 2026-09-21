@@ -23,6 +23,16 @@ pub fn build(b: *std.Build) void {
         }),
     });
     dylib.root_module.linkFramework("CoreFoundation", .{});
+    dylib.root_module.linkFramework("Foundation", .{});
+    const metadata_notifications = b.addSystemCommand(&.{
+        "/usr/bin/clang",
+        "-fobjc-arc",
+        "-fmodules",
+        "-c",
+    });
+    metadata_notifications.addFileArg(b.path("src/media/metadata_notifications.m"));
+    metadata_notifications.addArg("-o");
+    dylib.root_module.addObjectFile(metadata_notifications.addOutputFileArg("metadata-notifications.o"));
     b.installArtifact(dylib);
 
     // Desktop player.
