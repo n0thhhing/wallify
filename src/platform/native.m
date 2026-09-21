@@ -25,7 +25,19 @@ static NSLock* frameLock;
 static BOOL scheduled;
 static DrawCommand latestCommands[WALLIFY_MAX_COMMANDS];
 static size_t latestCount;
+static DrawCommand latestStaticCommands[WALLIFY_MAX_COMMANDS];
+static size_t latestStaticCount;
+static DrawCommand latestDynamicCommands[WALLIFY_MAX_COMMANDS];
+static size_t latestDynamicCount;
 static simd_float2 latestSize;
+
+static DrawCommand cachedStaticCommands[WALLIFY_MAX_COMMANDS];
+static size_t cachedStaticCount;
+static simd_float2 cachedStaticSize;
+static CGFloat cachedStaticScale;
+static BOOL staticCacheValid;
+static id<MTLTexture> staticSceneTexture;
+
 static id<MTLTexture> loadedTextures[WALLIFY_MAX_TEXTURES];
 static id<MTLTexture> latestTextures[WALLIFY_MAX_TEXTURES];
 static dispatch_semaphore_t inFlight;
@@ -50,7 +62,7 @@ void wallify_debug_renderer_stats(WallifyRendererStats* out) {
         out->gpu_ms = atomic_load(&gpuNanos) / (double)out->rendered_frames / 1e6;
     [frameLock lock];
     out->pending = scheduled;
-    out->command_count = (uint32_t)latestCount;
+    out->command_count = (uint32_t)latestDynamicCount;
     out->logical_width = latestSize.x;
     out->logical_height = latestSize.y;
     for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; ++i) {
@@ -471,57 +483,119 @@ bool wallify_create(int width, int height, int left, int top) {
 }
 
 /*
+ * Render an instanced command list into a target texture.
+ * The target uses the same logical viewport coordinates as the drawable.
+ */
+static void encodeCommands(id<MTLCommandBuffer> command,
+                           id<MTLTexture> target,
+                           const DrawCommand* commands,
+                           size_t count,
+                           simd_float2 size,
+                           id<MTLTexture>* textures) {
+    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
+    pass.colorAttachments[0].texture = target;
+    pass.colorAttachments[0].loadAction = MTLLoadActionClear;
+    pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+    pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+    id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:pass];
+
+    [encoder setRenderPipelineState:pipelineState];
+    [encoder setVertexBytes:commands length:count * sizeof(DrawCommand) atIndex:0];
+    [encoder setVertexBytes:&size length:sizeof(size) atIndex:1];
+    [encoder setFragmentBytes:commands length:count * sizeof(DrawCommand) atIndex:0];
+    [encoder setFragmentTextures:textures withRange:NSMakeRange(0, WALLIFY_MAX_TEXTURES)];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4
+              instanceCount:count];
+    [encoder endEncoding];
+}
+
+static BOOL staticSceneChanged(const DrawCommand* commands, size_t count, simd_float2 size) {
+    if (!staticCacheValid ||
+        cachedStaticCount != count ||
+        cachedStaticSize.x != size.x ||
+        cachedStaticSize.y != size.y ||
+        cachedStaticScale != surface.contentsScale) {
+        return YES;
+    }
+    return count != 0 && memcmp(cachedStaticCommands, commands, count * sizeof(DrawCommand)) != 0;
+}
+
+static BOOL ensureStaticSceneTexture(simd_float2 size) {
+    CGFloat scale = surface.contentsScale;
+    NSUInteger width = MAX((NSUInteger)1, (NSUInteger)ceil(size.x * scale));
+    NSUInteger height = MAX((NSUInteger)1, (NSUInteger)ceil(size.y * scale));
+
+    if (staticSceneTexture &&
+        staticSceneTexture.width == width &&
+        staticSceneTexture.height == height) {
+        return NO;
+    }
+
+    MTLTextureDescriptor* desc =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                           width:width
+                                                          height:height
+                                                       mipmapped:NO];
+    desc.storageMode = MTLStorageModePrivate;
+    desc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    staticSceneTexture = [device newTextureWithDescriptor:desc];
+    staticCacheValid = NO;
+    return YES;
+}
+
+/*
  * At most one pending scene and two submitted GPU frames.
+ *
+ * The active player is split into:
+ *   - a static texture: glass/background, artwork, glow, controls, frame
+ *   - a tiny dynamic pass: cached texture + progress/timestamps/Aurora
+ *
+ * This removes the expensive artwork/glow/button shader work from every
+ * playback-progress frame. The static cache is regenerated automatically
+ * whenever its command bytes or drawable size change.
  */
 static void presentLatest(void) {
     @autoreleasepool {
-
         [frameLock lock];
 
         if (!scheduled || dispatch_semaphore_wait(inFlight, DISPATCH_TIME_NOW) != 0) {
-
             [frameLock unlock];
             return;
         }
 
-        DrawCommand commands[WALLIFY_MAX_COMMANDS];
-
-        size_t count = latestCount;
-
-        if (count == 0) {
+        size_t staticCount = latestStaticCount;
+        size_t dynamicCount = latestDynamicCount;
+        if (dynamicCount == 0) {
             scheduled = NO;
-
             [frameLock unlock];
-
             dispatch_semaphore_signal(inFlight);
-
             return;
         }
 
-        memcpy(commands, latestCommands, count * sizeof(DrawCommand));
+        DrawCommand staticCommands[WALLIFY_MAX_COMMANDS];
+        DrawCommand dynamicCommands[WALLIFY_MAX_COMMANDS];
+        memcpy(staticCommands, latestStaticCommands, staticCount * sizeof(DrawCommand));
+        memcpy(dynamicCommands, latestDynamicCommands, dynamicCount * sizeof(DrawCommand));
 
         simd_float2 size = latestSize;
 
         id<MTLTexture> textures[WALLIFY_MAX_TEXTURES];
-
         for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; i++) {
             textures[i] = latestTextures[i];
         }
 
         scheduled = NO;
-
         [frameLock unlock];
 
         id<MTLTexture> defaultTex = textures[0];
-
         if (!defaultTex) {
             [frameLock lock];
-
             defaultTex = loadedTextures[0];
-
             [frameLock unlock];
         }
-
         for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; i++) {
             if (!textures[i]) {
                 textures[i] = defaultTex;
@@ -535,48 +609,36 @@ static void presentLatest(void) {
         }
 
         id<CAMetalDrawable> drawable = [surface nextDrawable];
-
         if (!drawable) {
             dispatch_semaphore_signal(inFlight);
-
             return;
         }
 
         id<MTLCommandBuffer> command = [queue commandBuffer];
-
         command.label = @"Wallify scene";
 
-        MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
+        const BOOL cacheChanged = staticSceneChanged(staticCommands, staticCount, size);
+        ensureStaticSceneTexture(size);
 
-        pass.colorAttachments[0].texture = drawable.texture;
+        if (!staticSceneTexture) {
+            dispatch_semaphore_signal(inFlight);
+            return;
+        }
 
-        pass.colorAttachments[0].loadAction = MTLLoadActionClear;
+        if (cacheChanged || !staticCacheValid) {
+            encodeCommands(command, staticSceneTexture, staticCommands, staticCount, size, textures);
+            memcpy(cachedStaticCommands, staticCommands, staticCount * sizeof(DrawCommand));
+            cachedStaticCount = staticCount;
+            cachedStaticSize = size;
+            cachedStaticScale = surface.contentsScale;
+            staticCacheValid = YES;
+        }
 
-        pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-
-        pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-        id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:pass];
-
-        [encoder setRenderPipelineState:pipelineState];
-
-        [encoder setVertexBytes:commands length:count * sizeof(DrawCommand) atIndex:0];
-
-        [encoder setVertexBytes:&size length:sizeof(size) atIndex:1];
-
-        [encoder setFragmentBytes:commands length:count * sizeof(DrawCommand) atIndex:0];
-
-        [encoder setFragmentTextures:textures withRange:NSMakeRange(0, WALLIFY_MAX_TEXTURES)];
-
-        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                    vertexStart:0
-                    vertexCount:4
-                  instanceCount:count];
-
-        [encoder endEncoding];
+        textures[WALLIFY_CACHED_SCENE_TEXTURE] = staticSceneTexture;
+        encodeCommands(command, drawable.texture, dynamicCommands, dynamicCount, size, textures);
 
         if (profiling) {
-            atomic_fetch_add(&drawCalls, 1);
+            atomic_fetch_add(&drawCalls, cacheChanged ? 2 : 1);
         }
 
         [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
@@ -586,7 +648,6 @@ static void presentLatest(void) {
 
           if (profiling) {
               atomic_fetch_add(&renderedFrames, 1);
-
               atomic_fetch_add(
                   &gpuNanos,
                   (unsigned long)(fmax(0, completed.GPUEndTime - completed.GPUStartTime) * 1e9));
@@ -594,8 +655,6 @@ static void presentLatest(void) {
 
           dispatch_semaphore_signal(inFlight);
 
-          // Only retry if a scene was waiting for an in-flight slot. A new
-          // submission after this check schedules its own presentation.
           [frameLock lock];
           BOOL hasPendingScene = scheduled;
           [frameLock unlock];
@@ -610,31 +669,59 @@ static void presentLatest(void) {
 
         [command waitUntilScheduled];
 
-        /*
-         * Resize atomically with drawable presentation so an old frame
-         * is not stretched while the native window changes size.
-         */
         [CATransaction begin];
-
         [CATransaction setDisableActions:YES];
 
         NSRect frame = panel.frame;
-
         if (frame.size.width != size.x || frame.size.height != size.y) {
             CGFloat top = NSMaxY(frame);
-
             frame.size = NSMakeSize(size.x, size.y);
-
             frame.origin.y = top - frame.size.height;
-
             [panel setFrame:frame display:NO];
         }
 
         [drawable present];
-
         [CATransaction commit];
     }
 }
+
+void wallify_present_split(float width,
+                           float height,
+                           const DrawCommand* staticCommands,
+                           size_t staticCount,
+                           const DrawCommand* dynamicCommands,
+                           size_t dynamicCount) {
+    if (staticCount > WALLIFY_MAX_COMMANDS ||
+        dynamicCount > WALLIFY_MAX_COMMANDS ||
+        width <= 0 ||
+        height <= 0) {
+        return;
+    }
+
+    [frameLock lock];
+
+    memcpy(latestStaticCommands, staticCommands, staticCount * sizeof(DrawCommand));
+    latestStaticCount = staticCount;
+    memcpy(latestDynamicCommands, dynamicCommands, dynamicCount * sizeof(DrawCommand));
+    latestDynamicCount = dynamicCount;
+    latestSize = (simd_float2){width, height};
+
+    for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; i++) {
+        latestTextures[i] = loadedTextures[i];
+    }
+
+    BOOL enqueue = !scheduled;
+    scheduled = YES;
+
+    [frameLock unlock];
+
+    if (enqueue) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          presentLatest();
+        });
+    }
+}
+
 
 void* wallify_context_menu_event(void) {
     return (__bridge void*)pendingContextMenuEvent;
