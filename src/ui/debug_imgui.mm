@@ -129,7 +129,9 @@ static bool beginProperties(const char* id) {
         ImGuiTableFlags_NoBordersInBodyUntilResize);
 
     if (open) {
-        ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 155.0f);
+        const float width = ImGui::GetContentRegionAvail().x;
+        const float labelWidth = ImClamp(width * 0.34f, 125.0f, 180.0f);
+        ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, labelWidth);
         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
     }
 
@@ -531,7 +533,6 @@ static void drawWidgetOverview(const WallifyDebugSnapshot& s) {
 }
 
 static void drawWidget(const WallifyDebugSnapshot& s) {
-    drawWidgetOverview(s);
     drawSection("Runtime", drawRuntime, s, true);
     drawSection("Appearance", drawAppearance, s, true);
     drawSection("Media", drawMedia, s);
@@ -547,6 +548,72 @@ static void drawGeometry(const WallifyDebugSnapshot& s) {
     drawSection("Viewports & displays", drawViewport, s);
     drawSection("Snapping", drawSnap, s);
     drawSection("WindowServer", drawWindowServer, s);
+}
+
+static const char* modeName(int mode) {
+    static const char* names[] = {"1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"};
+    return mode >= 0 && mode < IM_ARRAYSIZE(names) ? names[mode] : "Unknown";
+}
+
+static const char* mediaSourceName(int source) {
+    static const char* names[] = {"Now Playing", "Spotify", "Spotifast", "Auto"};
+    return source >= 0 && source < IM_ARRAYSIZE(names) ? names[source] : "Unknown";
+}
+
+static void drawStatusMetric(const char* label, const char* value, const char* detail = nullptr,
+                             bool accent = false) {
+    ImGui::TableNextColumn();
+    ImGui::TextDisabled("%s", label);
+    if (accent) {
+        ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        ImGui::TextColored(color, "%s", value);
+    } else {
+        ImGui::TextWrapped("%s", value);
+    }
+    if (detail) {
+        ImGui::TextDisabled("%s", detail);
+    }
+}
+
+static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
+    const ImGuiIO& io = ImGui::GetIO();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(11.0f, 8.0f));
+    if (ImGui::BeginChild("InspectorStatus", ImVec2(0, 72.0f), ImGuiChildFlags_Borders)) {
+        if (ImGui::BeginTable("InspectorStatusTable", 4,
+                              ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_BordersInnerV)) {
+            drawStatusMetric(
+                "STATUS",
+                s.transition_active ? "Transitioning" :
+                (s.frame_requested ? "Live" : "Idle"),
+                s.transition_active ? "Mode transition active" : "Frame updates",
+                true);
+            drawStatusMetric(
+                "MODE",
+                modeName(s.mode),
+                s.width > 0 && s.height > 0 ? nullptr : "Size unavailable");
+            drawStatusMetric(
+                "MEDIA",
+                s.title_len ? s.title : "Nothing playing",
+                mediaSourceName(s.source));
+            char frameRate[32];
+            if (io.Framerate > 0.0f)
+                snprintf(frameRate, sizeof(frameRate), "%.0f FPS", io.Framerate);
+            else
+                snprintf(frameRate, sizeof(frameRate), "—");
+
+            char frameDetail[32];
+            snprintf(frameDetail, sizeof(frameDetail), "%.2f ms", io.DeltaTime * 1000.0f);
+
+            drawStatusMetric("FRAME", frameRate, frameDetail);
+            ImGui::EndTable();
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+
+    ImGui::Spacing();
 }
 
 static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
@@ -631,6 +698,8 @@ static void drawInspector() {
     dragInspectorTitleBar();
 
     if (expanded) {
+        drawInspectorStatusBar(s);
+
         if (ImGui::BeginTabBar(
                 "InspectorTabs",
                 ImGuiTabBarFlags_Reorderable |
