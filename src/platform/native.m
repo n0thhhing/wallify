@@ -55,6 +55,7 @@ static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
 // Menu items and the pending event are intentionally process-lifetime UI state; AppKit owns the actual menu hierarchy.
+static __strong NSEvent* pendingContextMenuEvent;
 static __strong NSMenuItem* statusAuroraItem;
 static __strong NSMenuItem* statusGlowItem;
 static __strong NSMenuItem* statusAnimationsItem;
