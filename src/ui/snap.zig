@@ -44,6 +44,7 @@ var snap_debug_panel: Ref = null;
 var snap_debug_text: Ref = null;
 var snap_debug_header: Ref = null;
 var snap_debug_footer: Ref = null;
+var snap_debug_panes: [6]Ref = .{ null, null, null, null, null, null };
 var snap_debug_tick: u64 = 0;
 var snap_outline_was_visible = false;
 var snap_candidate_count: usize = 0;
@@ -122,10 +123,110 @@ fn playerWindowInfo() PanelWindowInfo {
     return .{};
 }
 
-fn setDebugText(view: Ref, value: []const u8) void {
+fn setInspectorText(label: Ref, value: []const u8) void {
     const ns_value = macos.string(value);
     defer macos.CFRelease(ns_value);
-    macos.send(void, view, "setString:", .{ns_value});
+    macos.send(void, label, "setStringValue:", .{ns_value});
+}
+
+fn makeDebugPane(content: Ref, index: usize, title_text: []const u8, frame: Rect) Ref {
+    const pane = macos.send(
+        Ref,
+        macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}),
+        "initWithFrame:",
+        .{frame},
+    );
+    if (pane == null) return null;
+
+    macos.send(void, pane, "setWantsLayer:", .{true});
+    const pane_layer = macos.send(Ref, pane, "layer", .{});
+    if (pane_layer != null) {
+        macos.send(void, pane_layer, "setCornerRadius:", .{@as(f64, 7.0)});
+        macos.send(void, pane_layer, "setBorderWidth:", .{@as(f64, 1.0)});
+        const border = macos.send(
+            Ref,
+            macos.objc_getClass("NSColor"),
+            "colorWithCalibratedWhite:alpha:",
+            .{@as(f64, 0.28), @as(f64, 0.55)},
+        );
+        const fill = macos.send(
+            Ref,
+            macos.objc_getClass("NSColor"),
+            "colorWithCalibratedWhite:alpha:",
+            .{@as(f64, 0.10), @as(f64, 0.92)},
+        );
+        macos.send(void, pane_layer, "setBorderColor:", .{macos.send(Ref, border, "CGColor", .{})});
+        macos.send(void, pane_layer, "setBackgroundColor:", .{macos.send(Ref, fill, "CGColor", .{})});
+    }
+
+    const label_cls = macos.objc_getClass("NSTextField");
+    const title = macos.send(
+        Ref,
+        macos.send(Ref, label_cls, "alloc", .{}),
+        "initWithFrame:",
+        .{rect(12, frame.size.height - 30.0, frame.size.width - 24.0, 20.0)},
+    );
+    if (title == null) return null;
+    macos.send(void, title, "setEditable:", .{false});
+    macos.send(void, title, "setSelectable:", .{false});
+    macos.send(void, title, "setBezeled:", .{false});
+    macos.send(void, title, "setDrawsBackground:", .{false});
+    const title_font = macos.send(
+        Ref,
+        macos.objc_getClass("NSFont"),
+        "monospacedSystemFontOfSize:weight:",
+        .{@as(f64, 12.0), @as(f64, 0.65)},
+    );
+    if (title_font != null) macos.send(void, title, "setFont:", .{title_font});
+    const title_color = macos.send(
+        Ref,
+        macos.objc_getClass("NSColor"),
+        "colorWithCalibratedWhite:alpha:",
+        .{@as(f64, 0.90), @as(f64, 1.0)},
+    );
+    macos.send(void, title, "setTextColor:", .{title_color});
+    const title_value = macos.string(title_text);
+    defer macos.CFRelease(title_value);
+    macos.send(void, title, "setStringValue:", .{title_value});
+    macos.send(void, pane, "addSubview:", .{title});
+
+    const body = macos.send(
+        Ref,
+        macos.send(Ref, label_cls, "alloc", .{}),
+        "initWithFrame:",
+        .{rect(12, 12, frame.size.width - 24.0, frame.size.height - 48.0)},
+    );
+    if (body == null) return null;
+    macos.send(void, body, "setEditable:", .{false});
+    macos.send(void, body, "setSelectable:", .{true});
+    macos.send(void, body, "setBezeled:", .{false});
+    macos.send(void, body, "setDrawsBackground:", .{false});
+    macos.send(void, body, "setUsesSingleLineMode:", .{false});
+    const body_font = macos.send(
+        Ref,
+        macos.objc_getClass("NSFont"),
+        "monospacedSystemFontOfSize:weight:",
+        .{@as(f64, 10.5), @as(f64, 0.0)},
+    );
+    if (body_font != null) macos.send(void, body, "setFont:", .{body_font});
+    const body_color = macos.send(
+        Ref,
+        macos.objc_getClass("NSColor"),
+        "colorWithCalibratedWhite:alpha:",
+        .{@as(f64, 0.72), @as(f64, 1.0)},
+    );
+    macos.send(void, body, "setTextColor:", .{body_color});
+    macos.send(void, body, "setAutoresizingMask:", .{@as(usize, 18)});
+    macos.send(void, pane, "addSubview:", .{body});
+
+    snap_debug_panes[index] = body;
+    return pane;
+}
+
+fn updateDebugPane(index: usize, value: []const u8) void {
+    if (snap_debug_panes[index] != null) {
+        setInspectorText(snap_debug_panes[index], value);
+    }
 }
 
 fn updateSnapDebug() void {
@@ -133,20 +234,34 @@ fn updateSnapDebug() void {
         if (snap_debug_panel) |panel| macos.send(void, panel, "orderOut:", .{@as(Ref, null)});
         return;
     }
+
     if (snap_debug_panel == null) {
         const panel_cls = macos.objc_getClass("NSPanel");
-        const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ rect(24, 60, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT), @as(usize, 1 | 2 | 32), @as(usize, 2), false });
+        const panel = macos.send(
+            Ref,
+            macos.send(Ref, panel_cls, "alloc", .{}),
+            "initWithContentRect:styleMask:backing:defer:",
+            .{
+                rect(24, 60, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT),
+                @as(usize, 1 | 2 | 32),
+                @as(usize, 2),
+                false,
+            },
+        );
         if (panel == null) return;
         snap_debug_panel = panel;
-        const title = macos.string("Wallify Debug Console");
+
+        const title = macos.string("Wallify Debug Inspector");
         defer macos.CFRelease(title);
         macos.send(void, panel, "setTitle:", .{title});
         macos.send(void, panel, "setFloatingPanel:", .{true});
-        macos.send(void, panel, "setTitleVisibility:", .{@as(usize, 1)});
-        macos.send(void, panel, "setTitlebarAppearsTransparent:", .{true});
-        macos.send(void, panel, "setMovableByWindowBackground:", .{true});
         macos.send(void, panel, "setOpaque:", .{true});
-        const bg = macos.send(Ref, macos.objc_getClass("NSColor"), "colorWithWhite:alpha:", .{@as(f64, 0.055), @as(f64, 0.96)});
+        const bg = macos.send(
+            Ref,
+            macos.objc_getClass("NSColor"),
+            "colorWithWhite:alpha:",
+            .{@as(f64, 0.06), @as(f64, 0.98)},
+        );
         macos.send(void, panel, "setBackgroundColor:", .{bg});
         macos.send(void, panel, "setLevel:", .{@as(isize, DEBUG_PANEL_LEVEL)});
         macos.send(void, panel, "setHidesOnDeactivate:", .{false});
@@ -155,106 +270,72 @@ fn updateSnapDebug() void {
         const content = macos.send(Ref, panel, "contentView", .{});
         if (content == null) return;
 
-        const header_cls = macos.objc_getClass("NSTextField");
-        const header = macos.send(
+        const root = macos.send(
             Ref,
-            macos.send(Ref, header_cls, "alloc", .{}),
+            macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}),
             "initWithFrame:",
-            .{rect(16, DEBUG_PANEL_HEIGHT - 42.0, DEBUG_PANEL_WIDTH - 32.0, 24.0)},
+            .{rect(0, 0, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT)},
         );
-        if (header == null) return;
-        snap_debug_header = header;
-        macos.send(void, header, "setEditable:", .{false});
-        macos.send(void, header, "setSelectable:", .{false});
-        macos.send(void, header, "setBezeled:", .{false});
-        macos.send(void, header, "setDrawsBackground:", .{false});
-        const header_font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 13.0), @as(f64, 0.65)});
-        if (header_font != null) macos.send(void, header, "setFont:", .{header_font});
-        const header_color = macos.send(
-            Ref,
-            macos.objc_getClass("NSColor"),
-            "colorWithCalibratedWhite:alpha:",
-            .{@as(f64, 0.92), @as(f64, 1.0)},
-        );
-        macos.send(void, header, "setTextColor:", .{header_color});
-        macos.send(void, header, "setStringValue:", .{macos.string("WALLIFY  /  DEBUG INSPECTOR")});
-        macos.send(void, content, "addSubview:", .{header});
+        if (root == null) return;
+        macos.send(void, root, "setAutoresizingMask:", .{@as(usize, 18)});
+        macos.send(void, content, "addSubview:", .{root});
+
+        const pad: f64 = 12.0;
+        const gap: f64 = 8.0;
+        const header_height: f64 = 28.0;
+        const footer_height: f64 = 18.0;
+        const body_top = footer_height + 8.0;
+        const body_bottom = DEBUG_PANEL_HEIGHT - header_height - 10.0;
+        const pane_height = (body_bottom - body_top - gap * 2.0) / 3.0;
+        const pane_width = (DEBUG_PANEL_WIDTH - pad * 2.0 - gap) / 2.0;
+
+        const titles = [_][]const u8{
+            "Runtime",
+            "Appearance",
+            "Media",
+            "Window",
+            "WindowServer",
+            "Snap",
+        };
+
+        const pane_frames = [_]Rect{
+            rect(pad, body_top + (pane_height + gap) * 2.0, pane_width, pane_height),
+            rect(pad + pane_width + gap, body_top + (pane_height + gap) * 2.0, pane_width, pane_height),
+            rect(pad, body_top + (pane_height + gap), pane_width, pane_height),
+            rect(pad + pane_width + gap, body_top + (pane_height + gap), pane_width, pane_height),
+            rect(pad, body_top, pane_width, pane_height),
+            rect(pad + pane_width + gap, body_top, pane_width, pane_height),
+        };
+
+        for (titles, 0..) |pane_title, i| {
+            const pane = makeDebugPane(root, i, pane_title, pane_frames[i]);
+            if (pane != null) macos.send(void, root, "addSubview:", .{pane});
+        }
 
         const footer_cls = macos.objc_getClass("NSTextField");
         const footer = macos.send(
             Ref,
             macos.send(Ref, footer_cls, "alloc", .{}),
             "initWithFrame:",
-            .{rect(16, 8, DEBUG_PANEL_WIDTH - 32.0, 18.0)},
+            .{rect(pad, 8, DEBUG_PANEL_WIDTH - pad * 2.0, footer_height)},
         );
-        if (footer == null) return;
-        snap_debug_footer = footer;
-        macos.send(void, footer, "setEditable:", .{false});
-        macos.send(void, footer, "setSelectable:", .{false});
-        macos.send(void, footer, "setBezeled:", .{false});
-        macos.send(void, footer, "setDrawsBackground:", .{false});
-        const footer_font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 10.0), @as(f64, 0.0)});
-        if (footer_font != null) macos.send(void, footer, "setFont:", .{footer_font});
-        const footer_color = macos.send(
-            Ref,
-            macos.objc_getClass("NSColor"),
-            "colorWithCalibratedWhite:alpha:",
-            .{@as(f64, 0.52), @as(f64, 1.0)},
-        );
-        macos.send(void, footer, "setTextColor:", .{footer_color});
-        macos.send(void, content, "addSubview:", .{footer});
-
-        const scroll_cls = macos.objc_getClass("NSScrollView");
-        const scroll = macos.send(
-            Ref,
-            macos.send(Ref, scroll_cls, "alloc", .{}),
-            "initWithFrame:",
-            .{rect(12, 32, DEBUG_PANEL_WIDTH - 24.0, DEBUG_PANEL_HEIGHT - 78.0)},
-        );
-        if (scroll == null) return;
-        macos.send(void, scroll, "setBorderType:", .{@as(usize, 0)});
-        macos.send(void, scroll, "setHasVerticalScroller:", .{true});
-        macos.send(void, scroll, "setHasHorizontalScroller:", .{false});
-        macos.send(void, scroll, "setAutohidesScrollers:", .{true});
-        macos.send(void, scroll, "setDrawsBackground:", .{true});
-        macos.send(void, scroll, "setBackgroundColor:", .{bg});
-        macos.send(void, scroll, "setAutoresizingMask:", .{@as(usize, 18)});
-
-        const text_cls = macos.objc_getClass("NSTextView");
-        const text = macos.send(
-            Ref,
-            macos.send(Ref, text_cls, "alloc", .{}),
-            "initWithFrame:",
-            .{rect(0, 0, DEBUG_PANEL_WIDTH - 20.0, DEBUG_PANEL_HEIGHT - 20.0)},
-        );
-        if (text == null) return;
-        snap_debug_text = text;
-        macos.send(void, text, "setEditable:", .{false});
-        macos.send(void, text, "setSelectable:", .{true});
-        macos.send(void, text, "setRichText:", .{false});
-        macos.send(void, text, "setDrawsBackground:", .{true});
-        macos.send(void, text, "setBackgroundColor:", .{bg});
-        macos.send(void, text, "setTextContainerInset:", .{@as(Point, .{ .x = 8, .y = 8 })});
-        macos.send(void, text, "setVerticallyResizable:", .{true});
-        macos.send(void, text, "setHorizontallyResizable:", .{false});
-        macos.send(void, text, "setAutoresizingMask:", .{@as(usize, 18)});
-        const text_container = macos.send(Ref, text, "textContainer", .{});
-        if (text_container != null) {
-            macos.send(void, text_container, "setWidthTracksTextView:", .{true});
-            macos.send(void, text_container, "setContainerSize:", .{@as(Point, .{ .x = DEBUG_PANEL_WIDTH - 36.0, .y = 10000.0 })});
+        if (footer != null) {
+            snap_debug_footer = footer;
+            macos.send(void, footer, "setEditable:", .{false});
+            macos.send(void, footer, "setSelectable:", .{false});
+            macos.send(void, footer, "setBezeled:", .{false});
+            macos.send(void, footer, "setDrawsBackground:", .{false});
+            const footer_font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 9.0), @as(f64, 0.0)});
+            if (footer_font != null) macos.send(void, footer, "setFont:", .{footer_font});
+            const footer_color = macos.send(
+                Ref,
+                macos.objc_getClass("NSColor"),
+                "colorWithCalibratedWhite:alpha:",
+                .{@as(f64, 0.48), @as(f64, 1.0)},
+            );
+            macos.send(void, footer, "setTextColor:", .{footer_color});
+            macos.send(void, root, "addSubview:", .{footer});
         }
-        const font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 11.0), @as(f64, 0.0)});
-        if (font != null) macos.send(void, text, "setFont:", .{font});
-        const green = macos.send(
-            Ref,
-            macos.objc_getClass("NSColor"),
-            "colorWithCalibratedRed:green:blue:alpha:",
-            .{@as(f64, 0.55), @as(f64, 0.95), @as(f64, 0.65), @as(f64, 0.95)},
-        );
-        macos.send(void, text, "setTextColor:", .{green});
-        macos.send(void, scroll, "setDocumentView:", .{text});
-
-        macos.send(void, content, "addSubview:", .{scroll});
     }
 
     const actual = if (snap_outline) |panel| macos.send(Rect, panel, "frame", .{}) else rect(0, 0, 0, 0);
@@ -266,30 +347,16 @@ fn updateSnapDebug() void {
 
     snap_debug_tick += 1;
 
-    var message: [4096]u8 = undefined;
-    var offset: usize = 0;
-
-    const first = std.fmt.bufPrint(
-        message[offset..],
-        "RUNTIME\\n" ++
-            "  Playback        {s} — {s}\\n" ++
-            "  Time            {d:.1}s / {d:.1}s\\n" ++
-            "  Artwork         {s}\\n" ++
-            "  Mode            {d}\\n" ++
-            "  Mode mix        {d:.3}\\n" ++
-            "  Render size     {d:.0} × {d:.0}\\n" ++
-            "  Dragging        {s}\\n" ++
-            "\\n" ++
-            "MATERIAL\\n" ++
-            "  Native glass    {s}\\n" ++
-            "  Glow            {s}\\n" ++
-            "  Aurora          {s}\\n" ++
-            "  Animations      {s}\\n" ++
-            "  Animation speed {d}\\n" ++
-            "\\n" ++
-            "MEDIA\\n" ++
-            "  Source          {d}\\n" ++
-            "  Transition      {d}\\n",
+    var runtime: [1024]u8 = undefined;
+    const runtime_text = std.fmt.bufPrint(
+        &runtime,
+        "Playback     {s} — {s}\n" ++
+            "Time         {d:.1}s / {d:.1}s\n" ++
+            "Artwork      {s}\n" ++
+            "Mode         {d}\n" ++
+            "Mode mix     {d:.3}\n" ++
+            "Render size  {d:.0} × {d:.0}\n" ++
+            "Dragging     {s}",
         .{
             state.global_title[0..state.global_title_len],
             state.global_artist[0..state.global_artist_len],
@@ -301,33 +368,42 @@ fn updateSnapDebug() void {
             snap_debug_card_width,
             snap_debug_card_height,
             if (snap_debug_dragging) "true" else "false",
+        },
+    ) catch return;
+    updateDebugPane(0, runtime_text);
+
+    var appearance: [512]u8 = undefined;
+    const appearance_text = std.fmt.bufPrint(
+        &appearance,
+        "Native glass  {s}\nGlow          {s}\nAurora        {s}\nAnimations    {s}\nAnimation spd {d}",
+        .{
             if (state.setting_native_glass) "on" else "off",
             if (state.setting_glow) "on" else "off",
             if (state.setting_aurora) "on" else "off",
             if (state.setting_animations) "on" else "off",
             @intFromEnum(state.setting_speed),
+        },
+    ) catch return;
+    updateDebugPane(1, appearance_text);
+
+    var media: [1024]u8 = undefined;
+    const media_text = std.fmt.bufPrint(
+        &media,
+        "Source        {d}\nTransition    {d}\nArtwork       {s}\nTitle         {s}\nArtist        {s}",
+        .{
             @intFromEnum(state.setting_source),
             @intFromEnum(state.setting_transition),
-        }
+            if (state.global_has_artwork) "available" else "none",
+            state.global_title[0..state.global_title_len],
+            state.global_artist[0..state.global_artist_len],
+        },
     ) catch return;
-    offset += first.len;
+    updateDebugPane(2, media_text);
 
-    const second = std.fmt.bufPrint(
-        message[offset..],
-        "WINDOW\\n" ++
-            "  Wallify id      #{d}\\n" ++
-            "  Layer           {d}\\n" ++
-            "  Screen          {d:.0} × {d:.0}\\n" ++
-            "  Margin          {d:.0}, {d:.0}\\n" ++
-            "  Visual          {d:.0}, {d:.0}\\n" ++
-            "  Panel frame     {d:.0}, {d:.0}  {d:.0} × {d:.0}\\n" ++
-            "\\n" ++
-            "WINDOW SERVER\\n" ++
-            "  Candidates      {d}\\n" ++
-            "  Outline         {s}\\n" ++
-            "  Distance²       {d:.0}\\n" ++
-            "  Outline id      #{d}\\n" ++
-            "  Outline level   {d}\\n",
+    var window: [1024]u8 = undefined;
+    const window_text = std.fmt.bufPrint(
+        &window,
+        "Wallify id    #{d}\nLayer         {d}\nScreen        {d:.0} × {d:.0}\nMargin        {d:.0}, {d:.0}\nVisual        {d:.0}, {d:.0}\nPanel frame   {d:.0}, {d:.0}  {d:.0} × {d:.0}",
         .{
             player.number,
             player.layer,
@@ -341,52 +417,51 @@ fn updateSnapDebug() void {
             actual.origin.y,
             actual.size.width,
             actual.size.height,
+        },
+    ) catch return;
+    updateDebugPane(3, window_text);
+
+    var window_server: [1024]u8 = undefined;
+    const ws_text = std.fmt.bufPrint(
+        &window_server,
+        "Candidates     {d}\nOutline        {s}\nDistance²      {d:.0}\nOutline id     #{d}\nOutline level  {d}\nCache offset   {d:.0}, {d:.0}\nCache valid    {s}",
+        .{
             snap_candidate_count,
             if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
             snap_last_distance_sq,
             outline_number,
             outline_level,
-        }
+            cached_offset_x,
+            cached_offset_y,
+            if (has_cached_offsets) "true" else "false",
+        },
     ) catch return;
-    offset += second.len;
+    updateDebugPane(4, ws_text);
 
-    const third = std.fmt.bufPrint(
-        message[offset..],
-        "SNAP\\n" ++
-            "  Target          {d:.0}, {d:.0}\\n" ++
-            "  Target size     {d:.0} × {d:.0}\\n" ++
-            "  Threshold²      {d:.0}\\n" ++
-            "  Snap state      {s}\\n" ++
-            "\\n" ++
-            "CACHE\\n" ++
-            "  Offset          {d:.0}, {d:.0}\\n" ++
-            "  Valid           {s}\\n",
+    var snap: [1024]u8 = undefined;
+    const snap_text = std.fmt.bufPrint(
+        &snap,
+        "Target        {d:.0}, {d:.0}\nTarget size   {d:.0} × {d:.0}\nThreshold²    {d:.0}\nSnap state    {s}\nOutline rect  {d:.0}, {d:.0}  {d:.0} × {d:.0}",
         .{
             snap_outline_rect.origin.x,
             snap_outline_rect.origin.y,
             snap_outline_rect.size.width,
             snap_outline_rect.size.height,
             SNAP_THRESHOLD,
-            if (snap_candidate_count > 0) "candidates detected" else "no candidates detected",
-            cached_offset_x,
-            cached_offset_y,
-            if (has_cached_offsets) "true" else "false",
-        }
+            if (snap_candidate_count > 0) "candidates detected" else "no candidates",
+            snap_outline_rect.origin.x,
+            snap_outline_rect.origin.y,
+            snap_outline_rect.size.width,
+            snap_outline_rect.size.height,
+        },
     ) catch return;
-    offset += third.len;
+    updateDebugPane(5, snap_text);
 
-    setDebugText(snap_debug_text, message[0..offset]);
-
-    if (snap_debug_header) |header| {
-        const header_value = macos.string(if (snap_debug_dragging) "WALLIFY  /  DEBUG INSPECTOR    •    DRAGGING" else "WALLIFY  /  DEBUG INSPECTOR    •    LIVE");
-        defer macos.CFRelease(header_value);
-        macos.send(void, header, "setStringValue:", .{header_value});
-    }
     if (snap_debug_footer) |footer| {
         var status: [192]u8 = undefined;
         const status_text = std.fmt.bufPrint(
             &status,
-            "tick {d}    |    candidates {d}    |    outline {s}    |    cache {s}",
+            "LIVE   tick {d}   •   candidates {d}   •   outline {s}   •   cache {s}",
             .{
                 snap_debug_tick,
                 snap_candidate_count,
@@ -398,7 +473,6 @@ fn updateSnapDebug() void {
         defer macos.CFRelease(footer_value);
         macos.send(void, footer, "setStringValue:", .{footer_value});
     }
-
 
     if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
         macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
