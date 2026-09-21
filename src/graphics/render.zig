@@ -53,7 +53,7 @@ pub fn drawUIFrame() void {
     @import("idle_compositor.zig").update(card);
     // Native Liquid Glass already clips the Metal subview to the card bounds.
     // Avoid repeating the rounded-card SDF for every fragment in that mode.
-    const clip = if (state.setting_native_glass)
+    const clip: gpu.Rect = if (state.setting_native_glass)
         .{ .x = 0.0, .y = 0.0, .w = 0.0, .h = 0.0, .radius = 0.0 }
     else
         card;
