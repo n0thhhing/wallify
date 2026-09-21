@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const debug_inspector = b.option(bool, "debug-inspector", "Build the Dear ImGui developer inspector") orelse optimize == .Debug;
+    const debug_inspector = b.option(bool, "debug-inspector", "Build the Dear ImGui developer inspector") orelse false;
 
     const build_options = b.addOptions();
     build_options.addOption(bool, "debug_inspector", debug_inspector);
