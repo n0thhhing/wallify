@@ -673,12 +673,12 @@ bool wallify_create(int width, int height, int left, int top) {
 
     [menu addItem:[NSMenuItem separatorItem]];
 
-    NSMenuItem* inspector = [[NSMenuItem alloc] initWithTitle:@"Open Inspector" action:@selector(statusOpenInspector:) keyEquivalent:@""]];
+    NSMenuItem* inspector = [[NSMenuItem alloc] initWithTitle:@"Open Inspector" action:@selector(statusOpenInspector:) keyEquivalent:@""];
     inspector.target = menuTarget;
     inspector.enabled = wallify_imgui_inspector_show != NULL;
     [menu addItem:inspector];
 
-    NSMenuItem* settings = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(statusOpenSettings:) keyEquivalent:@","]];
+    NSMenuItem* settings = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(statusOpenSettings:) keyEquivalent:@","];
     settings.target = menuTarget;
     [menu addItem:settings];
 
