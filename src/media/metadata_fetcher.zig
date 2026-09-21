@@ -22,6 +22,7 @@ extern "c" fn CFDateGetAbsoluteTime(theDate: CFTypeRef) f64;
 extern "c" fn CFAbsoluteTimeGetCurrent() f64;
 extern "c" fn CFNumberGetValue(number: CFNumberRef, theType: c_long, valuePtr: *anyopaque) bool;
 extern "c" fn CFRelease(cf: CFTypeRef) void;
+extern "c" fn atexit(function: *const fn () callconv(.c) void) c_int;
 extern "c" fn dispatch_semaphore_create(value: isize) *anyopaque;
 extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
 extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
@@ -113,6 +114,24 @@ var g_rateKey: ?CFStringRef = null;
 var g_elapsedKey: ?CFStringRef = null;
 var g_durationKey: ?CFStringRef = null;
 var g_timestampKey: ?CFStringRef = null;
+var cleanup_registered = false;
+
+fn cleanupCachedCFKeys() callconv(.c) void {
+    if (g_titleKey) |key| { CFRelease(key); g_titleKey = null; }
+    if (g_artistKey) |key| { CFRelease(key); g_artistKey = null; }
+    if (g_artworkKey) |key| { CFRelease(key); g_artworkKey = null; }
+    if (g_rateKey) |key| { CFRelease(key); g_rateKey = null; }
+    if (g_elapsedKey) |key| { CFRelease(key); g_elapsedKey = null; }
+    if (g_durationKey) |key| { CFRelease(key); g_durationKey = null; }
+    if (g_timestampKey) |key| { CFRelease(key); g_timestampKey = null; }
+}
+
+fn registerCleanup() void {
+    if (!cleanup_registered) {
+        _ = atexit(cleanupCachedCFKeys);
+        cleanup_registered = true;
+    }
+}
 
 // PERF: By statically caching these CoreFoundation string references after the first initialization,
 // we prevent the Perl daemon from repeatedly churning heap allocations and stalling the main thread
@@ -121,6 +140,7 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
     _ = block;
     if (info) |dict| {
         if (g_titleKey == null) {
+            registerCleanup();
             g_titleKey = CFStringCreateWithCString(null, "kMRMediaRemoteNowPlayingInfoTitle", kCFStringEncodingUTF8);
             g_artistKey = CFStringCreateWithCString(null, "kMRMediaRemoteNowPlayingInfoArtist", kCFStringEncodingUTF8);
             g_artworkKey = CFStringCreateWithCString(null, "kMRMediaRemoteNowPlayingInfoArtworkData", kCFStringEncodingUTF8);
