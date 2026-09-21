@@ -383,11 +383,20 @@ static void drawInspector() {
 static WallifyInspectorWindowDelegate* gInspectorDelegate = nil;
 
 static void showInspectorOnMain(void) {
+        NSLog(@"Wallify Inspector: showing");
+
         if (!gInspectorPanel) {
             id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-            if (!device) return;
+            if (!device) {
+                NSLog(@"Wallify Inspector: no Metal device");
+                return;
+            }
+
             gInspectorQueue = [device newCommandQueue];
-            if (!gInspectorQueue) return;
+            if (!gInspectorQueue) {
+                NSLog(@"Wallify Inspector: failed to create Metal command queue");
+                return;
+            }
 
             IMGUI_CHECKVERSION();
             ImGui::CreateContext();
@@ -430,6 +439,7 @@ static void showInspectorOnMain(void) {
             [gInspectorPanel setContentView:gInspectorView];
 
             if (!ImGui_ImplMetal_Init(device)) {
+                NSLog(@"Wallify Inspector: ImGui Metal backend initialization failed");
                 gInspectorPanel = nil;
                 gInspectorDelegate = nil;
                 gInspectorView = nil;
@@ -439,6 +449,7 @@ static void showInspectorOnMain(void) {
             }
 
             if (!ImGui_ImplOSX_Init(gInspectorView)) {
+                NSLog(@"Wallify Inspector: ImGui OSX backend initialization failed");
                 ImGui_ImplMetal_Shutdown();
                 gInspectorPanel = nil;
                 gInspectorDelegate = nil;
@@ -461,13 +472,9 @@ static void showInspectorOnMain(void) {
 }
 
 extern "C" void wallify_imgui_inspector_show(void) {
-    if ([NSThread isMainThread]) {
+    dispatch_async(dispatch_get_main_queue(), ^{
         showInspectorOnMain();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            showInspectorOnMain();
-        });
-    }
+    });
 }
 
 extern "C" void wallify_imgui_inspector_hide(void) {
