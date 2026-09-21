@@ -77,7 +77,16 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
                               constant DrawCommand *commands [[buffer(0)]],
                               array<texture2d<float>, WALLIFY_MAX_TEXTURES> textures [[texture(0)]]) {
     constant DrawCommand &c = commands[in.instance_id];
-    float distance = roundedDistance(in.point, float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
+    // Most commands are plain rectangles. Avoid the vector length in the
+    // rounded-box SDF for those quads; the rounded path is only needed for
+    // artwork/cards and other genuinely rounded geometry.
+    float distance;
+    if (c.radius <= 0.001f) {
+        float2 local = in.point - float2(c.dx, c.dy);
+        distance = max(max(-local.x, local.x - c.dw), max(-local.y, local.y - c.dh));
+    } else {
+        distance = roundedDistance(in.point, float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
+    }
 
     // Analytical anti-aliasing via screen-space partial derivative (fwidth)
     float aa = max(fwidth(distance), 0.25f);
