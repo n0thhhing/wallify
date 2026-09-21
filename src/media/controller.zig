@@ -213,6 +213,18 @@ pub fn triggerCommand(cmd: MediaRemoteCommand) void {
     enqueueAction(.{ .kind = .command, .cmd = cmd });
 }
 
+pub export fn wallify_menu_play_pause() callconv(.c) void {
+    togglePlayback();
+}
+
+pub export fn wallify_menu_previous() callconv(.c) void {
+    triggerCommand(.previous_track);
+}
+
+pub export fn wallify_menu_next() callconv(.c) void {
+    triggerCommand(.next_track);
+}
+
 pub fn togglePlayback() void {
     const now = window.widget_monotonic_time();
     std.log.info("media: toggle playback at position={d:.2}s, current_rate={d:.2}", .{
