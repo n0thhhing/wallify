@@ -88,6 +88,7 @@ pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) call
 }
 
 pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) void {
+    std.log.info("settings: bool key={d} value={}", .{ key, val });
     switch (key) {
         0 => state.setting_glow = val,
         1 => state.setting_aurora = val,
@@ -111,6 +112,7 @@ pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) vo
 }
 
 pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) void {
+    std.log.info("settings: int key={d} value={d}", .{ key, val });
     switch (key) {
         10 => state.setting_frame = @enumFromInt(std.math.clamp(val, 0, 2)),
         11 => state.setting_intensity = @enumFromInt(std.math.clamp(val, 0, 2)),
@@ -153,6 +155,7 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
 }
 
 pub export fn wallify_settings_restore_defaults() callconv(.c) void {
+    std.log.info("settings: restoring defaults", .{});
     state.setting_idle_style = .pixel_cat;
     state.setting_transition = .cinematic;
     state.setting_glow = true;
