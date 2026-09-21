@@ -17,8 +17,8 @@ const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
 const MIN_CANDIDATE_SIZE: f64 = 80.0;
 const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
 const DEBUG_PANEL_LEVEL: isize = 101;
-const DEBUG_PANEL_WIDTH: f64 = 420.0;
-const DEBUG_PANEL_HEIGHT: f64 = 300.0;
+const DEBUG_PANEL_WIDTH: f64 = 520.0;
+const DEBUG_PANEL_HEIGHT: f64 = 520.0;
 const OUTLINE_LEVEL_FALLBACK: isize = -2;
 
 pub const PanelSnap = extern struct {
@@ -124,7 +124,6 @@ fn setDebugText(view: Ref, value: []const u8) void {
     const ns_value = macos.string(value);
     defer macos.CFRelease(ns_value);
     macos.send(void, view, "setString:", .{ns_value});
-    macos.send(void, view, "scrollToEndOfDocument:", .{@as(Ref, null)});
 }
 
 fn updateSnapDebug() void {
@@ -179,7 +178,14 @@ fn updateSnapDebug() void {
         macos.send(void, text, "setDrawsBackground:", .{true});
         macos.send(void, text, "setBackgroundColor:", .{bg});
         macos.send(void, text, "setTextContainerInset:", .{@as(Point, .{ .x = 8, .y = 8 })});
+        macos.send(void, text, "setVerticallyResizable:", .{true});
+        macos.send(void, text, "setHorizontallyResizable:", .{false});
         macos.send(void, text, "setAutoresizingMask:", .{@as(usize, 18)});
+        const text_container = macos.send(Ref, text, "textContainer", .{});
+        if (text_container != null) {
+            macos.send(void, text_container, "setWidthTracksTextView:", .{true});
+            macos.send(void, text_container, "setContainerSize:", .{@as(Point, .{ .x = DEBUG_PANEL_WIDTH - 36.0, .y = 10000.0 })});
+        }
         const font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 11.0), @as(f64, 0.0)});
         if (font != null) macos.send(void, text, "setFont:", .{font});
         const green = macos.send(
