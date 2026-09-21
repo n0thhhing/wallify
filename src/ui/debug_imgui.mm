@@ -48,8 +48,6 @@ static NSPoint gInspectorDragStartOrigin = NSZeroPoint;
 
 static const CGFloat kInspectorWidth = 1040.0;
 static const CGFloat kInspectorExpandedHeight = 720.0;
-static const CGFloat kInspectorCollapsedSize = 96.0;
-static const CGFloat kInspectorHeaderHeight = 42.0;
 
 static CGFloat gInspectorExpandedWidth = kInspectorWidth;
 static CGFloat gInspectorExpandedHeight = kInspectorExpandedHeight;
@@ -58,8 +56,8 @@ static void setInspectorFrame(NSPanel* panel) {
     NSScreen* screen = NSScreen.mainScreen;
     if (!screen) return;
     NSRect visible = screen.visibleFrame;
-    const CGFloat width = gInspectorCollapsed ? kInspectorCollapsedSize : gInspectorExpandedWidth;
-    const CGFloat height = gInspectorCollapsed ? kInspectorCollapsedSize : gInspectorExpandedHeight;
+    const CGFloat width = gInspectorExpandedWidth;
+    const CGFloat height = gInspectorExpandedHeight;
     [panel setFrame:NSMakeRect(
         visible.origin.x + (visible.size.width - width) * 0.5,
         visible.origin.y + (visible.size.height - height) * 0.5,
@@ -291,107 +289,58 @@ static void resizeInspector(CGFloat width, CGFloat height, bool saveExpandedSize
     }
 
     NSRect frame = gInspectorPanel.frame;
-    frame.origin.x += (frame.size.width - width) * 0.5;
-    frame.origin.y += (frame.size.height - height) * 0.5;
+    // Keep the title bar anchored at the same screen position.
+    frame.origin.y += frame.size.height - height;
     frame.size = NSMakeSize(width, height);
     [gInspectorPanel setFrame:frame display:YES animate:NO];
 }
 
-static void drawInspectorHeader() {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImGuiIO& io = ImGui::GetIO();
-    const float headerHeight = gInspectorCollapsed
-        ? (float)kInspectorCollapsedSize
-        : (float)kInspectorHeaderHeight;
-    const float buttonWidth = 36.0f;
-    const float width = io.DisplaySize.x;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-
-    ImVec2 headerPos = ImGui::GetCursorScreenPos();
-    const float dragWidth = ImMax(0.0f, width - buttonWidth);
-
-    ImGui::InvisibleButton("##InspectorDrag", ImVec2(dragWidth, headerHeight));
-
-    if (ImGui::IsItemActivated()) {
+static void dragInspectorTitleBar() {
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    static bool dragging = false;
+    const bool active = ImGui::GetActiveID() == window->MoveId &&
+        ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+        (dragging || window->TitleBarRect().Contains(ImGui::GetIO().MouseClickedPos[0]));
+    if (active && !dragging) {
         gInspectorDragStartMouse = [NSEvent mouseLocation];
         gInspectorDragStartOrigin = gInspectorPanel.frame.origin;
     }
-
-    if (ImGui::IsItemActive()) {
+    if (active) {
         NSPoint mouse = [NSEvent mouseLocation];
-        NSPoint origin = NSMakePoint(
+        [gInspectorPanel setFrameOrigin:NSMakePoint(
             gInspectorDragStartOrigin.x + mouse.x - gInspectorDragStartMouse.x,
-            gInspectorDragStartOrigin.y + mouse.y - gInspectorDragStartMouse.y);
-        [gInspectorPanel setFrameOrigin:origin];
+            gInspectorDragStartOrigin.y + mouse.y - gInspectorDragStartMouse.y)];
     }
-
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-    const ImU32 headerBg = ImGui::GetColorU32(ImGuiCol_TitleBg);
-    const ImU32 headerFg = ImGui::GetColorU32(ImGuiCol_Text);
-
-    drawList->AddRectFilled(
-        headerPos,
-        ImVec2(headerPos.x + width, headerPos.y + headerHeight),
-        headerBg,
-        style.WindowRounding,
-        ImDrawFlags_RoundCornersTop);
-
-    if (gInspectorCollapsed) {
-        const char* title = "W";
-        const ImVec2 textSize = ImGui::CalcTextSize(title);
-        drawList->AddText(
-            ImVec2(headerPos.x + (width - buttonWidth - textSize.x) * 0.5f,
-                   headerPos.y + (headerHeight - textSize.y) * 0.5f),
-            headerFg,
-            title);
-    } else {
-        drawList->AddText(
-            ImVec2(headerPos.x + 14.0f, headerPos.y + 11.0f),
-            headerFg,
-            "Wallify Inspector");
-    }
-
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(width - buttonWidth);
-
-    if (ImGui::Button(gInspectorCollapsed ? "+" : "−", ImVec2(buttonWidth, headerHeight))) {
-        gInspectorCollapsed = !gInspectorCollapsed;
-
-        if (gInspectorCollapsed) {
-            resizeInspector(kInspectorCollapsedSize, kInspectorCollapsedSize, false);
-        } else {
-            resizeInspector(gInspectorExpandedWidth, gInspectorExpandedHeight, false);
-        }
-    }
-
-    ImGui::PopStyleVar();
-
-    ImGui::SetCursorPosY(headerHeight + style.ItemSpacing.y);
+    dragging = active;
 }
-
 
 static void drawInspector() {
     WallifyDebugSnapshot s{};
     wallify_debug_get_snapshot(&s);
 
-    ImGuiIO& io = ImGui::GetIO();
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(io.DisplaySize, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(gInspectorExpandedWidth, gInspectorExpandedHeight),
+                             ImGuiCond_Always);
 
     constexpr ImGuiWindowFlags rootFlags =
-        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoBringToFrontOnFocus |
         ImGuiWindowFlags_NoNavFocus;
 
-    ImGui::Begin("##WallifyInspectorSurface", nullptr, rootFlags);
+    const bool expanded = ImGui::Begin("Wallify Inspector", nullptr, rootFlags);
+    const bool collapsed = ImGui::IsWindowCollapsed();
+    if (collapsed != gInspectorCollapsed) {
+        gInspectorCollapsed = collapsed;
+        resizeInspector(gInspectorExpandedWidth,
+                        collapsed ? ImGui::GetWindowHeight() : gInspectorExpandedHeight,
+                        false);
+    }
+    dragInspectorTitleBar();
 
-    drawInspectorHeader();
-
-    if (!gInspectorCollapsed) {
+    if (expanded) {
         if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
             drawTab("Runtime", drawRuntime, s);
             drawTab("Appearance", drawAppearance, s);
@@ -538,7 +487,7 @@ static void showInspectorOnMain(void) {
                 NSWindowCollectionBehaviorFullScreenAuxiliary;
             gInspectorPanel.releasedWhenClosed = NO;
             gInspectorPanel.delegate = gInspectorDelegate;
-            gInspectorPanel.contentMinSize = NSMakeSize(kInspectorCollapsedSize, kInspectorCollapsedSize);
+            gInspectorPanel.contentMinSize = NSMakeSize(1.0, 1.0);
             setInspectorFrame(gInspectorPanel);
             [gInspectorPanel setContentView:gInspectorView];
 
@@ -566,6 +515,7 @@ static void showInspectorOnMain(void) {
             gInspectorInitialized = true;
         }
 
+        ImGui::SetWindowCollapsed("Wallify Inspector", false);
         gInspectorCollapsed = false;
         gInspectorExpandedWidth = kInspectorWidth;
         gInspectorExpandedHeight = kInspectorExpandedHeight;
