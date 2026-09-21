@@ -373,10 +373,9 @@ pub fn metadataLoop(io: std.Io) void {
         "$SIG{USR1} = sub { $wake = 1; }; " ++
         "while (1) { if ($wake) { $wake = 0; fetch(); } sleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_S ++ "); }";
 
-    // HACK: macOS `mediaremoted` strictly throttles rapid polling, placing requesters in an XPC penalty box.
-    // To bypass this and achieve instant `.now_playing` responsiveness, we spawn this Perl subprocess and hijack its UNIX signal handler.
-    // Setting `PERL_SIGNALS=unsafe` is absolutely critical here—it disables Perl's Deferred Signals mechanism, allowing our
-    // POSIX `SIGUSR1` interrupt to violently shatter the 150ms `usleep` block the exact microsecond a track changes!
+    // macOS `mediaremoted` is queried through the helper because the framework is private.
+    // Keep the helper mostly asleep and use Spotify's distributed notification to wake it immediately on playback changes.
+    // A short fallback sleep keeps the metadata fresh even when no notification is emitted.
     const command = "PERL_SIGNALS=unsafe perl -e '" ++ perl_cmd ++ "'";
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
