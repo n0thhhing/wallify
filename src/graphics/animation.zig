@@ -68,6 +68,7 @@ pub fn animationLoop() void {
     var marquee_cached_width: f64 = 0.0;
     while (true) {
         var high_rate_animation = false;
+        var idle_frame_interval: f64 = 0;
         const columns = @import("../platform/native.zig").wallify_width();
         var needs_draw = state.frame_requested.swap(false, .acq_rel) or columns != previous_columns;
         previous_columns = columns;
@@ -176,10 +177,10 @@ pub fn animationLoop() void {
                 else => 30.0,
             };
             const previous_tick = @floor(state.cat_time * fps);
+            idle_frame_interval = 1.0 / fps;
             state.cat_time += dt;
             if (@floor(state.cat_time * fps) != previous_tick) {
                 needs_draw = true;
-                high_rate_animation = true;
             }
         }
         if (state.mode_transition_active) {
@@ -234,12 +235,13 @@ pub fn animationLoop() void {
                 }
             }
         }
-        if (!state.spotifyIdle() and state.layout.compact_mix > 0.01 and state.global_title_len > 0) {
+        if (!state.setting_hide_text and !state.spotifyIdle() and state.layout.compact_mix > 0.01 and state.global_title_len > 0) {
             // Compact tiles lack horizontal clearance for full track titles.
             // If the text width exceeds the viewport, we auto-scroll back and forth (marquee effect).
             const title = state.global_title[0..state.global_title_len];
             if (title.len != marquee_cached_title_len or
-                !std.mem.eql(u8, title, marquee_cached_title[0..marquee_cached_title_len])) {
+                !std.mem.eql(u8, title, marquee_cached_title[0..marquee_cached_title_len]))
+            {
                 @memcpy(marquee_cached_title[0..title.len], title);
                 marquee_cached_title_len = title.len;
                 marquee_cached_width = text_cache.width(title, MARQUEE_FONT_SIZE, true);
@@ -329,6 +331,8 @@ pub fn animationLoop() void {
 
         const frame_interval = if (high_rate_animation)
             1.0 / TARGET_FPS
+        else if (idle_frame_interval > 0)
+            idle_frame_interval
         else if (progress_active)
             PROGRESS_FRAME_INTERVAL
         else
@@ -341,7 +345,9 @@ pub fn animationLoop() void {
 
         const after = window.widget_monotonic_time();
         if (frame_interval > 0.0) {
-            const remaining = frame_interval - (after - last_draw_time);
+            // Pace loop iterations even when a sprite tick did not need a draw.
+            // Basing this on the last draw can spin once that deadline passes.
+            const remaining = frame_interval - (after - now);
             if (remaining > 0) sleep_us(@intFromFloat(remaining * 1_000_000));
         } else {
             // Nothing is animating and no progress frame is due. Sleep until
