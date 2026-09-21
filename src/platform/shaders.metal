@@ -89,6 +89,7 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     }
 
     float coverage;
+    float aa = 0.0f;
     // In native glass mode, the Metal view is itself clipped to the rounded
     // AppKit glass container. Plain quads can therefore skip all SDF/derivative
     // coverage work; only genuinely rounded or stroked geometry needs it.
@@ -96,7 +97,7 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         coverage = 1.0f;
     } else {
         // Analytical anti-aliasing via screen-space partial derivative (fwidth)
-        float aa = max(fwidth(distance), 0.25f);
+        aa = max(fwidth(distance), 0.25f);
         coverage = 1.0f - smoothstep(-aa * 0.5f, aa * 0.5f, distance);
     }
 
