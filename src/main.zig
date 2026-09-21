@@ -12,6 +12,14 @@ const frame_wakeup = @import("frame_wakeup.zig");
 
 extern fn wallify_imgui_inspector_show() void;
 extern fn wallify_debug_console_install() void;
+
+export fn wallify_open_inspector() void {
+    if (build_options.debug_inspector and builtin.mode == .Debug) {
+        wallify_imgui_inspector_show();
+    } else {
+        std.log.info("inspector: unavailable in this build (use Debug with -Ddebug-inspector=true)", .{});
+    }
+}
 pub const settings_window = @import("ui/settings_window.zig");
 
 export fn wallify_set_window_visible(visible: c_int) void {
