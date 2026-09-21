@@ -270,17 +270,18 @@ static void drawInspector() {
     WallifyDebugSnapshot s{};
     wallify_debug_get_snapshot(&s);
 
-    if (!ImGui::Begin("Wallify Inspector"))
-        return;
+    const bool open = ImGui::Begin("Wallify Inspector");
 
-    if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
-        drawTab("Runtime", drawRuntime, s);
-        drawTab("Appearance", drawAppearance, s);
-        drawTab("Media", drawMedia, s);
-        drawTab("Window", drawWindow, s);
-        drawTab("WindowServer", drawWindowServer, s);
-        drawTab("Snap", drawSnap, s);
-        ImGui::EndTabBar();
+    if (open) {
+        if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
+            drawTab("Runtime", drawRuntime, s);
+            drawTab("Appearance", drawAppearance, s);
+            drawTab("Media", drawMedia, s);
+            drawTab("Window", drawWindow, s);
+            drawTab("WindowServer", drawWindowServer, s);
+            drawTab("Snap", drawSnap, s);
+            ImGui::EndTabBar();
+        }
     }
 
     ImGui::End();
