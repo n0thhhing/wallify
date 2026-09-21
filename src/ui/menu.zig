@@ -1,6 +1,7 @@
 const std = @import("std");
 const state = @import("../state.zig");
 const macos = @import("../platform/macos.zig");
+const native = @import("../platform/native.zig");
 
 pub const ContextMenuAction = enum(c_int) {
     none = 0,
@@ -103,7 +104,7 @@ pub const ContextMenuCtx = struct {
         const ns_app = macos.send(macos.Ref, macos.objc_getClass("NSApplication"), "sharedApplication", .{});
         const ns_ws = macos.send(macos.Ref, macos.objc_getClass("NSWorkspace"), "sharedWorkspace", .{});
         const previous_app = macos.send(macos.Ref, ns_ws, "frontmostApplication", .{});
-        const location = macos.send(macos.Point, macos.objc_getClass("NSEvent"), "mouseLocation", .{});
+        const context_event = native.wallify_context_menu_event();
 
         _ = macos.send(bool, ns_app, "activateIgnoringOtherApps:", .{true});
 
@@ -303,7 +304,15 @@ pub const ContextMenuCtx = struct {
         macos.send(void, quit_item, "setTarget:", .{ns_app});
         macos.send(void, menu, "addItem:", .{quit_item});
 
-        _ = macos.send(bool, menu, "popUpMenuPositioningItem:atLocation:inView:", .{ @as(macos.Ref, null), location, @as(macos.Ref, null) });
+        if (context_event) |event| {
+            // Use the original right-click event so AppKit starts menu tracking
+            // with a live mouse location and hover state immediately.
+            _ = macos.send(bool, menu, "popUpContextMenu:withEvent:forView:", .{ @as(macos.Ref, null), event, @as(macos.Ref, null) });
+        } else {
+            const location = macos.send(macos.Point, macos.objc_getClass("NSEvent"), "mouseLocation", .{});
+            _ = macos.send(bool, menu, "popUpMenuPositioningItem:atLocation:inView:", .{ @as(macos.Ref, null), location, @as(macos.Ref, null) });
+        }
+        native.wallify_clear_context_menu_event();
 
         if (previous_app != null) {
             _ = macos.send(bool, previous_app, "activateWithOptions:", .{@as(usize, 0)});
