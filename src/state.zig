@@ -219,7 +219,14 @@ pub fn isPlaceholderTitle(title: []const u8) bool {
 pub fn spotifyIdle() bool {
     if (setting_source != .spotify) return false;
     if (spotify_closed.load(.acquire)) return true;
-    return !spotify_has_track.load(.acquire);
+
+    // A live playback rate or real track metadata is authoritative even if
+    // the asynchronous presence flag is temporarily stale.
+    if (global_rate > 0.0) return false;
+    if (spotify_has_track.load(.acquire)) return false;
+    if (global_title_len > 0 and !isPlaceholderTitle(global_title[0..global_title_len])) return false;
+
+    return true;
 }
 
 pub var setting_mode: WidgetMode = .expanded;
