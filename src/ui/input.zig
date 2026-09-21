@@ -19,6 +19,11 @@ const ART_HIT_RADIUS: f64 = 14.0;
 const SEEK_HIT_RADIUS: f64 = 3.0;
 const PANEL_DRAG_TOP_MIN: i32 = state.Layout.margin_top_min;
 
+fn isContextMenuKind(kind: c_int) bool {
+    return kind == POINTER_RIGHT_CLICK;
+}
+
+
 fn openIdlePlayer() void {
     if (state.setting_source == .spotifast) {
         spotifast.widget_open_spotifast();
@@ -30,7 +35,7 @@ fn openIdlePlayer() void {
 pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     const is_click = kind == POINTER_CLICK;
     const is_release = kind == POINTER_RELEASE;
-    const is_right = kind == POINTER_RIGHT_CLICK;
+    const is_right = isContextMenuKind(kind);
 
     const px = x;
     const py = y_top_down;
@@ -237,3 +242,10 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 pub fn enableRawMode() !void {}
 pub fn disableRawMode() void {}
 pub fn inputLoop() void {}
+
+
+test "right-click input is routed only to context menu handling" {
+    try std.testing.expect(isContextMenuKind(POINTER_RIGHT_CLICK));
+    try std.testing.expect(!isContextMenuKind(POINTER_CLICK));
+    try std.testing.expect(!isContextMenuKind(POINTER_RELEASE));
+}
