@@ -34,7 +34,7 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     const mix = transition * transition * transition * (10.0 + transition * (-15.0 + 6.0 * transition));
 
     drawArtworkGlow(canvas, ease, mix);
-    drawArtworkImage(canvas, art, ease, mix);
+    drawArtworkImage(canvas, art, mix);
 
     if (state.layout.compact_mix > 0.5) {
         if (state.setting_compact_gradient) {
@@ -82,7 +82,7 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
     _ = canvas.add(native.gpu.WALLIFY_GLOW, @intFromEnum(gpu.Texture.glow), rect, .{ 1.0, 1.0, 1.0, alpha * @as(f32, @floatCast(mix)) });
 }
 
-fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, ease: f64, mix: f64) void {
+fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, mix: f64) void {
     if (state.global_has_artwork and assets.has_art) {
         if (state.setting_transition != .default and mix < 1.0) {
             canvas.transition(
