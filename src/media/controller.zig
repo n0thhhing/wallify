@@ -388,6 +388,7 @@ pub fn metadataLoop(io: std.Io) void {
     var last_art_url: [ARTWORK_URL_BUFFER_SIZE]u8 = undefined;
     var last_art_url_len: usize = 0;
     var last_source: ?state.MediaSource = null;
+    var spotify_no_track_misses: u8 = 0;
 
     while (true) {
         const active_source = getActiveSource();
@@ -396,6 +397,7 @@ pub fn metadataLoop(io: std.Io) void {
             last_source = active_source;
             state.spotify_closed.store(false, .release);
             state.spotify_has_track.store(false, .release);
+            spotify_no_track_misses = 0;
             last_art_url_len = 0; // Force Spotify art re-download
             state.artwork_refresh_pending = true; // Force Now Playing art reload
             state.global_title_len = 0; // Force title change to trigger updates
@@ -415,16 +417,32 @@ pub fn metadataLoop(io: std.Io) void {
                 continue;
             }
             const closed = std.mem.eql(u8, res_buf[0..res_len], "CLOSED");
-            if (state.spotify_closed.swap(closed, .acq_rel) != closed) {
+            const spotify_app_running = if (active_source == .spotify)
+                spotify.widget_is_spotify_running() != 0
+            else
+                false;
+            const confirmed_closed = closed and (active_source == .spotifast or !spotify_app_running);
+
+            if (closed and active_source == .spotify and spotify_app_running) {
+                // AppleScript can transiently fail while Spotify is still alive.
+                // Do not turn that into the idle view.
+                state.spotify_closed.store(false, .release);
+                std.log.warn("media: Spotify query said CLOSED but the app is still running; retaining current track", .{});
+                sleep_ms(QUERY_FAILURE_RETRY_MS);
+                continue;
+            }
+
+            if (state.spotify_closed.swap(confirmed_closed, .acq_rel) != confirmed_closed) {
                 std.log.info("media: {s} is now {s}", .{
                     if (active_source == .spotifast) "Spotifast" else "Spotify",
-                    if (closed) "closed" else "open",
+                    if (confirmed_closed) "closed" else "open",
                 });
                 last_art_url_len = 0;
                 state.requestFrame();
             }
-            if (closed) {
+            if (confirmed_closed) {
                 state.spotify_has_track.store(false, .release);
+                spotify_no_track_misses = 0;
                 const title_span = if (active_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
                 const artist_span = "Click to Launch";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
@@ -444,6 +462,12 @@ pub fn metadataLoop(io: std.Io) void {
             }
 
             if (std.mem.eql(u8, res_buf[0..res_len], "NO_TRACK")) {
+                spotify_no_track_misses +%= 1;
+                if (spotify_no_track_misses < 3 and state.spotify_has_track.load(.acquire)) {
+                    // Keep the current track visible through an isolated no-track response.
+                    sleep_ms(SPOTIFY_POLL_INTERVAL_MS);
+                    continue;
+                }
                 state.spotify_has_track.store(false, .release);
                 const title_span = if (active_source == .spotifast) "Spotifast" else "Spotify";
                 const artist_span = "No Track Playing";
@@ -481,8 +505,9 @@ pub fn metadataLoop(io: std.Io) void {
                 // Keep the idle presentation tied to an explicit Spotify track
                 // snapshot. Query failures do not clear this, so transient IPC
                 // hiccups cannot make a playing track look idle.
-                if (active_source == .spotify) {
-                    state.spotify_has_track.store(item.title.len > 0, .release);
+                spotify_no_track_misses = 0;
+                if (active_source == .spotify and item.title.len > 0) {
+                    state.spotify_has_track.store(true, .release);
                 }
                 const title_changed = item.title.len != state.global_title_len or !std.mem.eql(u8, item.title, state.global_title[0..state.global_title_len]);
                 const artist_changed = item.artist.len != state.global_artist_len or !std.mem.eql(u8, item.artist, state.global_artist[0..state.global_artist_len]);
