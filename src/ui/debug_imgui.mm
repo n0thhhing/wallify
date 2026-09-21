@@ -270,21 +270,15 @@ static void drawInspector() {
     WallifyDebugSnapshot s{};
     wallify_debug_get_snapshot(&s);
 
-    const bool open = ImGui::Begin("Wallify Inspector");
-
-    if (open) {
-        if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
-            drawTab("Runtime", drawRuntime, s);
-            drawTab("Appearance", drawAppearance, s);
-            drawTab("Media", drawMedia, s);
-            drawTab("Window", drawWindow, s);
-            drawTab("WindowServer", drawWindowServer, s);
-            drawTab("Snap", drawSnap, s);
-            ImGui::EndTabBar();
-        }
+    if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
+        drawTab("Runtime", drawRuntime, s);
+        drawTab("Appearance", drawAppearance, s);
+        drawTab("Media", drawMedia, s);
+        drawTab("Window", drawWindow, s);
+        drawTab("WindowServer", drawWindowServer, s);
+        drawTab("Snap", drawSnap, s);
+        ImGui::EndTabBar();
     }
-
-    ImGui::End();
 }
 
 @interface WallifyImGuiView : MTKView <MTKViewDelegate>
