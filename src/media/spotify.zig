@@ -1,4 +1,5 @@
 const std = @import("std");
+const state = @import("../state.zig");
 const macos = @import("../platform/macos.zig");
 
 pub const SpotifyControl = enum(c_int) {
@@ -17,6 +18,11 @@ const SIGUSR1: c_int = 30;
 
 fn spotifyCallback(_: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref) callconv(.c) void {
     pending_state.store(1, .monotonic);
+
+    // Keep the widget out of idle immediately while the metadata worker
+    // reconciles the authoritative Spotify state.
+    state.spotify_event_until = std.time.microTimestamp() / 1_000_000.0 + 1.0;
+    state.requestFrame();
 
     // Wake the MediaRemote Perl bridge immediately instead of a dedicated 10 ms
     // polling thread. kill(2) is async-signal-safe and this callback stays tiny.
