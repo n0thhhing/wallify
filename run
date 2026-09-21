@@ -247,62 +247,62 @@ if [[ "$DO_FOREGROUND" == true ]]; then
 elif [[ "$DO_RELAUNCH" == true ]]; then
     ./scripts/relaunch.sh
 else
-    EXEC_PATH="\${TARGET_APP}/Contents/MacOS/\${APP_NAME}"
+    EXEC_PATH="${TARGET_APP}/Contents/MacOS/${APP_NAME}"
     LAUNCH_LABEL="com.wallify.dev"
-    LAUNCH_PLIST="/tmp/\${LAUNCH_LABEL}.plist"
-    LAUNCH_LOG="/tmp/\${LAUNCH_LABEL}.log"
-    GUI_DOMAIN="gui/\$(id -u)"
+    LAUNCH_PLIST="/tmp/${LAUNCH_LABEL}.plist"
+    LAUNCH_LOG="/tmp/${LAUNCH_LABEL}.log"
+    GUI_DOMAIN="gui/$(id -u)"
 
-    echo -e "\${BOLD}\${GREEN}==>\${RESET} \${BOLD}Launching \${APP_NAME} via launchd (direct executable)...\${RESET}"
+    echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME} via launchd (direct executable)...${RESET}"
 
     # Use launchd's GUI login domain rather than LaunchServices. The job is
     # one-shot: RunAtLoad starts the executable once and KeepAlive=false means
     # a crash/exit is not automatically relaunched.
-    launchctl bootout "\$GUI_DOMAIN/\$LAUNCH_LABEL" 2>/dev/null || true
-    rm -f "\$LAUNCH_PLIST" "\$LAUNCH_LOG"
+    launchctl bootout "$GUI_DOMAIN/$LAUNCH_LABEL" 2>/dev/null || true
+    rm -f "$LAUNCH_PLIST" "$LAUNCH_LOG"
 
     {
         echo '<?xml version="1.0" encoding="UTF-8"?>'
         echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
         echo '<plist version="1.0"><dict>'
         echo '    <key>Label</key>'
-        printf '    <string>%s</string>\n' "\$LAUNCH_LABEL"
+        printf '    <string>%s</string>\n' "$LAUNCH_LABEL"
         echo '    <key>ProgramArguments</key>'
         echo '    <array>'
-        printf '        <string>%s</string>\n' "\$EXEC_PATH"
-        for arg in "\${APP_ARGS[@]}"; do
-            printf '        <string>%s</string>\n' "\$arg"
+        printf '        <string>%s</string>\n' "$EXEC_PATH"
+        for arg in "${APP_ARGS[@]}"; do
+            printf '        <string>%s</string>\n' "$arg"
         done
         echo '    </array>'
         echo '    <key>WorkingDirectory</key>'
-        printf '    <string>%s</string>\n' "\$PWD"
+        printf '    <string>%s</string>\n' "$PWD"
         echo '    <key>RunAtLoad</key><true/>'
         echo '    <key>KeepAlive</key><false/>'
         echo '    <key>ProcessType</key><string>Interactive</string>'
         echo '    <key>StandardOutPath</key>'
         printf '    <string>%s</string>\n' "/dev/null"
         echo '    <key>StandardErrorPath</key>'
-        printf '    <string>%s</string>\n' "\$LAUNCH_LOG"
+        printf '    <string>%s</string>\n' "$LAUNCH_LOG"
         echo '</dict></plist>'
-    } > "\$LAUNCH_PLIST"
+    } > "$LAUNCH_PLIST"
 
-    if ! launchctl bootstrap "\$GUI_DOMAIN" "\$LAUNCH_PLIST" 2>"\$LAUNCH_LOG"; then
-        echo -e "  \${RED}✗ Failed to bootstrap \${APP_NAME} into the GUI launchd domain.\${RESET}" >&2
-        [[ -s "\$LAUNCH_LOG" ]] && cat "\$LAUNCH_LOG" >&2
+    if ! launchctl bootstrap "$GUI_DOMAIN" "$LAUNCH_PLIST" 2>"$LAUNCH_LOG"; then
+        echo -e "  ${RED}✗ Failed to bootstrap ${APP_NAME} into the GUI launchd domain.${RESET}" >&2
+        [[ -s "$LAUNCH_LOG" ]] && cat "$LAUNCH_LOG" >&2
         exit 1
     fi
 
     sleep 0.5
 
-    NEW_PID=\$(pgrep -x "\$APP_NAME" 2>/dev/null | head -n 1 || true)
-    if [[ -n "\$NEW_PID" ]]; then
-        echo -e "  \${GREEN}✓\${RESET} \${APP_NAME} is running \${DIM}(PID: \${NEW_PID})\${RESET}"
+    NEW_PID=$(pgrep -x "$APP_NAME" 2>/dev/null | head -n 1 || true)
+    if [[ -n "$NEW_PID" ]]; then
+        echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${NEW_PID})${RESET}"
     else
-        echo -e "  \${YELLOW}Notice:\${RESET} \${APP_NAME} exited during startup.\${RESET}"
-        if [[ -s "\$LAUNCH_LOG" ]]; then
-            cat "\$LAUNCH_LOG" >&2
+        echo -e "  ${YELLOW}Notice:${RESET} ${APP_NAME} exited during startup.${RESET}"
+        if [[ -s "$LAUNCH_LOG" ]]; then
+            cat "$LAUNCH_LOG" >&2
         fi
-        launchctl bootout "\$GUI_DOMAIN/\$LAUNCH_LABEL" 2>/dev/null || true
+        launchctl bootout "$GUI_DOMAIN/$LAUNCH_LABEL" 2>/dev/null || true
         exit 1
     fi
 fi
