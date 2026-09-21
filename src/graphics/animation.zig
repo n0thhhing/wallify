@@ -298,13 +298,15 @@ pub fn animationLoop() void {
         } else if (@abs(state.aurora_mix - aurora_target) > 0.001) {
             state.aurora_mix += (aurora_target - state.aurora_mix) * @min(1, dt * 3.5);
             needs_draw = true;
-            high_rate_animation = true;
+            ambient_animation = true;
         } else {
             state.aurora_mix = aurora_target;
         }
         if (state.aurora_mix > 0.001 and state.global_rate > 0 and state.setting_animations) {
+            // Aurora is an ambient effect, not an interactive animation. Keep
+            // it fluid while avoiding a 60 FPS CPU wakeup.
             needs_draw = true;
-            high_rate_animation = true;
+            ambient_animation = true;
         }
 
         previous_time = now;
