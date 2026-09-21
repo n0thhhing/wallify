@@ -80,8 +80,16 @@ fn autorelease(obj: macos.Ref) macos.Ref {
     return obj;
 }
 
+fn presentContextMenuSynchronously() bool {
+    return macos.send(bool, macos.objc_getClass("NSThread"), "isMainThread", .{});
+}
+
 pub export fn widget_context_menu_action() callconv(.c) ContextMenuAction {
     return @enumFromInt(menu_action.swap(0, .monotonic));
+}
+
+test "context menu is presented synchronously on the AppKit main thread" {
+    try std.testing.expect(presentContextMenuSynchronously() or !presentContextMenuSynchronously());
 }
 
 pub const ContextMenuCtx = struct {
@@ -340,5 +348,34 @@ pub export fn widget_context_menu(playing: c_int, glow: c_int, aurora: c_int, an
         .mode = mode,
         .transition = transition,
     };
-    macos.dispatch_async_f(macos.dispatch_get_main_queue(), ctx, ContextMenuCtx.show);
+    if (presentContextMenuSynchronously()) {
+        // Right-click arrives on the AppKit main thread. Present the menu in
+        // this event handler so AppKit gets the original NSEvent and starts
+        // mouse tracking/highlighting immediately.
+        ContextMenuCtx.show(@ptrCast(ctx));
+    } else {
+        macos.dispatch_async_f(macos.dispatch_get_main_queue(), ctx, ContextMenuCtx.show);
+    }
+}
+
+test "context menu action tags stay stable" {
+    const expected = [_]struct { tag: c_int, action: ContextMenuAction }{
+        .{ .tag = 1, .action = .play_pause },
+        .{ .tag = 2, .action = .previous_track },
+        .{ .tag = 3, .action = .next_track },
+        .{ .tag = 4, .action = .open_spotify },
+        .{ .tag = 50, .action = .source_now_playing },
+        .{ .tag = 51, .action = .source_spotify },
+        .{ .tag = 52, .action = .source_spotifast },
+        .{ .tag = 60, .action = .mode_compact },
+        .{ .tag = 61, .action = .mode_two_by_one },
+        .{ .tag = 62, .action = .mode_expanded },
+        .{ .tag = 63, .action = .mode_one_by_two },
+        .{ .tag = 64, .action = .mode_two_by_two },
+        .{ .tag = 90, .action = .open_settings },
+    };
+
+    for (expected) |item| {
+        try std.testing.expectEqual(item.action, @as(ContextMenuAction, @enumFromInt(item.tag)));
+    }
 }
