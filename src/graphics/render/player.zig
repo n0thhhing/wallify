@@ -7,7 +7,6 @@ const window = @import("../../ui/window.zig");
 const icon_transition = @import("../icon_transition.zig");
 const labels = @import("labels.zig");
 
-
 pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
         state.global_elapsed
@@ -46,8 +45,8 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
             }, .{ 0.0, 0.0, 0.0, 162.0 / 255.0 });
         }
     } else {
-        if (!state.setting_hide_progress) drawProgressBar(canvas, elapsed);
-        if (state.setting_show_controls) drawButtons(canvas);
+        if (state.layout.progressVisible(state.setting_hide_progress)) drawProgressBar(canvas, elapsed);
+        if (state.layout.controlsVisible(state.setting_show_controls)) drawButtons(canvas);
     }
 
     labels.drawLabels(canvas, elapsed);

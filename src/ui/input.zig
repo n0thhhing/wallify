@@ -35,6 +35,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     const px = x;
     const py = y_top_down;
     state.pointer_x = px;
+    state.pointer_y = py;
     const point = hitbox.Point{ .x = px, .y = py };
 
     if (is_right) {
@@ -61,9 +62,11 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     var new_hover_target: state.HitTarget = .grid_background;
     var pressed: ?state.ActionId = null;
+    const controls_visible = state.layout.controlsVisible(state.setting_show_controls) and !state.spotifyIdle();
+    const progress_visible = state.layout.progressVisible(state.setting_hide_progress) and !state.spotifyIdle();
 
     for (state.layout.buttons) |button| {
-        if (button.bounds().contains(point)) {
+        if (controls_visible and button.bounds().contains(point)) {
             new_hover_target = state.HitTarget.fromActionId(button.id);
             break;
         }
@@ -71,7 +74,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         const seek_bounds = hitbox.Rect{ .x = state.layout.bar_x, .y = state.layout.bar_y - state.layout.bar_hit_pad_y, .w = state.layout.bar_w, .h = state.layout.bar_h + 2 * state.layout.bar_hit_pad_y, .radius = SEEK_HIT_RADIUS };
         const art_bounds = hitbox.Rect{ .x = state.layout.art_x, .y = state.layout.art_y, .w = state.layout.art_size, .h = state.layout.art_size, .radius = ART_HIT_RADIUS };
         const frame_bounds = state.layout.card(state.mode_mix);
-        if (seek_bounds.contains(point)) {
+        if (progress_visible and seek_bounds.contains(point)) {
             new_hover_target = .bar;
         } else if (art_bounds.contains(point)) {
             new_hover_target = .art;
@@ -88,7 +91,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     if (is_click) {
         for (state.layout.buttons) |button| {
-            if (!state.spotifyIdle() and button.bounds().contains(point)) pressed = button.id;
+            if (controls_visible and button.bounds().contains(point)) pressed = button.id;
         }
         if (state.global_click_target != new_hover_target) {
             state.global_click_target = new_hover_target;

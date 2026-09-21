@@ -8,11 +8,11 @@ pub const ActionId = enum {
 };
 
 pub const WidgetMode = enum(u8) {
-    compact = 0,      // 1×1
-    two_by_one = 1,   // 2×1
-    expanded = 2,     // 3×1
-    one_by_two = 3,   // 1×2
-    two_by_two = 4,   // 2×2
+    compact = 0, // 1×1
+    two_by_one = 1, // 2×1
+    expanded = 2, // 3×1
+    one_by_two = 3, // 1×2
+    two_by_two = 4, // 2×2
 
     pub fn dimensions(self: WidgetMode) struct { width: f64, height: f64 } {
         return switch (self) {
@@ -214,28 +214,33 @@ pub const Layout = struct {
 
             .two_by_two => blk: {
                 // 2×2: centered artwork with a full-width player footer.
-                const art_size = @min(200.0, card_w - 32.0);
+                const inset = 24.0;
+                const controls_y = height - 34.0;
+                const bar_y = controls_y - 46.0;
+                const title_y = bar_y - 52.0;
+                const art_y = inset;
+                const art_size = @max(0.0, @min(192.0, @min(width - 2.0 * inset, title_y - art_y - 12.0)));
                 const art_x = (width - art_size) / 2.0;
-                const art_y = 16.0;
                 const center = width / 2.0;
+                const content_width = @max(0.0, width - 2.0 * inset);
                 break :blk .{
                     .art_x = art_x,
                     .art_y = art_y,
                     .art_size = art_size,
                     .art_radius = 26.0,
-                    .bar_x = 16.0,
-                    .bar_y = 283.0,
-                    .bar_w = @max(64.0, card_w - 32.0),
+                    .bar_x = inset,
+                    .bar_y = bar_y,
+                    .bar_w = content_width,
                     .bar_h = 5.0,
-                    .text_x = 16.0,
-                    .text_width = @max(64.0, card_w - 32.0),
-                    .title_y = 229.0,
-                    .artist_y = 253.0,
-                    .timestamp_y = 297.0,
+                    .text_x = inset,
+                    .text_width = content_width,
+                    .title_y = title_y,
+                    .artist_y = bar_y - 26.0,
+                    .timestamp_y = bar_y + 12.0,
                     .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 322.0, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 322.0, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 322.0, .size = 12.0 },
+                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = controls_y, .size = 12.0 },
+                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = controls_y, .size = 14.0 },
+                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = controls_y, .size = 12.0 },
                     },
                 };
             },
@@ -311,7 +316,45 @@ pub const Layout = struct {
             .radius = card_radius,
         };
     }
+
+    pub fn controlsVisible(self: Layout, enabled: bool) bool {
+        return enabled and self.compact_mix <= 0.5;
+    }
+
+    pub fn progressVisible(self: Layout, hidden: bool) bool {
+        return !hidden and self.compact_mix <= 0.5;
+    }
 };
+
+test "compact layouts and disabled controls have no playback targets" {
+    var layout = Layout{};
+    try std.testing.expect(layout.controlsVisible(true));
+    try std.testing.expect(!layout.controlsVisible(false));
+    try std.testing.expect(layout.progressVisible(false));
+    try std.testing.expect(!layout.progressVisible(true));
+    layout.compact_mix = 1.0;
+    try std.testing.expect(!layout.controlsVisible(true));
+    try std.testing.expect(!layout.progressVisible(false));
+    layout.compact_mix = 0.5;
+    try std.testing.expect(layout.controlsVisible(true));
+}
+
+test "two by two geometry shares a centerline and separates seek and controls" {
+    var layout = Layout{};
+    layout.update(360, 360, .two_by_two, .two_by_two, 1);
+    const center = layout.width / 2;
+    try std.testing.expectEqual(center, layout.art_x + layout.art_size / 2);
+    try std.testing.expectEqual(center, layout.text_x + layout.text_width / 2);
+    try std.testing.expectEqual(center, layout.bar_x + layout.bar_w / 2);
+    try std.testing.expectEqual(center, layout.buttons[1].x);
+    try std.testing.expect(layout.art_y + layout.art_size + 12 <= layout.title_y);
+    const seek_bottom = layout.bar_y + layout.bar_h + layout.bar_hit_pad_y;
+    for (layout.buttons) |button| {
+        const bounds = button.bounds();
+        try std.testing.expect(seek_bottom < bounds.y);
+        try std.testing.expect(bounds.y + bounds.h <= layout.height - 8);
+    }
+}
 
 test "form factors use exact desktop grid dimensions" {
     const one = WidgetMode.compact.dimensions();
