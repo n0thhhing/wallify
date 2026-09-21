@@ -27,7 +27,7 @@ const HOVER_SPEED: f64 = 10.0;
 const ART_FADE_DURATION: f64 = 0.3;
 const ARTWORK_WAKE_GRACE: f64 = 0.1;
 const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 30.0;
-const IDLE_LOOP_SLEEP_US: u64 = 50_000;
+const IDLE_LOOP_SLEEP_US: u64 = 100_000;
 
 fn sleep_us(us: u64) void {
     const ts = std.posix.timespec{
