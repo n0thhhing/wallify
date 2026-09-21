@@ -13,6 +13,7 @@ A native macOS music widget written in Zig with an AppKit window and Metal GPU r
 - **Idle companions** — Pixel Cat, Banana Cat, Raccoon, or Spotify button when nothing is playing
 - **Five widget form factors** — 1×1, 2×1, 3×1, 1×2, and 2×2 with animated resizing
 - **Aurora background** — multi-stop gradient shifting to album art dominant colors
+- **Power-aware renderer** — static artwork/glow is cached, animation runs in tiered frame budgets, and fully occluded widgets put the render loop to sleep
 - **Configurable** — hide text, hide progress bar, font scale, glow intensity, animation speed, glass border strength
 
 ## Run
@@ -85,7 +86,13 @@ bash scripts/package-app.sh
 
 If compiler caches are restricted, supply writable `--cache-dir` and `--global-cache-dir` paths. `zig build` without an optimization flag builds Debug; use ReleaseFast for performance measurements.
 
-Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, and texture upload counters.
+Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, texture upload counters, and periodic renderer statistics. Native lifecycle logs also report cache rebuilds, texture uploads/swaps, resize requests, and visibility changes.
+
+### Performance model
+
+Wallify deliberately does not redraw at the display refresh rate all the time. Input-critical motion such as dragging, snapping, and widget resizing can run at 60 FPS; short decorative transitions use 30 FPS; steady playback/progress and ambient effects use 20 FPS. The active player is split into a cached static layer and a small dynamic layer so artwork, glow, controls, and the frame do not get shaded again on every playback tick.
+
+When macOS reports the widget as fully occluded, Wallify keeps the latest scene marked dirty but stops waking the animation loop and issuing Metal work. Visibility changes wake the loop once so the next frame incorporates any metadata or settings changes that arrived while covered.
 
 ## Architecture
 
