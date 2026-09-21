@@ -74,6 +74,7 @@ void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     out->scene_frames = atomic_load(&sceneFrames);
     out->rendered_frames = atomic_load(&renderedFrames);
     out->uploaded_bytes = atomic_load(&uploadedBytes);
+    out->draw_calls = atomic_load(&drawCalls);
     if (out->scene_frames)
         out->scene_ms = atomic_load(&sceneNanos) / (double)out->scene_frames / 1e6;
     if (out->rendered_frames)
