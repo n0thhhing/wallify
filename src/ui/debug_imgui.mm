@@ -450,6 +450,31 @@ static void drawAnimation(const WallifyDebugSnapshot& s) {
     }
 }
 
+static void drawSection(const char* label, void (*draw)(const WallifyDebugSnapshot&),
+                        const WallifyDebugSnapshot& snapshot, bool defaultOpen = false) {
+    if (ImGui::CollapsingHeader(label, defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None)) {
+        ImGui::PushID(label);
+        draw(snapshot);
+        ImGui::PopID();
+        ImGui::Spacing();
+    }
+}
+
+static void drawWidget(const WallifyDebugSnapshot& s) {
+    drawSection("Runtime", drawRuntime, s, true);
+    drawSection("Appearance", drawAppearance, s);
+    drawSection("Media", drawMedia, s);
+    drawSection("Animation", drawAnimation, s);
+}
+
+static void drawGeometry(const WallifyDebugSnapshot& s) {
+    drawSection("Layout & hitboxes", drawLayout, s, true);
+    drawSection("Window", drawWindow, s);
+    drawSection("Viewports & displays", drawViewport, s);
+    drawSection("Snapping", drawSnap, s);
+    drawSection("WindowServer", drawWindowServer, s);
+}
+
 static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
     if (ImGui::BeginTabItem(label)) {
         ImGui::PushID(label);
@@ -529,17 +554,10 @@ static void drawInspector() {
 
     if (expanded) {
         if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
-            drawTab("Runtime", drawRuntime, s);
+            drawTab("Widget", drawWidget, s);
             drawTab("Renderer", drawRenderer, s);
-            drawTab("Mouse", drawMouse, s);
-            drawTab("Layout", drawLayout, s);
-            drawTab("Viewport", drawViewport, s);
-            drawTab("Animation", drawAnimation, s);
-            drawTab("Appearance", drawAppearance, s);
-            drawTab("Media", drawMedia, s);
-            drawTab("Window", drawWindow, s);
-            drawTab("WindowServer", drawWindowServer, s);
-            drawTab("Snap", drawSnap, s);
+            drawTab("Input", drawMouse, s);
+            drawTab("Layout", drawGeometry, s);
             ImGui::EndTabBar();
         }
     }
