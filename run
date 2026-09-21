@@ -27,6 +27,7 @@ DO_INSTALL=false
 DO_DMG=false
 DO_KILL_ONLY=false
 DO_SETTINGS=false
+DO_WATCH=false
 
 show_help() {
     printf "%b\n" "${BOLD}${APP_NAME} Development & Launch Utility${RESET}
@@ -38,6 +39,7 @@ ${BOLD}OPTIONS:${RESET}
   -d, --debug            Build in Debug mode (faster compilation, runtime asserts)
   -r, --release          Build in ReleaseFast mode (default, optimized)
   -f, --foreground, -l   Run in foreground; stream logs/stdout directly to terminal
+  -w, --watch             Watch source files and automatically rebuild/relaunch on changes
   -t, --test             Run test suite before building & launching
   -C, --clean            Deep clean build cache & temporary artwork files before build
   -k, --kill             Terminate any currently running ${APP_NAME} instances and exit
@@ -50,6 +52,7 @@ ${BOLD}OPTIONS:${RESET}
 ${BOLD}EXAMPLES:${RESET}
   ./run                  # Quick rebuild, package, and launch in background
   ./run -f               # Rebuild and run in foreground to watch logs
+  ./run -w               # Rebuild, launch, then automatically rebuild on changes
   ./run -R               # Rebuild and kickstart the background LaunchAgent
   ./run -d -f            # Debug build running in foreground
   ./run -t               # Run tests first, then build and launch
@@ -62,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         -d|--debug) OPTIMIZE="Debug"; shift ;;
         -r|--release) OPTIMIZE="ReleaseFast"; shift ;;
         -f|--foreground|-l|--logs) DO_FOREGROUND=true; shift ;;
+        -w|--watch) DO_WATCH=true; shift ;;
         -t|--test) DO_TEST=true; shift ;;
         -c|-C|--clean) DO_CLEAN=true; shift ;;
         -k|--kill) DO_KILL_ONLY=true; shift ;;
@@ -112,6 +116,68 @@ if [[ "$DO_TEST" == true ]]; then
         exit 1
     fi
     echo -e "  ${GREEN}✓${RESET} All tests passed."
+fi
+
+source_snapshot() {
+    find . \
+        -type d \( -name .git -o -name .zig-cache -o -name zig-out \) -prune -o \
+        -type f -exec stat -f '%m:%z:%N' {} + 2>/dev/null |
+        shasum -a 256 |
+        awk '{print $1}'
+}
+
+if [[ "$DO_WATCH" == true ]]; then
+    # Watch mode wraps the existing build/launch path instead of duplicating it.
+    # Foreground/log mode is intentionally disabled for the child rebuilds so
+    # this shell remains available to watch and restart the app.
+    WATCH_ARGS=()
+    for arg in "$@"; do
+        case "$arg" in
+            -w|--watch|-f|--foreground|-l|--logs)
+                ;;
+            *)
+                WATCH_ARGS+=("$arg")
+                ;;
+        esac
+    done
+
+    echo -e "${BOLD}${CYAN}==>${RESET} ${BOLD}Watch mode enabled${RESET}"
+    echo -e "  ${DIM}Rebuilds when files outside .git/.zig-cache/zig-out change.${RESET}"
+
+    if ! "$0" "${WATCH_ARGS[@]}"; then
+        echo -e "${YELLOW}Initial build failed. Watching for the next change...${RESET}"
+    fi
+
+    last_snapshot="$(source_snapshot)"
+    echo -e "${CYAN}==>${RESET} ${BOLD}Watching...${RESET} ${DIM}(Ctrl+C to quit)${RESET}"
+
+    cleanup_watch() {
+        echo ""
+        echo -e "${YELLOW}Stopping watch mode...${RESET}"
+        exit 0
+    }
+    trap cleanup_watch INT TERM
+
+    while true; do
+        sleep 0.5
+        current_snapshot="$(source_snapshot)"
+
+        if [[ "$current_snapshot" == "$last_snapshot" ]]; then
+            continue
+        fi
+
+        last_snapshot="$current_snapshot"
+        echo ""
+        echo -e "${CYAN}==>${RESET} ${BOLD}Change detected. Rebuilding ${APP_NAME}...${RESET}"
+
+        if "$0" "${WATCH_ARGS[@]}"; then
+            echo -e "${GREEN}✓${RESET} ${APP_NAME} restarted."
+        else
+            echo -e "${YELLOW}Build failed; existing instance was preserved. Watching for the next change...${RESET}"
+        fi
+
+        last_snapshot="$(source_snapshot)"
+    done
 fi
 
 # 4. Compile & Package Application
