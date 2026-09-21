@@ -19,7 +19,7 @@ static void metadataNotificationsInitOnMain(void) {
             MRRegisterNotificationsFn registerFn =
                 (MRRegisterNotificationsFn)dlsym(handle, "MRMediaRemoteRegisterForNowPlayingNotifications");
             if (registerFn)
-                registerFn(dispatch_get_main_queue());
+                registerFn(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
         }
 
         NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
@@ -27,7 +27,7 @@ static void metadataNotificationsInitOnMain(void) {
         g_infoObserver = [center addObserverForName:
             @"kMRMediaRemoteNowPlayingInfoDidChangeNotification"
             object:nil
-            queue:[NSOperationQueue mainQueue]
+            queue:nil
             usingBlock:^(NSNotification* notification) {
                 (void)notification;
                 dispatch_semaphore_signal(g_metadata_notification_semaphore);
