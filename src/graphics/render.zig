@@ -108,9 +108,11 @@ pub fn drawUIFrame() void {
     }
 
     if (state.idle_mix < 1.0) {
-        player.drawPlayerDynamic(&dynamic_canvas, state.global_rate == 0.0 or state.global_is_dragging
-            ? state.global_elapsed
-            : state.playback_clock.position(window.widget_monotonic_time(), state.global_duration));
+        const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
+            state.global_elapsed
+        else
+            state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
+        player.drawPlayerDynamic(&dynamic_canvas, elapsed);
     } else if (state.idle_mix > 0.0 and !@import("idle_compositor.zig").active) {
         idle.drawIdle(&dynamic_canvas, card);
     }
