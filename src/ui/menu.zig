@@ -94,6 +94,16 @@ pub export fn widget_context_menu_action() callconv(.c) ContextMenuAction {
     return @enumFromInt(menu_action.swap(0, .monotonic));
 }
 
+fn contextMenuUsesEventTracking(context_event: ?macos.Ref, context_view: ?macos.Ref) bool {
+    return context_event != null and context_view != null;
+}
+
+test "context menu uses event-backed tracking when AppKit supplies both objects" {
+    try std.testing.expect(contextMenuUsesEventTracking(@as(macos.Ref, @ptrFromInt(1)), @as(macos.Ref, @ptrFromInt(2))));
+    try std.testing.expect(!contextMenuUsesEventTracking(@as(macos.Ref, null), @as(macos.Ref, @ptrFromInt(2))));
+    try std.testing.expect(!contextMenuUsesEventTracking(@as(macos.Ref, @ptrFromInt(1)), @as(macos.Ref, null)));
+}
+
 test "context menu presentation stays synchronous on the AppKit main thread" {
     try std.testing.expect(shouldPresentContextMenuSynchronously(true));
     try std.testing.expect(!shouldPresentContextMenuSynchronously(false));
@@ -319,14 +329,22 @@ pub const ContextMenuCtx = struct {
         macos.send(void, quit_item, "setTarget:", .{ns_app});
         macos.send(void, menu, "addItem:", .{quit_item});
 
-        if (context_event) |event| {
-            // This is an NSMenu class method. Pass the actual right-click event
-            // so AppKit starts tracking/highlighting immediately.
-            const context_view = native.wallify_context_menu_view();
-            _ = macos.send(void, menu_cls, "popUpContextMenu:withEvent:forView:", .{ menu, event, context_view });
+        const context_view = native.wallify_context_menu_view();
+        if (context_event != null and context_view != null) {
+            // Use the completed right-click event and its originating view so
+            // AppKit owns mouse tracking/highlighting immediately.
+            _ = macos.send(void, menu_cls, "popUpContextMenu:withEvent:forView:", .{
+                menu,
+                context_event.?,
+                context_view,
+            });
         } else {
             const location = macos.send(macos.Point, macos.objc_getClass("NSEvent"), "mouseLocation", .{});
-            _ = macos.send(bool, menu, "popUpMenuPositioningItem:atLocation:inView:", .{ @as(macos.Ref, null), location, @as(macos.Ref, null) });
+            _ = macos.send(bool, menu, "popUpMenuPositioningItem:atLocation:inView:", .{
+                @as(macos.Ref, null),
+                location,
+                context_view,
+            });
         }
         native.wallify_clear_context_menu_event();
 
