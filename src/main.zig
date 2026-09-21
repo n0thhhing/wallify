@@ -9,9 +9,11 @@ const window = @import("ui/window.zig");
 const spotify = @import("media/spotify.zig");
 
 extern fn wallify_imgui_inspector_show() void;
+extern fn wallify_debug_console_install() void;
 pub const settings_window = @import("ui/settings_window.zig");
 
 pub fn main() !void {
+    if (builtin.mode == .Debug) wallify_debug_console_install();
     @import("platform/native.zig").wallify_prepare();
     window.widget_application_init();
     state.loadWidgetSettings();
