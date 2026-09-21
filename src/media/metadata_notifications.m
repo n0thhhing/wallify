@@ -4,6 +4,7 @@
 
 typedef void (*MRRegisterNotificationsFn)(dispatch_queue_t);
 
+// These notification resources intentionally live for the process lifetime; initialization is guarded by dispatch_once.
 static dispatch_semaphore_t g_metadata_notification_semaphore;
 static id g_infoObserver;
 static id g_playingObserver;
@@ -14,6 +15,7 @@ static void metadataNotificationsInitOnMain(void) {
     dispatch_once(&onceToken, ^{
         g_metadata_notification_semaphore = dispatch_semaphore_create(0);
 
+        // Keep MediaRemote loaded for the duration of the helper process; unloading while callbacks are registered would be unsafe.
         void* handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY);
         if (handle) {
             MRRegisterNotificationsFn registerFn =
