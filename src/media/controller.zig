@@ -17,7 +17,7 @@ extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 const SPOTIFY_POLL_INTERVAL_MS: u64 = 250;
 const SPOTIFAST_POLL_INTERVAL_MS: u64 = 500;
 const QUERY_FAILURE_RETRY_MS: u64 = 500;
-const METADATA_HELPER_FALLBACK_INTERVAL_S: []const u8 = "2";
+const METADATA_HELPER_FALLBACK_INTERVAL_S: []const u8 = "0.25";
 const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
 const METADATA_LINE_BUFFER_SIZE: usize = 2048;
