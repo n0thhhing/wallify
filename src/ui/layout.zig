@@ -186,28 +186,33 @@ pub const Layout = struct {
 
             .one_by_two => blk: {
                 // 1×2: artwork on top, metadata, progress, then controls.
-                const art_size = @min(148.0, card_w - 16.0);
+                const inset = 16.0;
+                const content_width = @max(0.0, width - 2.0 * inset);
+                const controls_y = height - 48.0;
+                const bar_y = controls_y - 60.0;
+                const title_y = bar_y - 64.0;
+                const art_y = 20.0;
+                const art_size = @max(0.0, @min(148.0, @min(content_width, title_y - art_y - 20.0)));
                 const art_x = (width - art_size) / 2.0;
-                const art_y = 16.0;
                 const center = width / 2.0;
                 break :blk .{
                     .art_x = art_x,
                     .art_y = art_y,
                     .art_size = art_size,
                     .art_radius = 18.0,
-                    .bar_x = 16.0,
-                    .bar_y = 243.0,
-                    .bar_w = @max(64.0, card_w - 32.0),
+                    .bar_x = inset,
+                    .bar_y = bar_y,
+                    .bar_w = content_width,
                     .bar_h = 5.0,
-                    .text_x = 16.0,
-                    .text_width = @max(64.0, card_w - 32.0),
-                    .title_y = 183.0,
-                    .artist_y = 207.0,
-                    .timestamp_y = 257.0,
+                    .text_x = inset,
+                    .text_width = content_width,
+                    .title_y = title_y,
+                    .artist_y = title_y + 26.0,
+                    .timestamp_y = bar_y + 12.0,
                     .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 286.0, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 286.0, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 286.0, .size = 12.0 },
+                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = controls_y, .size = 12.0 },
+                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = controls_y, .size = 14.0 },
+                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = controls_y, .size = 12.0 },
                     },
                 };
             },
@@ -339,20 +344,25 @@ test "compact layouts and disabled controls have no playback targets" {
     try std.testing.expect(layout.controlsVisible(true));
 }
 
-test "two by two geometry shares a centerline and separates seek and controls" {
-    var layout = Layout{};
-    layout.update(360, 360, .two_by_two, .two_by_two, 1);
-    const center = layout.width / 2;
-    try std.testing.expectEqual(center, layout.art_x + layout.art_size / 2);
-    try std.testing.expectEqual(center, layout.text_x + layout.text_width / 2);
-    try std.testing.expectEqual(center, layout.bar_x + layout.bar_w / 2);
-    try std.testing.expectEqual(center, layout.buttons[1].x);
-    try std.testing.expect(layout.art_y + layout.art_size + 12 <= layout.title_y);
-    const seek_bottom = layout.bar_y + layout.bar_h + layout.bar_hit_pad_y;
-    for (layout.buttons) |button| {
-        const bounds = button.bounds();
-        try std.testing.expect(seek_bottom < bounds.y);
-        try std.testing.expect(bounds.y + bounds.h <= layout.height - 8);
+test "vertical layouts share a centerline and separate seek and controls" {
+    for ([_]WidgetMode{ .one_by_two, .two_by_two }) |mode| {
+        const dimensions = mode.dimensions();
+        var layout = Layout{};
+        layout.update(dimensions.width, dimensions.height, mode, mode, 1);
+        const center = layout.width / 2;
+        try std.testing.expectEqual(center, layout.art_x + layout.art_size / 2);
+        try std.testing.expectEqual(center, layout.text_x + layout.text_width / 2);
+        try std.testing.expectEqual(center, layout.bar_x + layout.bar_w / 2);
+        try std.testing.expectEqual(center, layout.buttons[1].x);
+        try std.testing.expect(layout.art_y + layout.art_size + 12 <= layout.title_y);
+        const seek_bottom = layout.bar_y + layout.bar_h + layout.bar_hit_pad_y;
+        for (layout.buttons) |button| {
+            const bounds = button.bounds();
+            try std.testing.expect(seek_bottom < bounds.y);
+            try std.testing.expect(bounds.y + bounds.h <= layout.height - 8);
+            try std.testing.expect(bounds.x >= 8);
+            try std.testing.expect(bounds.x + bounds.w <= layout.width - 8);
+        }
     }
 }
 
