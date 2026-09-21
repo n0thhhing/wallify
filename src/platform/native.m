@@ -337,9 +337,8 @@ static WallifyView* globalMetalView = nil;
     } else if (tag >= 110 && tag < 115) {
         wallify_settings_apply_int(14, (int)(tag - 110));
     } else if (tag >= 120 && tag < 124) {
-        const int mapping[] = {81, 82, 80, 83};
-        wallify_settings_apply_int(15, mapping[tag - 120] - 80);
-        if (tag == 122) wallify_settings_apply_int(15, 2);
+        const int mapping[] = {0, 1, 2, 3};
+        wallify_settings_apply_int(15, mapping[tag - 120]);
     } else if (tag >= 130 && tag < 136) {
         wallify_settings_apply_int(16, (int)(tag - 130));
     } else if (tag >= 140 && tag < 143) {
@@ -670,6 +669,7 @@ bool wallify_create(int width, int height, int left, int top) {
 
     NSMenuItem* inspector = [[NSMenuItem alloc] initWithTitle:@"Open Inspector" action:@selector(statusOpenInspector:) keyEquivalent:@""]];
     inspector.target = menuTarget;
+    inspector.enabled = wallify_imgui_inspector_show != NULL;
     [menu addItem:inspector];
 
     NSMenuItem* settings = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(statusOpenSettings:) keyEquivalent:@","]];
