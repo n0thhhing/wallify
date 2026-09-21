@@ -3,6 +3,10 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const debug_inspector = b.option(bool, "debug-inspector", "Build the Dear ImGui developer inspector") orelse optimize == .Debug;
+
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "debug_inspector", debug_inspector);
 
     // Decode source PNGs once per asset change; outputs live only in Zig's cache.
 
@@ -28,6 +32,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     linkMacos(mod);
+    mod.addOptions("build_options", build_options);
     mod.addIncludePath(b.path("src/platform"));
     const native = b.addSystemCommand(&.{ "/usr/bin/clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
     native.addArg("-include");
@@ -40,6 +45,56 @@ pub fn build(b: *std.Build) void {
     mod.linkFramework("Metal", .{});
     mod.linkFramework("MetalPerformanceShaders", .{});
     mod.linkFramework("QuartzCore", .{});
+
+    if (debug_inspector) {
+        const imgui_dir = ".zig-cache/wallify-imgui";
+        mod.addIncludePath(b.path(imgui_dir));
+        mod.addIncludePath(b.path(imgui_dir ++ "/backends"));
+        mod.linkFramework("MetalKit", .{});
+        mod.linkFramework("GameController", .{});
+        mod.linkSystemLibrary("c++", .{});
+
+        const imgui_sources = [_][]const u8{
+            "imgui.cpp",
+            "imgui_draw.cpp",
+            "imgui_tables.cpp",
+            "imgui_widgets.cpp",
+            "backends/imgui_impl_osx.mm",
+            "backends/imgui_impl_metal.mm",
+        };
+
+        for (imgui_sources, 0..) |source, index| {
+            const compile = b.addSystemCommand(&.{
+                "/usr/bin/clang++",
+                "-std=c++17",
+                "-fobjc-arc",
+                "-fmodules",
+                "-Wno-deprecated-declarations",
+                "-I.zig-cache/wallify-imgui",
+                "-I.zig-cache/wallify-imgui/backends",
+                "-c",
+            });
+            compile.addFileArg(b.path(".zig-cache/wallify-imgui/" ++ source));
+            compile.addArg("-o");
+            mod.addObjectFile(compile.addOutputFileArg(
+                b.fmt("wallify-imgui-{d}.o", .{index}),
+            ));
+        }
+
+        const bridge = b.addSystemCommand(&.{
+            "/usr/bin/clang++",
+            "-std=c++17",
+            "-fobjc-arc",
+            "-fmodules",
+            "-Wno-deprecated-declarations",
+            "-I.zig-cache/wallify-imgui",
+            "-I.zig-cache/wallify-imgui/backends",
+            "-c",
+        });
+        bridge.addFileArg(b.path("src/ui/debug_imgui.mm"));
+        bridge.addArg("-o");
+        mod.addObjectFile(bridge.addOutputFileArg("wallify-debug-imgui.o"));
+    }
 
     const metal_c = b.addSystemCommand(&.{ "xcrun", "-sdk", "macosx", "metal", "-fmodules-cache-path=/tmp/wallify-metal-modules", "-c" });
     metal_c.addArg("-include");
