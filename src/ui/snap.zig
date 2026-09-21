@@ -312,102 +312,109 @@ fn inspectorField(tag: isize, value: f64) Ref {
     macos.send(void, field, "setSendsActionOnEndEditing:", .{true});
     return field;
 }
-fn makeInspectorPage(title_text: []const u8) Ref {
-    const view = macos.send(
-        Ref,
-        macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}),
-        "initWithFrame:",
-        .{rect(0, 0, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT - 44.0)},
-    );
-    if (view == null) return null;
-
-    macos.send(void, view, "setWantsLayer:", .{true});
-    const layer = macos.send(Ref, view, "layer", .{});
-    if (layer != null) {
-        const background = macos.send(
-            Ref,
-            macos.objc_getClass("NSColor"),
-            "colorWithCalibratedWhite:alpha:",
-            .{@as(f64, 0.075), @as(f64, 1.0)},
-        );
-        macos.send(void, layer, "setBackgroundColor:", .{macos.send(Ref, background, "CGColor", .{})});
+fn makeInspectorPage(index: usize, title_text: []const u8) Ref {
+    const page = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT - 42.0)});
+    if (page == null) return null;
+    macos.send(void, page, "setAutoresizingMask:", .{@as(usize, 18)});
+    const title = inspectorLabel(title_text, rect(18, DEBUG_PANEL_HEIGHT - 76.0, DEBUG_PANEL_WIDTH - 36.0, 24.0));
+    if (title != null) {
+        const font = macos.send(Ref, macos.objc_getClass("NSFont"), "systemFontOfSize:weight:", .{@as(f64, 18.0), @as(f64, 0.65)});
+        if (font != null) macos.send(void, title, "setFont:", .{font});
+        macos.send(void, page, "addSubview:", .{title});
     }
-
-    const label_cls = macos.objc_getClass("NSTextField");
-    const title = macos.send(
-        Ref,
-        macos.send(Ref, label_cls, "alloc", .{}),
-        "initWithFrame:",
-        .{rect(18, DEBUG_PANEL_HEIGHT - 76.0, DEBUG_PANEL_WIDTH - 36.0, 22.0)},
-    );
-    if (title == null) return null;
-    macos.send(void, title, "setEditable:", .{false});
-    macos.send(void, title, "setSelectable:", .{false});
-    macos.send(void, title, "setBezeled:", .{false});
-    macos.send(void, title, "setDrawsBackground:", .{false});
-    const title_font = macos.send(
-        Ref,
-        macos.objc_getClass("NSFont"),
-        "systemFontOfSize:weight:",
-        .{@as(f64, 18.0), @as(f64, 0.65)},
-    );
-    if (title_font != null) macos.send(void, title, "setFont:", .{title_font});
-    const title_color = macos.send(
-        Ref,
-        macos.objc_getClass("NSColor"),
-        "colorWithCalibratedWhite:alpha:",
-        .{@as(f64, 0.92), @as(f64, 1.0)},
-    );
-    macos.send(void, title, "setTextColor:", .{title_color});
-    const title_value = macos.string(title_text);
-    defer macos.CFRelease(title_value);
-    macos.send(void, title, "setStringValue:", .{title_value});
-    macos.send(void, title, "setAutoresizingMask:", .{@as(usize, 2 | 8)});
-    macos.send(void, view, "addSubview:", .{title});
-
-    const body = macos.send(
-        Ref,
-        macos.send(Ref, label_cls, "alloc", .{}),
-        "initWithFrame:",
-        .{rect(18, 18, DEBUG_PANEL_WIDTH - 36.0, DEBUG_PANEL_HEIGHT - 108.0)},
-    );
-    if (body == null) return null;
-    macos.send(void, body, "setEditable:", .{false});
-    macos.send(void, body, "setSelectable:", .{true});
-    macos.send(void, body, "setBezeled:", .{false});
-    macos.send(void, body, "setDrawsBackground:", .{false});
-    macos.send(void, body, "setUsesSingleLineMode:", .{false});
-    macos.send(void, body, "setLineBreakMode:", .{@as(isize, 0)});
-    const body_font = macos.send(
-        Ref,
-        macos.objc_getClass("NSFont"),
-        "monospacedSystemFontOfSize:weight:",
-        .{@as(f64, 12.0), @as(f64, 0.0)},
-    );
-    if (body_font != null) macos.send(void, body, "setFont:", .{body_font});
-    const body_color = macos.send(
-        Ref,
-        macos.objc_getClass("NSColor"),
-        "colorWithCalibratedWhite:alpha:",
-        .{@as(f64, 0.78), @as(f64, 1.0)},
-    );
-    macos.send(void, body, "setTextColor:", .{body_color});
-    macos.send(void, body, "setAutoresizingMask:", .{@as(usize, 2 | 16)});
-    macos.send(void, view, "addSubview:", .{body});
-
-    return view;
+    const width = DEBUG_PANEL_WIDTH;
+    const row: f64 = 40.0;
+    const top: f64 = 246.0;
+    switch (index) {
+        0 => {
+            const mode = inspectorPopup(14, &[_][]const u8{"1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"}, @intCast(@intFromEnum(state.setting_mode)));
+            const mix = inspectorSlider(1000, snap_debug_mode_mix * 100.0, 0, 100);
+            const w = inspectorField(1001, snap_debug_card_width);
+            const h = inspectorField(1002, snap_debug_card_height);
+            snap_debug_controls[0] = mode; snap_debug_controls[1] = mix; snap_debug_controls[2] = w; snap_debug_controls[3] = h;
+            inspectorRow(page, top, "Form Factor", mode, width);
+            inspectorRow(page, top - row, "Mode Mix", mix, width);
+            inspectorRow(page, top - row * 2.0, "Width", w, width);
+            inspectorRow(page, top - row * 3.0, "Height", h, width);
+            const dragging = inspectorLabel(if (snap_debug_dragging) "true" else "false", rect(0, 0, 172, 22));
+            snap_debug_readouts[0] = dragging; inspectorRow(page, top - row * 4.0, "Dragging", dragging, width);
+        },
+        1 => {
+            const glass = inspectorSwitch(5, state.setting_native_glass);
+            const glow = inspectorSwitch(0, state.setting_glow);
+            const aurora = inspectorSwitch(1, state.setting_aurora);
+            const animations = inspectorSwitch(2, state.setting_animations);
+            const speed = inspectorPopup(12, &[_][]const u8{"Slow", "Normal", "Fast"}, @intCast(@intFromEnum(state.setting_speed)));
+            snap_debug_controls[4] = glass; snap_debug_controls[5] = glow; snap_debug_controls[6] = aurora; snap_debug_controls[7] = animations; snap_debug_controls[8] = speed;
+            inspectorRow(page, top, "Native Glass", glass, width);
+            inspectorRow(page, top - row, "Glow", glow, width);
+            inspectorRow(page, top - row * 2.0, "Aurora", aurora, width);
+            inspectorRow(page, top - row * 3.0, "Animations", animations, width);
+            inspectorRow(page, top - row * 4.0, "Animation Speed", speed, width);
+        },
+        2 => {
+            const source = inspectorPopup(13, &[_][]const u8{"Now Playing", "Spotify", "Spotifast", "Auto"}, @intCast(@intFromEnum(state.setting_source)));
+            const transition = inspectorPopup(16, &[_][]const u8{"Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"}, @intCast(@intFromEnum(state.setting_transition)));
+            const keys = inspectorPopup(18, &[_][]const u8{"Off", "Active", "Spotify", "Spotifast"}, @intCast(@intFromEnum(state.setting_media_key_target)));
+            snap_debug_controls[9] = source; snap_debug_controls[10] = transition; snap_debug_controls[11] = keys;
+            inspectorRow(page, top, "Media Source", source, width);
+            inspectorRow(page, top - row, "Track Transition", transition, width);
+            inspectorRow(page, top - row * 2.0, "Media Keys", keys, width);
+            const title_readout = inspectorLabel("—", rect(0, 0, 172, 22));
+            const artist_readout = inspectorLabel("—", rect(0, 0, 172, 22));
+            snap_debug_readouts[1] = title_readout; snap_debug_readouts[2] = artist_readout;
+            inspectorRow(page, top - row * 3.0, "Title", title_readout, width);
+            inspectorRow(page, top - row * 4.0, "Artist", artist_readout, width);
+        },
+        3 => {
+            const left = inspectorField(1003, @floatFromInt(state.widget_margin_left));
+            const top_field = inspectorField(1004, @floatFromInt(state.widget_margin_top));
+            snap_debug_controls[12] = left; snap_debug_controls[13] = top_field;
+            inspectorRow(page, top, "Margin Left", left, width);
+            inspectorRow(page, top - row, "Margin Top", top_field, width);
+            const id = inspectorLabel("—", rect(0, 0, 172, 22));
+            const layer = inspectorLabel("—", rect(0, 0, 172, 22));
+            const frame = inspectorLabel("—", rect(0, 0, 172, 22));
+            snap_debug_readouts[3] = id; snap_debug_readouts[4] = layer; snap_debug_readouts[5] = frame;
+            inspectorRow(page, top - row * 2.0, "Window ID", id, width);
+            inspectorRow(page, top - row * 3.0, "Layer", layer, width);
+            inspectorRow(page, top - row * 4.0, "Frame", frame, width);
+        },
+        4 => {
+            const candidates = inspectorLabel("0", rect(0, 0, 172, 22));
+            const distance = inspectorLabel("0", rect(0, 0, 172, 22));
+            const outline = inspectorLabel("hidden", rect(0, 0, 172, 22));
+            const cache = inspectorLabel("uncached", rect(0, 0, 172, 22));
+            snap_debug_readouts[6] = candidates; snap_debug_readouts[7] = distance;
+            inspectorRow(page, top, "Candidates", candidates, width);
+            inspectorRow(page, top - row, "Distance²", distance, width);
+            inspectorRow(page, top - row * 2.0, "Outline", outline, width);
+            inspectorRow(page, top - row * 3.0, "Cache", cache, width);
+        },
+        5 => {
+            const x = inspectorField(1005, snap_outline_rect.origin.x);
+            const y = inspectorField(1006, snap_outline_rect.origin.y);
+            const w = inspectorField(1007, snap_outline_rect.size.width);
+            const h = inspectorField(1008, snap_outline_rect.size.height);
+            snap_debug_controls[14] = x; snap_debug_controls[15] = y; snap_debug_controls[16] = w; snap_debug_controls[17] = h;
+            inspectorRow(page, top, "Target X", x, width);
+            inspectorRow(page, top - row, "Target Y", y, width);
+            inspectorRow(page, top - row * 2.0, "Target Width", w, width);
+            inspectorRow(page, top - row * 3.0, "Target Height", h, width);
+            const threshold = inspectorLabel("1210000", rect(0, 0, 172, 22));
+            inspectorRow(page, top - row * 4.0, "Threshold²", threshold, width);
+        },
+        else => {},
+    }
+    return page;
 }
 
-fn updateInspectorPage(view: Ref, value: []const u8) void {
-    if (view == null) return;
-    const subviews = macos.send(Ref, view, "subviews", .{});
-    if (subviews == null) return;
-    const count = macos.CFArrayGetCount(subviews);
-    if (count < 2) return;
-    const body = macos.CFArrayGetValueAtIndex(subviews, 1);
-    setInspectorText(body, value);
+fn updateInspectorField(control: Ref, value: f64) void {
+    if (control == null) return;
+    const editor = macos.send(Ref, control, "currentEditor", .{});
+    if (editor != null) return;
+    macos.send(void, control, "setDoubleValue:", .{value});
 }
-
 fn updateSnapDebug() void {
     if (!state.setting_debug) {
         if (snap_debug_panel) |panel| macos.send(void, panel, "orderOut:", .{@as(Ref, null)});
