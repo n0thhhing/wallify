@@ -237,8 +237,8 @@ test "Spotify launcher targets the official application bundle" {
 test "Spotify query isolates artwork failures from track detection" {
     const script = spotifyQueryScript();
     try std.testing.expect(std.mem.indexOf(u8, script, "set tArt to \"\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, script, "try\\n            set tArt") != null);
-    try std.testing.expect(std.mem.indexOf(u8, script, 'set {tName, tArtist, tState, tPos, tDur}') != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "try\n            set tArt") != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "set {tName, tArtist, tState, tPos, tDur}") != null);
     try std.testing.expect(std.mem.indexOf(u8, script, "return \"NO_TRACK\"") != null);
 }
 
