@@ -909,6 +909,18 @@ static void drawInspector() {
 @end
 
 @implementation WallifyInspectorWindowDelegate
+- (void)windowDidResize:(NSNotification*)notification {
+    (void)notification;
+    if (!gInspectorPanel || gInspectorCollapsed) return;
+
+    const NSSize size = gInspectorPanel.contentView.bounds.size;
+    if (size.width < 1.0 || size.height < 1.0) return;
+
+    gInspectorExpandedWidth = size.width;
+    gInspectorExpandedHeight = size.height;
+    gInspectorDrawableResizing = true;
+}
+
 - (void)windowWillClose:(NSNotification*)notification {
     (void)notification;
     gInspectorVisible = false;
@@ -970,7 +982,7 @@ static void showInspectorOnMain(void) {
                 NSWindowCollectionBehaviorFullScreenAuxiliary;
             gInspectorPanel.releasedWhenClosed = NO;
             gInspectorPanel.delegate = gInspectorDelegate;
-            gInspectorPanel.contentMinSize = NSMakeSize(1.0, 1.0);
+            gInspectorPanel.contentMinSize = NSMakeSize(640.0, 420.0);
             setInspectorFrame(gInspectorPanel);
             [gInspectorPanel setContentView:gInspectorView];
 
