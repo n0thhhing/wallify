@@ -554,6 +554,9 @@ static BOOL ensureStaticSceneTexture(simd_float2 size) {
         return NO;
     }
 
+    NSLog(@"Wallify: static scene texture resize -> %lux%lu (scale %.2f)",
+          (unsigned long)width, (unsigned long)height, scale);
+
     MTLTextureDescriptor* desc =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                                            width:width
@@ -638,14 +641,17 @@ static void presentLatest(void) {
         command.label = @"Wallify scene";
 
         const BOOL cacheChanged = staticSceneChanged(staticCommands, staticCount, size);
-        ensureStaticSceneTexture(size);
+        const BOOL textureRecreated = ensureStaticSceneTexture(size);
 
         if (!staticSceneTexture) {
             dispatch_semaphore_signal(inFlight);
             return;
         }
 
-        if (cacheChanged || !staticCacheValid) {
+        if (cacheChanged || !staticCacheValid || textureRecreated) {
+            NSLog(@"Wallify: rebuilding static cache cmds=%lu size=%.0fx%.0f%@",
+                  (unsigned long)staticCount, size.x, size.y,
+                  textureRecreated ? @" [texture recreated]" : @"");
             encodeCommands(command, staticSceneTexture, staticCommands, staticCount, size, textures);
             memcpy(cachedStaticCommands, staticCommands, staticCount * sizeof(DrawCommand));
             cachedStaticCount = staticCount;
@@ -802,6 +808,7 @@ void wallify_load_texture(int textureID, const unsigned int* pixels, size_t widt
         [frameLock lock];
 
         loadedTextures[textureID] = texture;
+        NSLog(@"Wallify: texture upload id=%d size=%zux%zu", textureID, width, height);
 
         if (profiling) {
             atomic_fetch_add(&uploadedBytes, width * height * 4);
@@ -972,6 +979,7 @@ void wallify_resize(int width, int height) {
     atomic_store(&surfaceWidth, width);
 
     atomic_store(&surfaceHeight, height);
+    NSLog(@"Wallify: requested surface resize -> %dx%d", width, height);
 }
 
 void wallify_move(int left, int top) {
