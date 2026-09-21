@@ -2,6 +2,11 @@ const std = @import("std");
 const macos = @import("../platform/macos.zig");
 const state = @import("../state.zig");
 const native = @import("../platform/native.zig");
+const build_options = @import("build_options");
+const debug_imgui = if (build_options.debug_inspector) @import("debug_imgui.zig") else struct {
+    pub fn show() void {}
+    pub fn hide() void {}
+};
 
 const Ref = macos.Ref;
 const Point = macos.Point;
@@ -16,9 +21,6 @@ const MAX_CANDIDATE_WIDTH: f64 = 1400.0;
 const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
 const MIN_CANDIDATE_SIZE: f64 = 80.0;
 const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
-const DEBUG_PANEL_LEVEL: isize = 101;
-const DEBUG_PANEL_WIDTH: f64 = 680.0;
-const DEBUG_PANEL_HEIGHT: f64 = 600.0;
 const OUTLINE_LEVEL_FALLBACK: isize = -2;
 
 pub const PanelSnap = extern struct {
@@ -40,15 +42,6 @@ const PanelWindowInfo = struct {
 
 var snap_outline: Ref = null;
 var snap_outline_rect = Rect{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
-var snap_debug_panel: Ref = null;
-var snap_debug_text: Ref = null;
-var snap_debug_header: Ref = null;
-var snap_debug_footer: Ref = null;
-var snap_debug_panes: [6]Ref = .{ null, null, null, null, null, null };
-var snap_debug_target: Ref = null;
-var snap_debug_controls: [18]Ref = .{ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null };
-var snap_debug_readouts: [8]Ref = .{ null, null, null, null, null, null, null, null };
-var snap_debug_tick: u64 = 0;
 var snap_outline_was_visible = false;
 var snap_candidate_count: usize = 0;
 var snap_last_distance_sq: f64 = 0;
@@ -126,488 +119,126 @@ fn playerWindowInfo() PanelWindowInfo {
     return .{};
 }
 
-fn setInspectorText(label: Ref, value: []const u8) void {
-    const ns_value = macos.string(value);
-    defer macos.CFRelease(ns_value);
-    macos.send(void, label, "setStringValue:", .{ns_value});
+pub const DebugSnapshot = extern struct {
+    glow: c_int,
+    aurora: c_int,
+    animations: c_int,
+    dim: c_int,
+    native_glass: c_int,
+    hide_text: c_int,
+    hide_progress: c_int,
+    show_controls: c_int,
+    timestamps: c_int,
+    artwork_border: c_int,
+    compact_gradient: c_int,
+
+    frame: c_int,
+    intensity: c_int,
+    speed: c_int,
+    source: c_int,
+    mode: c_int,
+    transition: c_int,
+    font_scale: c_int,
+    media_key_target: c_int,
+    artwork_radius: c_int,
+    progress_thickness: c_int,
+
+    width: c_int,
+    height: c_int,
+    margin_left: c_int,
+    margin_top: c_int,
+    dragging: c_int,
+
+    window_number: i64,
+    window_layer: i64,
+    window_x: f64,
+    window_y: f64,
+    window_width: f64,
+    window_height: f64,
+
+    outline_x: f64,
+    outline_y: f64,
+    outline_width: f64,
+    outline_height: f64,
+
+    candidate_count: u32,
+    snap_distance_sq: f64,
+
+    mode_mix: f32,
+
+    title_len: u32,
+    artist_len: u32,
+    title: [256]u8,
+    artist: [256]u8,
+};
+
+pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void {
+    const player = playerWindowInfo();
+    const actual = player.frame;
+    out.* = .{
+        .glow = @intFromBool(state.setting_glow),
+        .aurora = @intFromBool(state.setting_aurora),
+        .animations = @intFromBool(state.setting_animations),
+        .dim = @intFromBool(state.setting_dim),
+        .native_glass = @intFromBool(state.setting_native_glass),
+        .hide_text = @intFromBool(state.setting_hide_text),
+        .hide_progress = @intFromBool(state.setting_hide_progress),
+        .show_controls = @intFromBool(state.setting_show_controls),
+        .timestamps = @intFromBool(state.setting_show_timestamps),
+        .artwork_border = @intFromBool(state.setting_artwork_border),
+        .compact_gradient = @intFromBool(state.setting_compact_gradient),
+        .frame = @intFromEnum(state.setting_frame),
+        .intensity = @intFromEnum(state.setting_intensity),
+        .speed = @intFromEnum(state.setting_speed),
+        .source = @intFromEnum(state.setting_source),
+        .mode = @intFromEnum(state.setting_mode),
+        .transition = @intFromEnum(state.setting_transition),
+        .font_scale = @intFromEnum(state.setting_font_scale),
+        .media_key_target = @intFromEnum(state.setting_media_key_target),
+        .artwork_radius = @intFromEnum(state.setting_artwork_radius),
+        .progress_thickness = @intFromEnum(state.setting_progress_thickness),
+        .width = native.wallify_width(),
+        .height = native.wallify_height(),
+        .margin_left = state.widget_margin_left,
+        .margin_top = state.widget_margin_top,
+        .dragging = @intFromBool(snap_debug_dragging),
+        .window_number = player.number,
+        .window_layer = player.layer,
+        .window_x = actual.origin.x,
+        .window_y = actual.origin.y,
+        .window_width = actual.size.width,
+        .window_height = actual.size.height,
+        .outline_x = snap_outline_rect.origin.x,
+        .outline_y = snap_outline_rect.origin.y,
+        .outline_width = snap_outline_rect.size.width,
+        .outline_height = snap_outline_rect.size.height,
+        .candidate_count = @intCast(snap_candidate_count),
+        .snap_distance_sq = snap_last_distance_sq,
+        .mode_mix = @floatCast(snap_debug_mode_mix),
+        .title_len = @intCast(@min(state.global_title_len, 255)),
+        .artist_len = @intCast(@min(state.global_artist_len, 255)),
+        .title = [_]u8{0} ** 256,
+        .artist = [_]u8{0} ** 256,
+    };
+    std.mem.copyForwards(u8, out.title[0..out.title_len], state.global_title[0..out.title_len]);
+    std.mem.copyForwards(u8, out.artist[0..out.artist_len], state.global_artist[0..out.artist_len]);
 }
 
-fn debugApplyBool(key: isize, value: bool) void {
-    switch (key) {
-        0 => state.setting_glow = value,
-        1 => state.setting_aurora = value,
-        2 => state.setting_animations = value,
-        3 => state.setting_dim = value,
-        5 => state.setting_native_glass = value,
-        6 => state.setting_hide_text = value,
-        7 => state.setting_hide_progress = value,
-        8 => state.setting_show_controls = value,
-        9 => state.setting_show_timestamps = value,
-        19 => state.setting_artwork_border = value,
-        20 => state.setting_compact_gradient = value,
-        else => {},
-    }
-    state.saveWidgetSettings();
-    state.requestFrame();
+pub export fn wallify_debug_set_bool(key: c_int, value: c_int) callconv(.c) void {
+    debugApplyBool(@intCast(key), value != 0);
 }
 
-fn debugApplyInt(key: isize, value: isize) void {
-    switch (key) {
-        10 => state.setting_frame = @enumFromInt(std.math.clamp(value, 0, 2)),
-        11 => state.setting_intensity = @enumFromInt(std.math.clamp(value, 0, 2)),
-        12 => state.setting_speed = @enumFromInt(std.math.clamp(value, 0, 2)),
-        13 => state.setting_source = @enumFromInt(std.math.clamp(value, 0, 3)),
-        14 => {
-            const mode: state.WidgetMode = @enumFromInt(std.math.clamp(value, 0, 4));
-            const width: f64 = @floatFromInt(native.wallify_width());
-            const height: f64 = @floatFromInt(native.wallify_height());
-            state.beginModeTransition(mode, width, height, state.setting_animations);
-            if (!state.mode_transition_active) native.resizeForMode(mode);
-        },
-        16 => state.setting_transition = @enumFromInt(std.math.clamp(value, 0, 5)),
-        17 => state.setting_font_scale = @enumFromInt(std.math.clamp(value, 0, 2)),
-        18 => {
-            state.setting_media_key_target = @enumFromInt(std.math.clamp(value, 0, 3));
-            native.wallify_update_media_key_tap(@intCast(value));
-        },
-        21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(value, 0, 2)),
-        22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(value, 0, 2)),
-        1000 => snap_debug_mode_mix = std.math.clamp(@as(f64, @floatFromInt(value)) / 100.0, 0.0, 1.0),
-        1001 => {
-            snap_debug_card_width = @max(1.0, @as(f64, @floatFromInt(value)));
-            native.resizeTo(snap_debug_card_width, @floatFromInt(native.wallify_height()));
-        },
-        1002 => {
-            snap_debug_card_height = @max(1.0, @as(f64, @floatFromInt(value)));
-            native.resizeTo(@floatFromInt(native.wallify_width()), snap_debug_card_height);
-        },
-        1003 => {
-            state.widget_margin_left = @intCast(value);
-            state.panel_position_dirty = true;
-            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
-        },
-        1004 => {
-            state.widget_margin_top = @intCast(value);
-            state.panel_position_dirty = true;
-            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
-        },
-        1005 => snap_outline_rect.origin.x = @floatFromInt(value),
-        1006 => snap_outline_rect.origin.y = @floatFromInt(value),
-        1007 => snap_outline_rect.size.width = @max(1.0, @as(f64, @floatFromInt(value))),
-        1008 => snap_outline_rect.size.height = @max(1.0, @as(f64, @floatFromInt(value))),
-        else => {},
-    }
-    state.saveWidgetSettings();
-    state.requestFrame();
-}
-
-fn debugBoolCallback(_: Ref, _: Ref, sender: Ref) callconv(.c) void {
-    const key = macos.send(isize, sender, "tag", .{});
-    const value = macos.send(isize, sender, "state", .{}) != 0;
-    debugApplyBool(key, value);
+pub export fn wallify_debug_set_int(key: c_int, value: c_int) callconv(.c) void {
+    debugApplyInt(@intCast(key), value);
     updateSnapDebug();
 }
 
-fn debugIntCallback(_: Ref, _: Ref, sender: Ref) callconv(.c) void {
-    const key = macos.send(isize, sender, "tag", .{});
-    const is_text = macos.send(bool, sender, "isKindOfClass:", .{macos.objc_getClass("NSTextField")});
-    const value: isize = if (is_text)
-        macos.send(isize, sender, "integerValue", .{})
-    else if (key == 1000)
-        @as(isize, @intFromFloat(macos.send(f64, sender, "doubleValue", .{}) * 100.0))
-    else
-        macos.send(isize, sender, "indexOfSelectedItem", .{});
-    debugApplyInt(key, value);
-    updateSnapDebug();
-}
-
-fn getDebugTarget() Ref {
-    if (snap_debug_target != null) return snap_debug_target;
-    const superclass = macos.objc_getClass("NSObject");
-    const cls = macos.objc_allocateClassPair(superclass, "WallifyDebugInspectorTarget", 0);
-    if (cls != null) {
-        _ = macos.class_addMethod(cls, macos.sel_registerName("debugBool:"), @ptrCast(&debugBoolCallback), "v@:@");
-        _ = macos.class_addMethod(cls, macos.sel_registerName("debugInt:"), @ptrCast(&debugIntCallback), "v@:@");
-        macos.objc_registerClassPair(cls);
-        snap_debug_target = macos.send(Ref, macos.send(Ref, cls, "alloc", .{}), "init", .{});
-    }
-    return snap_debug_target;
-}
-
-fn inspectorLabel(text: []const u8, frame: Rect) Ref {
-    const field = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSTextField"), "alloc", .{}), "initWithFrame:", .{frame});
-    if (field == null) return null;
-    const value = macos.string(text);
-    defer macos.CFRelease(value);
-    macos.send(void, field, "setStringValue:", .{value});
-    macos.send(void, field, "setEditable:", .{false});
-    macos.send(void, field, "setSelectable:", .{false});
-    macos.send(void, field, "setBezeled:", .{false});
-    macos.send(void, field, "setDrawsBackground:", .{false});
-    return field;
-}
-
-fn inspectorRow(page: Ref, y: f64, title: []const u8, control: Ref, width: f64) void {
-    const label = inspectorLabel(title, rect(18, y + 2.0, 190, 22));
-    if (label != null) macos.send(void, page, "addSubview:", .{label});
-    if (control != null) {
-        macos.send(void, control, "setFrame:", .{rect(width - 190.0, y, 172.0, 26.0)});
-        macos.send(void, page, "addSubview:", .{control});
-    }
-}
-
-fn inspectorSwitch(tag: isize, enabled: bool) Ref {
-    const button = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSButton"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, 60, 24)});
-    if (button == null) return null;
-    macos.send(void, button, "setButtonType:", .{@as(isize, 6)});
-    macos.send(void, button, "setTitle:", .{macos.string("")});
-    macos.send(void, button, "setTag:", .{tag});
-    macos.send(void, button, "setTarget:", .{getDebugTarget()});
-    macos.send(void, button, "setAction:", .{macos.sel_registerName("debugBool:")});
-    macos.send(void, button, "setState:", .{if (enabled) @as(isize, 1) else @as(isize, 0)});
-    return button;
-}
-
-fn inspectorPopup(tag: isize, options: []const []const u8, selected: usize) Ref {
-    const popup = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSPopUpButton"), "alloc", .{}), "initWithFrame:pullsDown:", .{rect(0, 0, 172, 26), false});
-    if (popup == null) return null;
-    for (options) |option| {
-        const value = macos.string(option);
-        defer macos.CFRelease(value);
-        macos.send(void, popup, "addItemWithTitle:", .{value});
-    }
-    macos.send(void, popup, "selectItemAtIndex:", .{@as(isize, @intCast(selected))});
-    macos.send(void, popup, "setTag:", .{tag});
-    macos.send(void, popup, "setTarget:", .{getDebugTarget()});
-    macos.send(void, popup, "setAction:", .{macos.sel_registerName("debugInt:")});
-    return popup;
-}
-
-fn inspectorSlider(tag: isize, value: f64, min: f64, max: f64) Ref {
-    const slider = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSSlider"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, 172, 26)});
-    if (slider == null) return null;
-    macos.send(void, slider, "setMinValue:", .{min});
-    macos.send(void, slider, "setMaxValue:", .{max});
-    macos.send(void, slider, "setDoubleValue:", .{value});
-    macos.send(void, slider, "setContinuous:", .{true});
-    macos.send(void, slider, "setTag:", .{tag});
-    macos.send(void, slider, "setTarget:", .{getDebugTarget()});
-    macos.send(void, slider, "setAction:", .{macos.sel_registerName("debugInt:")});
-    return slider;
-}
-
-fn inspectorField(tag: isize, value: f64) Ref {
-    const field = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSTextField"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, 172, 26)});
-    if (field == null) return null;
-    var buffer: [64]u8 = undefined;
-    const formatted = std.fmt.bufPrint(&buffer, "{d}", .{@as(i64, @intFromFloat(value))}) catch "";
-    const initial = macos.string(formatted);
-    defer macos.CFRelease(initial);
-    macos.send(void, field, "setStringValue:", .{initial});
-    macos.send(void, field, "setEditable:", .{true});
-    macos.send(void, field, "setSelectable:", .{true});
-    macos.send(void, field, "setTag:", .{tag});
-    macos.send(void, field, "setTarget:", .{getDebugTarget()});
-    macos.send(void, field, "setAction:", .{macos.sel_registerName("debugInt:")});
-    return field;
-}
-fn makeInspectorPage(index: usize, title_text: []const u8) Ref {
-    const page = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT - 42.0)});
-    if (page == null) return null;
-    macos.send(void, page, "setAutoresizingMask:", .{@as(usize, 18)});
-    const title = inspectorLabel(title_text, rect(18, DEBUG_PANEL_HEIGHT - 76.0, DEBUG_PANEL_WIDTH - 36.0, 24.0));
-    if (title != null) {
-        const font = macos.send(Ref, macos.objc_getClass("NSFont"), "systemFontOfSize:weight:", .{@as(f64, 18.0), @as(f64, 0.65)});
-        if (font != null) macos.send(void, title, "setFont:", .{font});
-        macos.send(void, page, "addSubview:", .{title});
-    }
-    const width = DEBUG_PANEL_WIDTH;
-    const row: f64 = 40.0;
-    const top: f64 = 246.0;
-    switch (index) {
-        0 => {
-            const mode = inspectorPopup(14, &[_][]const u8{"1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"}, @intCast(@intFromEnum(state.setting_mode)));
-            const mix = inspectorSlider(1000, snap_debug_mode_mix * 100.0, 0, 100);
-            const w = inspectorField(1001, snap_debug_card_width);
-            const h = inspectorField(1002, snap_debug_card_height);
-            snap_debug_controls[0] = mode; snap_debug_controls[1] = mix; snap_debug_controls[2] = w; snap_debug_controls[3] = h;
-            inspectorRow(page, top, "Form Factor", mode, width);
-            inspectorRow(page, top - row, "Mode Mix", mix, width);
-            inspectorRow(page, top - row * 2.0, "Width", w, width);
-            inspectorRow(page, top - row * 3.0, "Height", h, width);
-            const dragging = inspectorLabel(if (snap_debug_dragging) "true" else "false", rect(0, 0, 172, 22));
-            snap_debug_readouts[0] = dragging; inspectorRow(page, top - row * 4.0, "Dragging", dragging, width);
-        },
-        1 => {
-            const glass = inspectorSwitch(5, state.setting_native_glass);
-            const glow = inspectorSwitch(0, state.setting_glow);
-            const aurora = inspectorSwitch(1, state.setting_aurora);
-            const animations = inspectorSwitch(2, state.setting_animations);
-            const speed = inspectorPopup(12, &[_][]const u8{"Slow", "Normal", "Fast"}, @intCast(@intFromEnum(state.setting_speed)));
-            snap_debug_controls[4] = glass; snap_debug_controls[5] = glow; snap_debug_controls[6] = aurora; snap_debug_controls[7] = animations; snap_debug_controls[8] = speed;
-            inspectorRow(page, top, "Native Glass", glass, width);
-            inspectorRow(page, top - row, "Glow", glow, width);
-            inspectorRow(page, top - row * 2.0, "Aurora", aurora, width);
-            inspectorRow(page, top - row * 3.0, "Animations", animations, width);
-            inspectorRow(page, top - row * 4.0, "Animation Speed", speed, width);
-        },
-        2 => {
-            const source = inspectorPopup(13, &[_][]const u8{"Now Playing", "Spotify", "Spotifast", "Auto"}, @intCast(@intFromEnum(state.setting_source)));
-            const transition = inspectorPopup(16, &[_][]const u8{"Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"}, @intCast(@intFromEnum(state.setting_transition)));
-            const keys = inspectorPopup(18, &[_][]const u8{"Off", "Active", "Spotify", "Spotifast"}, @intCast(@intFromEnum(state.setting_media_key_target)));
-            snap_debug_controls[9] = source; snap_debug_controls[10] = transition; snap_debug_controls[11] = keys;
-            inspectorRow(page, top, "Media Source", source, width);
-            inspectorRow(page, top - row, "Track Transition", transition, width);
-            inspectorRow(page, top - row * 2.0, "Media Keys", keys, width);
-            const title_readout = inspectorLabel("—", rect(0, 0, 172, 22));
-            const artist_readout = inspectorLabel("—", rect(0, 0, 172, 22));
-            snap_debug_readouts[1] = title_readout; snap_debug_readouts[2] = artist_readout;
-            inspectorRow(page, top - row * 3.0, "Title", title_readout, width);
-            inspectorRow(page, top - row * 4.0, "Artist", artist_readout, width);
-        },
-        3 => {
-            const left = inspectorField(1003, @floatFromInt(state.widget_margin_left));
-            const top_field = inspectorField(1004, @floatFromInt(state.widget_margin_top));
-            snap_debug_controls[12] = left; snap_debug_controls[13] = top_field;
-            inspectorRow(page, top, "Margin Left", left, width);
-            inspectorRow(page, top - row, "Margin Top", top_field, width);
-            const id = inspectorLabel("—", rect(0, 0, 172, 22));
-            const layer = inspectorLabel("—", rect(0, 0, 172, 22));
-            const frame = inspectorLabel("—", rect(0, 0, 172, 22));
-            snap_debug_readouts[3] = id; snap_debug_readouts[4] = layer; snap_debug_readouts[5] = frame;
-            inspectorRow(page, top - row * 2.0, "Window ID", id, width);
-            inspectorRow(page, top - row * 3.0, "Layer", layer, width);
-            inspectorRow(page, top - row * 4.0, "Frame", frame, width);
-        },
-        4 => {
-            const candidates = inspectorLabel("0", rect(0, 0, 172, 22));
-            const distance = inspectorLabel("0", rect(0, 0, 172, 22));
-            const outline = inspectorLabel("hidden", rect(0, 0, 172, 22));
-            const cache = inspectorLabel("uncached", rect(0, 0, 172, 22));
-            snap_debug_readouts[6] = candidates; snap_debug_readouts[7] = distance;
-            inspectorRow(page, top, "Candidates", candidates, width);
-            inspectorRow(page, top - row, "Distance²", distance, width);
-            inspectorRow(page, top - row * 2.0, "Outline", outline, width);
-            inspectorRow(page, top - row * 3.0, "Cache", cache, width);
-        },
-        5 => {
-            const x = inspectorField(1005, snap_outline_rect.origin.x);
-            const y = inspectorField(1006, snap_outline_rect.origin.y);
-            const w = inspectorField(1007, snap_outline_rect.size.width);
-            const h = inspectorField(1008, snap_outline_rect.size.height);
-            snap_debug_controls[14] = x; snap_debug_controls[15] = y; snap_debug_controls[16] = w; snap_debug_controls[17] = h;
-            inspectorRow(page, top, "Target X", x, width);
-            inspectorRow(page, top - row, "Target Y", y, width);
-            inspectorRow(page, top - row * 2.0, "Target Width", w, width);
-            inspectorRow(page, top - row * 3.0, "Target Height", h, width);
-            const threshold = inspectorLabel("1210000", rect(0, 0, 172, 22));
-            inspectorRow(page, top - row * 4.0, "Threshold²", threshold, width);
-        },
-        else => {},
-    }
-    return page;
-}
-
-fn updateInspectorField(control: Ref, value: f64) void {
-    if (control == null) return;
-    const editor = macos.send(Ref, control, "currentEditor", .{});
-    if (editor != null) return;
-    macos.send(void, control, "setDoubleValue:", .{value});
-}
 fn updateSnapDebug() void {
     if (!state.setting_debug) {
-        if (snap_debug_panel) |panel| macos.send(void, panel, "orderOut:", .{@as(Ref, null)});
+        debug_imgui.hide();
         return;
     }
-
-    if (snap_debug_panel == null) {
-        const panel_cls = macos.objc_getClass("NSPanel");
-        const panel = macos.send(
-            Ref,
-            macos.send(Ref, panel_cls, "alloc", .{}),
-            "initWithContentRect:styleMask:backing:defer:",
-            .{
-                rect(24, 60, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT),
-                @as(usize, 1 | 2 | 32),
-                @as(usize, 2),
-                false,
-            },
-        );
-        if (panel == null) return;
-        snap_debug_panel = panel;
-
-        const title = macos.string("Wallify Inspector");
-        defer macos.CFRelease(title);
-        macos.send(void, panel, "setTitle:", .{title});
-        macos.send(void, panel, "setFloatingPanel:", .{true});
-        macos.send(void, panel, "setOpaque:", .{true});
-        const bg = macos.send(
-            Ref,
-            macos.objc_getClass("NSColor"),
-            "colorWithCalibratedWhite:alpha:",
-            .{@as(f64, 0.065), @as(f64, 1.0)},
-        );
-        macos.send(void, panel, "setBackgroundColor:", .{bg});
-        macos.send(void, panel, "setLevel:", .{@as(isize, DEBUG_PANEL_LEVEL)});
-        macos.send(void, panel, "setHidesOnDeactivate:", .{false});
-        macos.send(void, panel, "setReleasedWhenClosed:", .{false});
-
-        const content = macos.send(Ref, panel, "contentView", .{});
-        if (content == null) return;
-
-        const tab_cls = macos.objc_getClass("NSTabView");
-        const tabs = macos.send(
-            Ref,
-            macos.send(Ref, tab_cls, "alloc", .{}),
-            "initWithFrame:",
-            .{rect(0, 0, DEBUG_PANEL_WIDTH, DEBUG_PANEL_HEIGHT - 26.0)},
-        );
-        if (tabs == null) return;
-        macos.send(void, tabs, "setTabViewType:", .{@as(usize, 0)});
-        macos.send(void, tabs, "setAutoresizingMask:", .{@as(usize, 18)});
-        macos.send(void, content, "addSubview:", .{tabs});
-
-        const item_cls = macos.objc_getClass("NSTabViewItem");
-        const titles = [_][]const u8{
-            "Runtime",
-            "Appearance",
-            "Media",
-            "Window",
-            "WindowServer",
-            "Snap",
-        };
-
-        for (titles, 0..) |tab_title, i| {
-            const item = macos.send(
-                Ref,
-                macos.send(Ref, item_cls, "alloc", .{}),
-                "initWithIdentifier:",
-                .{macos.string(tab_title)},
-            );
-            if (item == null) continue;
-            defer macos.CFRelease(macos.send(Ref, item, "identifier", .{}));
-            const label_value = macos.string(tab_title);
-            defer macos.CFRelease(label_value);
-            macos.send(void, item, "setLabel:", .{label_value});
-
-            const page = makeInspectorPage(i, tab_title);
-            if (page == null) continue;
-            macos.send(void, item, "setView:", .{page});
-            macos.send(void, tabs, "addTabViewItem:", .{item});
-            snap_debug_panes[i] = page;
-        }
-
-        macos.send(void, tabs, "selectFirstTabViewItem:", .{@as(Ref, null)});
-
-        const footer_cls = macos.objc_getClass("NSTextField");
-        const footer = macos.send(
-            Ref,
-            macos.send(Ref, footer_cls, "alloc", .{}),
-            "initWithFrame:",
-            .{rect(16, 7, DEBUG_PANEL_WIDTH - 32.0, 16.0)},
-        );
-        if (footer != null) {
-            snap_debug_footer = footer;
-            macos.send(void, footer, "setEditable:", .{false});
-            macos.send(void, footer, "setSelectable:", .{false});
-            macos.send(void, footer, "setBezeled:", .{false});
-            macos.send(void, footer, "setDrawsBackground:", .{false});
-            const font = macos.send(Ref, macos.objc_getClass("NSFont"), "systemFontOfSize:", .{@as(f64, 10.0)});
-            if (font != null) macos.send(void, footer, "setFont:", .{font});
-            const color = macos.send(
-                Ref,
-                macos.objc_getClass("NSColor"),
-                "colorWithCalibratedWhite:alpha:",
-                .{@as(f64, 0.46), @as(f64, 1.0)},
-            );
-            macos.send(void, footer, "setTextColor:", .{color});
-            macos.send(void, content, "addSubview:", .{footer});
-        }
-    }
-
-    const actual = if (snap_outline) |panel| macos.send(Rect, panel, "frame", .{}) else rect(0, 0, 0, 0);
-    const player = playerWindowInfo();
-
-    snap_debug_tick += 1;
-
-    if (snap_debug_controls[0] != null)
-        macos.send(void, snap_debug_controls[0], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_mode)))});
-    if (snap_debug_controls[1] != null)
-        macos.send(void, snap_debug_controls[1], "setDoubleValue:", .{snap_debug_mode_mix * 100.0});
-    if (snap_debug_controls[4] != null)
-        macos.send(void, snap_debug_controls[4], "setState:", .{if (state.setting_native_glass) @as(isize, 1) else @as(isize, 0)});
-    if (snap_debug_controls[5] != null)
-        macos.send(void, snap_debug_controls[5], "setState:", .{if (state.setting_glow) @as(isize, 1) else @as(isize, 0)});
-    if (snap_debug_controls[6] != null)
-        macos.send(void, snap_debug_controls[6], "setState:", .{if (state.setting_aurora) @as(isize, 1) else @as(isize, 0)});
-    if (snap_debug_controls[7] != null)
-        macos.send(void, snap_debug_controls[7], "setState:", .{if (state.setting_animations) @as(isize, 1) else @as(isize, 0)});
-    if (snap_debug_controls[8] != null)
-        macos.send(void, snap_debug_controls[8], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_speed)))});
-    if (snap_debug_controls[9] != null)
-        macos.send(void, snap_debug_controls[9], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_source)))});
-    if (snap_debug_controls[10] != null)
-        macos.send(void, snap_debug_controls[10], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_transition)))});
-    if (snap_debug_controls[11] != null)
-        macos.send(void, snap_debug_controls[11], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_media_key_target)))});
-
-    if (snap_debug_readouts[0] != null)
-        setInspectorText(snap_debug_readouts[0], if (snap_debug_dragging) "true" else "false");
-    if (snap_debug_readouts[1] != null)
-        setInspectorText(snap_debug_readouts[1], if (state.global_title_len > 0) state.global_title[0..state.global_title_len] else "—");
-    if (snap_debug_readouts[2] != null)
-        setInspectorText(snap_debug_readouts[2], if (state.global_artist_len > 0) state.global_artist[0..state.global_artist_len] else "—");
-
-    updateInspectorField(snap_debug_controls[2], snap_debug_card_width);
-    updateInspectorField(snap_debug_controls[3], snap_debug_card_height);
-    updateInspectorField(snap_debug_controls[12], @floatFromInt(state.widget_margin_left));
-    updateInspectorField(snap_debug_controls[13], @floatFromInt(state.widget_margin_top));
-    updateInspectorField(snap_debug_controls[14], snap_outline_rect.origin.x);
-    updateInspectorField(snap_debug_controls[15], snap_outline_rect.origin.y);
-    updateInspectorField(snap_debug_controls[16], snap_outline_rect.size.width);
-    updateInspectorField(snap_debug_controls[17], snap_outline_rect.size.height);
-
-    var buffer: [128]u8 = undefined;
-    if (snap_debug_readouts[3] != null) {
-        const value = std.fmt.bufPrint(&buffer, "#{d}", .{player.number}) catch "—";
-        setInspectorText(snap_debug_readouts[3], value);
-    }
-    if (snap_debug_readouts[4] != null) {
-        const value = std.fmt.bufPrint(&buffer, "{d}", .{player.layer}) catch "—";
-        setInspectorText(snap_debug_readouts[4], value);
-    }
-    if (snap_debug_readouts[5] != null) {
-        const value = std.fmt.bufPrint(&buffer, "{d:.0}, {d:.0}  {d:.0} × {d:.0}", .{actual.origin.x, actual.origin.y, actual.size.width, actual.size.height}) catch "—";
-        setInspectorText(snap_debug_readouts[5], value);
-    }
-    if (snap_debug_readouts[6] != null) {
-        const value = std.fmt.bufPrint(&buffer, "{d}", .{snap_candidate_count}) catch "0";
-        setInspectorText(snap_debug_readouts[6], value);
-    }
-    if (snap_debug_readouts[7] != null) {
-        const value = std.fmt.bufPrint(&buffer, "{d:.0}", .{snap_last_distance_sq}) catch "0";
-        setInspectorText(snap_debug_readouts[7], value);
-    }
-
-    if (snap_debug_footer) |footer| {
-        var status: [192]u8 = undefined;
-        const status_text = std.fmt.bufPrint(&status, "LIVE   tick {d}   •   candidates {d}   •   outline {s}", .{
-            snap_debug_tick,
-            snap_candidate_count,
-            if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
-        }) catch return;
-        const footer_value = macos.string(status_text);
-        defer macos.CFRelease(footer_value);
-        macos.send(void, footer, "setStringValue:", .{footer_value});
-    }
-
-    if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
-        macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
-        macos.send(void, snap_debug_panel, "orderFrontRegardless", .{});
-        macos.send(void, macos.send(Ref, snap_debug_panel, "animator", .{}), "setAlphaValue:", .{@as(f64, 1)});
-    } else {
-        macos.send(void, snap_debug_panel, "orderFrontRegardless", .{});
-    }
+    debug_imgui.show();
 }
 
 fn updateSnapOutline(_: Ref) callconv(.c) void {
