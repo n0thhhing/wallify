@@ -16,7 +16,6 @@ pub fn main() !void {
     window.widget_application_init();
     state.loadWidgetSettings();
     if (state.setting_debug) window.widget_debug_window_show();
-    if (build_options.debug_inspector) wallify_imgui_inspector_show();
     const initial_size = state.setting_mode.dimensions();
     state.mode_from = state.setting_mode;
     state.mode_mix = 1.0;
@@ -27,6 +26,7 @@ pub fn main() !void {
     state.mode_target_height = initial_size.height;
     spotify.widget_spotify_observe();
     if (!@import("platform/native.zig").create(state.setting_mode, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
+    if (build_options.debug_inspector) wallify_imgui_inspector_show();
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
