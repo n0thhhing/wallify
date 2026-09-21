@@ -63,6 +63,9 @@ pub fn animationLoop() void {
     var previous_columns = @import("../platform/native.zig").wallify_width();
     var previous_time = window.widget_monotonic_time();
     var last_draw_time = previous_time;
+    var marquee_cached_title: [256]u8 = undefined;
+    var marquee_cached_title_len: usize = 0;
+    var marquee_cached_width: f64 = 0.0;
     while (true) {
         var high_rate_animation = false;
         const columns = @import("../platform/native.zig").wallify_width();
@@ -234,7 +237,14 @@ pub fn animationLoop() void {
         if (!state.spotifyIdle() and state.layout.compact_mix > 0.01 and state.global_title_len > 0) {
             // Compact tiles lack horizontal clearance for full track titles.
             // If the text width exceeds the viewport, we auto-scroll back and forth (marquee effect).
-            const title_width = text_cache.width(state.global_title[0..state.global_title_len], MARQUEE_FONT_SIZE, true);
+            const title = state.global_title[0..state.global_title_len];
+            if (title.len != marquee_cached_title_len or
+                !std.mem.eql(u8, title, marquee_cached_title[0..marquee_cached_title_len])) {
+                @memcpy(marquee_cached_title[0..title.len], title);
+                marquee_cached_title_len = title.len;
+                marquee_cached_width = text_cache.width(title, MARQUEE_FONT_SIZE, true);
+            }
+            const title_width = marquee_cached_width;
             if (title_width > MARQUEE_VIEWPORT_WIDTH and state.setting_animations) {
                 const travel = title_width - MARQUEE_VIEWPORT_WIDTH;
                 state.marquee_offset += dt * MARQUEE_SPEED * state.marquee_direction;
