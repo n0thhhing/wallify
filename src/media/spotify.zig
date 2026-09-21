@@ -53,7 +53,8 @@ pub export fn widget_spotify_take_state() callconv(.c) c_int {
 
 pub export fn widget_spotify_wait_for_event(timeout_ms: u64) callconv(.c) c_int {
     const sema = playback_event_sema orelse return 0;
-    const timeout = dispatch_time(DISPATCH_TIME_NOW, @intCast(timeout_ms * @as(u64, @intCast(NSEC_PER_MS))));
+    const delta_ns: i64 = @intCast(timeout_ms * @as(u64, @intCast(NSEC_PER_MS)));
+    const timeout = dispatch_time(DISPATCH_TIME_NOW, delta_ns);
     const signaled = dispatch_semaphore_wait(sema, timeout) == 0;
     if (signaled) {
         _ = pending_state.swap(-1, .monotonic);
