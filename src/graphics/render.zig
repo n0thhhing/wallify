@@ -10,6 +10,73 @@ const player = @import("render/player.zig");
 pub const idle_renderer = idle;
 pub const player_renderer = player;
 
+// Keep the last static command list in Zig as well as the Metal-side texture cache.
+// Steady playback only changes progress/labels/Aurora, so rebuilding artwork/glow/buttons
+// and their DrawCommands on every frame is wasted CPU work.
+var cached_static_canvas: gpu.Canvas = undefined;
+var cached_static_key: u64 = 0;
+var cached_static_valid = false;
+
+fn hashBool(hash: *std.hash.Wyhash, value: bool) void {
+    const v = @intFromBool(value);
+    hash.update(std.mem.asBytes(&v));
+}
+
+fn hashF64(hash: *std.hash.Wyhash, value: f64) void {
+    hash.update(std.mem.asBytes(&value));
+}
+
+fn hashEnum(hash: *std.hash.Wyhash, value: anytype) void {
+    const v = @intFromEnum(value);
+    hash.update(std.mem.asBytes(&v));
+}
+
+fn staticSceneKey(card: gpu.Rect) u64 {
+    var hash = std.hash.Wyhash.init(0);
+
+    // Layout geometry is determined by these mode/size inputs. Avoid hashing the
+    // whole Layout struct because it also contains function-independent cache state.
+    hashF64(&hash, state.layout.width);
+    hashF64(&hash, state.layout.height);
+    hashEnum(&hash, state.mode_from);
+    hashEnum(&hash, state.setting_mode);
+    hashF64(&hash, state.mode_mix);
+    hashF64(&hash, card.x);
+    hashF64(&hash, card.y);
+    hashF64(&hash, card.w);
+    hashF64(&hash, card.h);
+    hashF64(&hash, card.radius);
+
+    hashBool(&hash, state.setting_native_glass);
+    hashBool(&hash, state.setting_glow);
+    hashBool(&hash, state.setting_dim);
+    hashBool(&hash, state.setting_compact_gradient);
+    hashBool(&hash, state.setting_show_controls);
+    hashBool(&hash, state.setting_artwork_border);
+    hashEnum(&hash, state.setting_artwork_radius);
+    hashEnum(&hash, state.setting_frame);
+    hashEnum(&hash, state.setting_intensity);
+    hashEnum(&hash, state.setting_transition);
+
+    hashBool(&hash, state.global_has_artwork);
+    hashBool(&hash, assets.has_art);
+    hashF64(&hash, state.idle_mix);
+    hashF64(&hash, state.global_anim_art_t);
+    hashF64(&hash, state.play_pause_mix);
+    hashF64(&hash, @as(f64, @floatFromInt(state.extracted_r)));
+    hashF64(&hash, @as(f64, @floatFromInt(state.extracted_g)));
+    hashF64(&hash, @as(f64, @floatFromInt(state.extracted_b)));
+
+    // Track transition math depends on the current animation time, but only while
+    // the transition is active. Once settled, animation_time must not invalidate
+    // the static cache every frame.
+    const transition_active = state.art_transition_until > state.animation_time;
+    hashBool(&hash, transition_active);
+    if (transition_active) hashF64(&hash, state.animation_time);
+
+    return hash.final();
+}
+
 // When native glass is active, drop opacity so the NSVisualEffectView blur shines through
 inline fn cardBackgroundColor() gpu.Color {
     return if (state.setting_native_glass)
@@ -60,8 +127,13 @@ pub fn drawUIFrame() void {
     else
         card;
 
-    var static_canvas = gpu.Canvas{ .clip = clip };
-    var dynamic_canvas = gpu.Canvas{ .clip = clip };
+    const static_key = staticSceneKey(card);
+    const rebuild_static = !cached_static_valid or cached_static_key != static_key;
+
+    if (rebuild_static) {
+        cached_static_canvas = gpu.Canvas{ .clip = clip };
+        const static_canvas = &cached_static_canvas;
+
 
     const ambient_intensity: f32 = if (state.global_has_artwork and assets.has_art and state.setting_glow) 0.12 else 0.0;
     native.wallify_update_glass_rect(
@@ -76,23 +148,32 @@ pub fn drawUIFrame() void {
         state.setting_native_glass,
     );
 
-    if (!state.setting_native_glass) {
-        static_canvas.glass(
-            card,
-            cardBackgroundColor(),
-            @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
-            @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
-            @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
-            ambient_intensity,
-        );
+    if (rebuild_static) {
+        if (!state.setting_native_glass) {
+            cached_static_canvas.glass(
+                card,
+                cardBackgroundColor(),
+                @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
+                @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
+                @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
+                ambient_intensity,
+            );
+        }
+
+        if (state.idle_mix < 1.0) {
+            player.drawPlayerStatic(&cached_static_canvas, card);
+        }
+
+        const frame_strength = state.setting_frame.multiplier();
+        if (!state.setting_native_glass and frame_strength > 0.0) {
+            cached_static_canvas.stroke(card, 0.8, .{ 1.0, 1.0, 1.0, @floatCast(0.12 * frame_strength) });
+        }
+
+        cached_static_key = static_key;
+        cached_static_valid = true;
     }
 
-    // Unchanged active-player content is rendered once into the GPU cache.
-    if (state.idle_mix < 1.0) {
-        player.drawPlayerStatic(&static_canvas, card);
-    }
-
-    // Dynamic pass always begins with the cached static scene.
+    var dynamic_canvas = gpu.Canvas{ .clip = clip };
     dynamic_canvas.compositeCachedScene(state.layout.width, state.layout.height);
 
     // Dynamic fluid Aurora wave layer (Apple Music style).
@@ -117,13 +198,11 @@ pub fn drawUIFrame() void {
         idle.drawIdle(&dynamic_canvas, card);
     }
 
-    // Static frame outline belongs in the cache, so it does not get shaded
-    // again every progress frame.
-    const frame_strength = state.setting_frame.multiplier();
-    if (!state.setting_native_glass and frame_strength > 0.0) {
-        static_canvas.stroke(card, 0.8, .{ 1.0, 1.0, 1.0, @floatCast(0.12 * frame_strength) });
-    }
-
-    gpu.Canvas.submitSplit(&static_canvas, &dynamic_canvas, state.layout.width, state.layout.height);
+    gpu.Canvas.submitSplit(
+        &cached_static_canvas,
+        &dynamic_canvas,
+        state.layout.width,
+        state.layout.height,
+    );
 }
 
