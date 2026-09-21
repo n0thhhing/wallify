@@ -14,7 +14,7 @@ extern fn wallify_debug_console_install() void;
 pub const settings_window = @import("ui/settings_window.zig");
 
 pub fn main() !void {
-    if (builtin.mode == .Debug) {
+    if (build_options.debug_inspector and builtin.mode == .Debug) {
         wallify_debug_console_install();
         std.log.info("startup: Debug build, inspector={s}, profiling={s}", .{
             if (build_options.debug_inspector) "enabled" else "disabled",

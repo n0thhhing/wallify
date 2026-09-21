@@ -26,6 +26,7 @@ const c = struct {
     const SOL_SOCKET: c_int = 0xffff;
     const SO_RCVTIMEO: c_int = 0x1006;
     const SO_SNDTIMEO: c_int = 0x1005;
+    const SO_NOSIGPIPE: c_int = 0x1022;
 
     const Timeval = extern struct {
         tv_sec: c_long,
@@ -48,6 +49,94 @@ const c = struct {
     extern "c" fn write(fd: c_int, buf: [*]const u8, nbytes: usize) isize;
 };
 
+var query_socket: c_int = -1;
+var query_socket_lock: std.atomic.Mutex = .unlocked;
+
+fn lockQuerySocket() void {
+    while (!query_socket_lock.tryLock()) {
+        std.atomic.spinLoopHint();
+    }
+}
+
+fn unlockQuerySocket() void {
+    query_socket_lock.unlock();
+}
+
+fn closeQuerySocket() void {
+    if (query_socket >= 0) {
+        _ = c.close(query_socket);
+        query_socket = -1;
+    }
+}
+
+fn configureQuerySocket(sock: c_int) void {
+    const timeout = c.Timeval{ .tv_sec = 0, .tv_usec = 300_000 };
+    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_RCVTIMEO, &timeout, @sizeOf(c.Timeval));
+    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_SNDTIMEO, &timeout, @sizeOf(c.Timeval));
+    const no_sigpipe: c_int = 1;
+    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_NOSIGPIPE, &no_sigpipe, @sizeOf(no_sigpipe));
+}
+
+fn connectQuerySocket() !void {
+    if (query_socket >= 0) return;
+
+    const sock = c.socket(c.AF_INET, c.SOCK_STREAM, 0);
+    if (sock < 0) return error.SocketCreationFailed;
+    configureQuerySocket(sock);
+
+    const target_addr = c.SockaddrIn{
+        .sin_port = std.mem.nativeToBig(u16, INSTANCE_PORT),
+        .sin_addr = [4]u8{ 127, 0, 0, 1 },
+    };
+
+    if (c.connect(sock, &target_addr, @sizeOf(c.SockaddrIn)) != 0) {
+        _ = c.close(sock);
+        return error.ConnectionFailed;
+    }
+
+    query_socket = sock;
+}
+
+/// Sends a one-line request using a reusable loopback connection.
+/// If Spotifast closes the connection after a request, the next call reconnects.
+fn sendPersistentQuery(verb: []const u8, buf: []u8) !usize {
+    lockQuerySocket();
+    defer unlockQuerySocket();
+
+    var attempts: usize = 0;
+    while (attempts < 2) : (attempts += 1) {
+        connectQuerySocket() catch {
+            closeQuerySocket();
+            if (attempts == 1) return error.ConnectionFailed;
+            continue;
+        };
+
+        var req_buf: [128]u8 = undefined;
+        const req = try std.fmt.bufPrint(&req_buf, "fastpotify:{s}
+", .{verb});
+        const written = c.write(query_socket, req.ptr, req.len);
+        if (written != @as(isize, @intCast(req.len))) {
+            closeQuerySocket();
+            continue;
+        }
+
+        var total_read: usize = 0;
+        while (total_read < buf.len) {
+            const n = c.read(query_socket, buf.ptr + total_read, buf.len - total_read);
+            if (n <= 0) break;
+            total_read += @intCast(n);
+            if (std.mem.indexOfScalar(u8, buf[0..total_read], '
+')) |_| break;
+        }
+
+        if (total_read > 0) return total_read;
+
+        closeQuerySocket();
+    }
+
+    return error.ReadFailed;
+}
+
 /// Sends a one-line request to the Spotifast single-instance loopback socket
 /// and reads the response line into `buf`.
 // AppleScript is way too slow (20-50ms per query) and causes the UI to stutter.
@@ -57,11 +146,7 @@ pub fn sendSocketRequest(verb: []const u8, buf: []u8) !usize {
     const sock = c.socket(c.AF_INET, c.SOCK_STREAM, 0);
     if (sock < 0) return error.SocketCreationFailed;
     defer _ = c.close(sock);
-
-    // 300ms timeout for connect/read/write
-    const timeout = c.Timeval{ .tv_sec = 0, .tv_usec = 300_000 };
-    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_RCVTIMEO, &timeout, @sizeOf(c.Timeval));
-    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_SNDTIMEO, &timeout, @sizeOf(c.Timeval));
+    configureQuerySocket(sock);
 
     const target_addr = c.SockaddrIn{
         .sin_port = std.mem.nativeToBig(u16, INSTANCE_PORT),
@@ -75,7 +160,7 @@ pub fn sendSocketRequest(verb: []const u8, buf: []u8) !usize {
     var req_buf: [128]u8 = undefined;
     const req = try std.fmt.bufPrint(&req_buf, "fastpotify:{s}\n", .{verb});
     const written = c.write(sock, req.ptr, req.len);
-    if (written < 0) return error.WriteFailed;
+    if (written != @as(isize, @intCast(req.len))) return error.WriteFailed;
 
     var total_read: usize = 0;
     while (total_read < buf.len) {
@@ -206,7 +291,7 @@ pub fn parseSpotifastPayload(raw: []const u8) ?SpotifastPayload {
 ///   - raw string starting with "fastpotify:now ..." on success
 pub export fn widget_query_spotifast(buf: [*]u8, max_len: usize) callconv(.c) usize {
     var socket_buf: [2048]u8 = undefined;
-    const read_len = sendSocketRequest("nowplaying", &socket_buf) catch {
+    const read_len = sendPersistentQuery("nowplaying", &socket_buf) catch {
         const closed_str = "CLOSED";
         const copy_len = @min(closed_str.len, max_len);
         @memcpy(buf[0..copy_len], closed_str[0..copy_len]);
