@@ -131,13 +131,19 @@ source_snapshot() {
 
 if [[ "$DO_WATCH" == true ]]; then
     # Watch mode wraps the existing build/launch path instead of duplicating it.
-    # Foreground/log mode is intentionally disabled for the child rebuilds so
-    # this shell remains available to watch and restart the app.
+    # Child launches return immediately; stream their shared log separately so
+    # foreground logging does not block the watcher.
     WATCH_INITIAL_ARGS=()
     WATCH_REBUILD_ARGS=()
     for arg in "${ORIGINAL_ARGS[@]}"; do
         case "$arg" in
             -w|--watch|-f|--foreground|-l|--logs)
+                ;;
+            -R|--relaunch)
+                if [[ "$DO_FOREGROUND" != true ]]; then
+                    WATCH_INITIAL_ARGS+=("$arg")
+                    WATCH_REBUILD_ARGS+=("$arg")
+                fi
                 ;;
             -t|--test|-c|-C|--clean)
                 WATCH_INITIAL_ARGS+=("$arg")
@@ -148,6 +154,23 @@ if [[ "$DO_WATCH" == true ]]; then
                 ;;
         esac
     done
+
+    WATCH_LOG_PID=""
+    cleanup_watch() {
+        if [[ -n "$WATCH_LOG_PID" ]]; then
+            kill "$WATCH_LOG_PID" 2>/dev/null || true
+            wait "$WATCH_LOG_PID" 2>/dev/null || true
+            rm -f "$WALLIFY_WATCH_LOG"
+        fi
+    }
+    trap cleanup_watch EXIT
+    trap 'echo ""; echo "Stopping watch mode..."; exit 0' INT TERM
+    if [[ "$DO_FOREGROUND" == true ]]; then
+        WALLIFY_WATCH_LOG=$(mktemp /tmp/wallify-watch.XXXXXX)
+        export WALLIFY_WATCH_LOG
+        tail -n +1 -f "$WALLIFY_WATCH_LOG" &
+        WATCH_LOG_PID=$!
+    fi
 
     echo -e "${BOLD}${CYAN}==>${RESET} ${BOLD}Watch mode enabled${RESET}"
     echo -e "  ${DIM}Rebuilds when files outside .git/.zig-cache/zig-out change.${RESET}"
@@ -164,13 +187,6 @@ if [[ "$DO_WATCH" == true ]]; then
 
     last_snapshot="$(source_snapshot)"
     echo -e "${CYAN}==>${RESET} ${BOLD}Watching...${RESET} ${DIM}(Ctrl+C to quit)${RESET}"
-
-    cleanup_watch() {
-        echo ""
-        echo -e "${YELLOW}Stopping watch mode...${RESET}"
-        exit 0
-    }
-    trap cleanup_watch INT TERM
 
     while true; do
         sleep 0.5
@@ -260,7 +276,7 @@ else
     EXEC_PATH="${TARGET_APP}/Contents/MacOS/${APP_NAME}"
     LAUNCH_LABEL="com.wallify.dev"
     LAUNCH_PLIST="/tmp/${LAUNCH_LABEL}.plist"
-    LAUNCH_LOG="/tmp/${LAUNCH_LABEL}.log"
+    LAUNCH_LOG="${WALLIFY_WATCH_LOG:-/tmp/${LAUNCH_LABEL}.log}"
     GUI_DOMAIN="gui/$(id -u)"
 
     echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME} via launchd (direct executable)...${RESET}"
@@ -269,7 +285,10 @@ else
     # one-shot: RunAtLoad starts the executable once and KeepAlive=false means
     # a crash/exit is not automatically relaunched.
     launchctl bootout "$GUI_DOMAIN/$LAUNCH_LABEL" 2>/dev/null || true
-    rm -f "$LAUNCH_PLIST" "$LAUNCH_LOG"
+    rm -f "$LAUNCH_PLIST"
+    if [[ -z "${WALLIFY_WATCH_LOG:-}" ]]; then
+        rm -f "$LAUNCH_LOG"
+    fi
 
     {
         echo '<?xml version="1.0" encoding="UTF-8"?>'
@@ -292,13 +311,13 @@ else
         echo '    <key>KeepAlive</key><false/>'
         echo '    <key>ProcessType</key><string>Interactive</string>'
         echo '    <key>StandardOutPath</key>'
-        printf '    <string>%s</string>\n' "/dev/null"
+        printf '    <string>%s</string>\n' "$LAUNCH_LOG"
         echo '    <key>StandardErrorPath</key>'
         printf '    <string>%s</string>\n' "$LAUNCH_LOG"
         echo '</dict></plist>'
     } > "$LAUNCH_PLIST"
 
-    if ! launchctl bootstrap "$GUI_DOMAIN" "$LAUNCH_PLIST" 2>"$LAUNCH_LOG"; then
+    if ! launchctl bootstrap "$GUI_DOMAIN" "$LAUNCH_PLIST" 2>>"$LAUNCH_LOG"; then
         echo -e "  ${RED}✗ Failed to bootstrap ${APP_NAME} into the GUI launchd domain.${RESET}" >&2
         [[ -s "$LAUNCH_LOG" ]] && cat "$LAUNCH_LOG" >&2
         exit 1
