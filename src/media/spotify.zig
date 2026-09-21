@@ -1,5 +1,4 @@
 const std = @import("std");
-const state = @import("../state.zig");
 const macos = @import("../platform/macos.zig");
 
 pub const SpotifyControl = enum(c_int) {
@@ -12,17 +11,25 @@ pub const SpotifyControl = enum(c_int) {
 
 var pending_state: std.atomic.Value(c_int) = std.atomic.Value(c_int).init(-1);
 var media_helper_pid = std.atomic.Value(c_int).init(-1);
+var playback_event_sema: ?*anyopaque = null;
 
 extern "c" fn kill(pid: c_int, sig: c_int) c_int;
+extern "c" fn dispatch_semaphore_create(value: isize) ?*anyopaque;
+extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
+extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
+extern "c" fn dispatch_time(when: u64, delta: i64) u64;
+
 const SIGUSR1: c_int = 30;
+const DISPATCH_TIME_NOW: u64 = 0;
+const NSEC_PER_MS: i64 = 1_000_000;
 
 fn spotifyCallback(_: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref) callconv(.c) void {
-    pending_state.store(1, .monotonic);
-
-    // Keep the widget out of idle immediately while the metadata worker
-    // reconciles the authoritative Spotify state.
-    state.spotify_event_until = std.time.microTimestamp() / 1_000_000.0 + 1.0;
-    state.requestFrame();
+    // Signal the metadata worker immediately instead of making it poll.
+    if (pending_state.swap(1, .monotonic) == -1) {
+        if (playback_event_sema) |sema| {
+            _ = dispatch_semaphore_signal(sema);
+        }
+    }
 
     // Wake the MediaRemote Perl bridge immediately instead of a dedicated 10 ms
     // polling thread. kill(2) is async-signal-safe and this callback stays tiny.
@@ -31,6 +38,9 @@ fn spotifyCallback(_: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref, _: ma
 }
 
 pub export fn widget_spotify_observe() callconv(.c) void {
+    if (playback_event_sema == null) {
+        playback_event_sema = dispatch_semaphore_create(0);
+    }
     const center = macos.CFNotificationCenterGetDistributedCenter();
     const name = macos.string("com.spotify.client.PlaybackStateChanged");
     defer macos.CFRelease(name);
@@ -39,6 +49,17 @@ pub export fn widget_spotify_observe() callconv(.c) void {
 
 pub export fn widget_spotify_take_state() callconv(.c) c_int {
     return pending_state.swap(-1, .monotonic);
+}
+
+pub export fn widget_spotify_wait_for_event(timeout_ms: u64) callconv(.c) c_int {
+    const sema = playback_event_sema orelse return 0;
+    const timeout = dispatch_time(DISPATCH_TIME_NOW, @intCast(timeout_ms * @as(u64, @intCast(NSEC_PER_MS))));
+    const signaled = dispatch_semaphore_wait(sema, timeout) == 0;
+    if (signaled) {
+        _ = pending_state.swap(-1, .monotonic);
+        return 1;
+    }
+    return 0;
 }
 
 /// Install the PID of the MediaRemote Perl helper that should be interrupted
