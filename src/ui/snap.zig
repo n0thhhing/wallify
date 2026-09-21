@@ -17,8 +17,8 @@ const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
 const MIN_CANDIDATE_SIZE: f64 = 80.0;
 const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
 const DEBUG_PANEL_LEVEL: isize = 101;
-const DEBUG_PANEL_WIDTH: f64 = 520.0;
-const DEBUG_PANEL_HEIGHT: f64 = 520.0;
+const DEBUG_PANEL_WIDTH: f64 = 680.0;
+const DEBUG_PANEL_HEIGHT: f64 = 600.0;
 const OUTLINE_LEVEL_FALLBACK: isize = -2;
 
 pub const PanelSnap = extern struct {
@@ -42,6 +42,8 @@ var snap_outline: Ref = null;
 var snap_outline_rect = Rect{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
 var snap_debug_panel: Ref = null;
 var snap_debug_text: Ref = null;
+var snap_debug_header: Ref = null;
+var snap_debug_footer: Ref = null;
 var snap_debug_tick: u64 = 0;
 var snap_outline_was_visible = false;
 var snap_candidate_count: usize = 0;
@@ -140,6 +142,9 @@ fn updateSnapDebug() void {
         defer macos.CFRelease(title);
         macos.send(void, panel, "setTitle:", .{title});
         macos.send(void, panel, "setFloatingPanel:", .{true});
+        macos.send(void, panel, "setTitleVisibility:", .{@as(usize, 1)});
+        macos.send(void, panel, "setTitlebarAppearsTransparent:", .{true});
+        macos.send(void, panel, "setMovableByWindowBackground:", .{true});
         macos.send(void, panel, "setOpaque:", .{true});
         const bg = macos.send(Ref, macos.objc_getClass("NSColor"), "colorWithWhite:alpha:", .{@as(f64, 0.055), @as(f64, 0.96)});
         macos.send(void, panel, "setBackgroundColor:", .{bg});
@@ -147,12 +152,64 @@ fn updateSnapDebug() void {
         macos.send(void, panel, "setHidesOnDeactivate:", .{false});
         macos.send(void, panel, "setReleasedWhenClosed:", .{false});
 
+        const content = macos.send(Ref, panel, "contentView", .{});
+        if (content == null) return;
+
+        const header_cls = macos.objc_getClass("NSTextField");
+        const header = macos.send(
+            Ref,
+            macos.send(Ref, header_cls, "alloc", .{}),
+            "initWithFrame:",
+            .{rect(16, DEBUG_PANEL_HEIGHT - 42.0, DEBUG_PANEL_WIDTH - 32.0, 24.0)},
+        );
+        if (header == null) return;
+        snap_debug_header = header;
+        macos.send(void, header, "setEditable:", .{false});
+        macos.send(void, header, "setSelectable:", .{false});
+        macos.send(void, header, "setBezeled:", .{false});
+        macos.send(void, header, "setDrawsBackground:", .{false});
+        const header_font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 13.0), @as(f64, 0.65)});
+        if (header_font != null) macos.send(void, header, "setFont:", .{header_font});
+        const header_color = macos.send(
+            Ref,
+            macos.objc_getClass("NSColor"),
+            "colorWithCalibratedWhite:alpha:",
+            .{@as(f64, 0.92), @as(f64, 1.0)},
+        );
+        macos.send(void, header, "setTextColor:", .{header_color});
+        macos.send(void, header, "setStringValue:", .{macos.string("WALLIFY  /  DEBUG INSPECTOR")});
+        macos.send(void, content, "addSubview:", .{header});
+
+        const footer_cls = macos.objc_getClass("NSTextField");
+        const footer = macos.send(
+            Ref,
+            macos.send(Ref, footer_cls, "alloc", .{}),
+            "initWithFrame:",
+            .{rect(16, 8, DEBUG_PANEL_WIDTH - 32.0, 18.0)},
+        );
+        if (footer == null) return;
+        snap_debug_footer = footer;
+        macos.send(void, footer, "setEditable:", .{false});
+        macos.send(void, footer, "setSelectable:", .{false});
+        macos.send(void, footer, "setBezeled:", .{false});
+        macos.send(void, footer, "setDrawsBackground:", .{false});
+        const footer_font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 10.0), @as(f64, 0.0)});
+        if (footer_font != null) macos.send(void, footer, "setFont:", .{footer_font});
+        const footer_color = macos.send(
+            Ref,
+            macos.objc_getClass("NSColor"),
+            "colorWithCalibratedWhite:alpha:",
+            .{@as(f64, 0.52), @as(f64, 1.0)},
+        );
+        macos.send(void, footer, "setTextColor:", .{footer_color});
+        macos.send(void, content, "addSubview:", .{footer});
+
         const scroll_cls = macos.objc_getClass("NSScrollView");
         const scroll = macos.send(
             Ref,
             macos.send(Ref, scroll_cls, "alloc", .{}),
             "initWithFrame:",
-            .{rect(10, 10, DEBUG_PANEL_WIDTH - 20.0, DEBUG_PANEL_HEIGHT - 20.0)},
+            .{rect(12, 32, DEBUG_PANEL_WIDTH - 24.0, DEBUG_PANEL_HEIGHT - 78.0)},
         );
         if (scroll == null) return;
         macos.send(void, scroll, "setBorderType:", .{@as(usize, 0)});
@@ -197,7 +254,6 @@ fn updateSnapDebug() void {
         macos.send(void, text, "setTextColor:", .{green});
         macos.send(void, scroll, "setDocumentView:", .{text});
 
-        const content = macos.send(Ref, panel, "contentView", .{});
         macos.send(void, content, "addSubview:", .{scroll});
     }
 
@@ -210,35 +266,31 @@ fn updateSnapDebug() void {
 
     snap_debug_tick += 1;
 
-    var message: [2048]u8 = undefined;
+    var message: [4096]u8 = undefined;
     var offset: usize = 0;
 
     const first = std.fmt.bufPrint(
         message[offset..],
-        "wallify(debug) :: live session\n" ++
-            "---------------------------------------------\n" ++
-            "[RUNTIME]\n" ++
-            "  tick        = {d}\n" ++
-            "  playback    = {s} — {s}\n" ++
-            "  time        = {d:.1}s / {d:.1}s\n" ++
-            "  artwork     = {s}\n" ++
-            "  mode        = {d}\n" ++
-            "  mode_mix    = {d:.3}\n" ++
-            "  render_size = {d:.0} × {d:.0}\n" ++
-            "  dragging    = {s}\n" ++
-            "\n" ++
-            "[MATERIAL]\n" ++
-            "  glass       = {s}\n" ++
-            "  glow        = {s}\n" ++
-            "  aurora      = {s}\n" ++
-            "  animations  = {s}\n" ++
-            "  anim_speed  = {d}\n" ++
-            "\n" ++
-            "[MEDIA]\n" ++
-            "  source      = {d}\n" ++
-            "  transition  = {d}\n",
+        "RUNTIME\\n" ++
+            "  Playback        {s} — {s}\\n" ++
+            "  Time            {d:.1}s / {d:.1}s\\n" ++
+            "  Artwork         {s}\\n" ++
+            "  Mode            {d}\\n" ++
+            "  Mode mix        {d:.3}\\n" ++
+            "  Render size     {d:.0} × {d:.0}\\n" ++
+            "  Dragging        {s}\\n" ++
+            "\\n" ++
+            "MATERIAL\\n" ++
+            "  Native glass    {s}\\n" ++
+            "  Glow            {s}\\n" ++
+            "  Aurora          {s}\\n" ++
+            "  Animations      {s}\\n" ++
+            "  Animation speed {d}\\n" ++
+            "\\n" ++
+            "MEDIA\\n" ++
+            "  Source          {d}\\n" ++
+            "  Transition      {d}\\n",
         .{
-            snap_debug_tick,
             state.global_title[0..state.global_title_len],
             state.global_artist[0..state.global_artist_len],
             state.global_elapsed,
@@ -262,20 +314,20 @@ fn updateSnapDebug() void {
 
     const second = std.fmt.bufPrint(
         message[offset..],
-        "[WINDOW]\n" ++
-            "  wallify.id   = #{d}\n" ++
-            "  wallify.layer= {d}\n" ++
-            "  screen       = {d:.0} × {d:.0}\n" ++
-            "  margin       = {d:.0}, {d:.0}\n" ++
-            "  visual       = {d:.0}, {d:.0}\n" ++
-            "  panel_frame  = {d:.0}, {d:.0}  {d:.0} × {d:.0}\n" ++
-            "\n" ++
-            "[WINDOWSERVER]\n" ++
-            "  candidates   = {d}\n" ++
-            "  outline      = {s}\n" ++
-            "  distance²    = {d:.0}\n" ++
-            "  outline.id   = #{d}\n" ++
-            "  outline.lvl  = {d}\n",
+        "WINDOW\\n" ++
+            "  Wallify id      #{d}\\n" ++
+            "  Layer           {d}\\n" ++
+            "  Screen          {d:.0} × {d:.0}\\n" ++
+            "  Margin          {d:.0}, {d:.0}\\n" ++
+            "  Visual          {d:.0}, {d:.0}\\n" ++
+            "  Panel frame     {d:.0}, {d:.0}  {d:.0} × {d:.0}\\n" ++
+            "\\n" ++
+            "WINDOW SERVER\\n" ++
+            "  Candidates      {d}\\n" ++
+            "  Outline         {s}\\n" ++
+            "  Distance²       {d:.0}\\n" ++
+            "  Outline id      #{d}\\n" ++
+            "  Outline level   {d}\\n",
         .{
             player.number,
             player.layer,
@@ -300,17 +352,15 @@ fn updateSnapDebug() void {
 
     const third = std.fmt.bufPrint(
         message[offset..],
-        "[SNAP]\n" ++
-            "  target       = {d:.0}, {d:.0}\n" ++
-            "  target_size  = {d:.0} × {d:.0}\n" ++
-            "  threshold²   = {d:.0}\n" ++
-            "  snap_status  = {s}\n" ++
-            "\n" ++
-            "[CACHE]\n" ++
-            "  offset       = {d:.0}, {d:.0}\n" ++
-            "  valid        = {s}\n" ++
-            "---------------------------------------------\n" ++
-            "$ live debug stream (read-only)\n",
+        "SNAP\\n" ++
+            "  Target          {d:.0}, {d:.0}\\n" ++
+            "  Target size     {d:.0} × {d:.0}\\n" ++
+            "  Threshold²      {d:.0}\\n" ++
+            "  Snap state      {s}\\n" ++
+            "\\n" ++
+            "CACHE\\n" ++
+            "  Offset          {d:.0}, {d:.0}\\n" ++
+            "  Valid           {s}\\n",
         .{
             snap_outline_rect.origin.x,
             snap_outline_rect.origin.y,
@@ -326,6 +376,30 @@ fn updateSnapDebug() void {
     offset += third.len;
 
     setDebugText(snap_debug_text, message[0..offset]);
+
+    if (snap_debug_header) |header| {
+        const header_value = macos.string(if (snap_debug_dragging) "WALLIFY  /  DEBUG INSPECTOR    •    DRAGGING" else "WALLIFY  /  DEBUG INSPECTOR    •    LIVE");
+        defer macos.CFRelease(header_value);
+        macos.send(void, header, "setStringValue:", .{header_value});
+    }
+    if (snap_debug_footer) |footer| {
+        var status: [192]u8 = undefined;
+        const status_text = std.fmt.bufPrint(
+            &status,
+            "tick {d}    |    candidates {d}    |    outline {s}    |    cache {s}",
+            .{
+                snap_debug_tick,
+                snap_candidate_count,
+                if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
+                if (has_cached_offsets) "valid" else "uncached",
+            },
+        ) catch return;
+        const footer_value = macos.string(status_text);
+        defer macos.CFRelease(footer_value);
+        macos.send(void, footer, "setStringValue:", .{footer_value});
+    }
+
+
     if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
         macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
         macos.send(void, snap_debug_panel, "orderFrontRegardless", .{});
