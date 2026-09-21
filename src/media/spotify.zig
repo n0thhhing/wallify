@@ -69,15 +69,49 @@ pub export fn widget_spotify_set_helper_pid(pid: c_int) void {
     media_helper_pid.store(pid, .release);
 }
 
+pub fn spotifyBundleIdentifier() []const u8 {
+    return "com.spotify.client";
+}
+
 pub export fn widget_open_spotify() callconv(.c) void {
     const main_q = macos.dispatch_get_main_queue();
     const Work = struct {
         fn run(_: macos.Ref) callconv(.c) void {
-            const url_str = macos.string("spotify:");
-            defer macos.CFRelease(url_str);
-            const url = macos.send(macos.Ref, macos.objc_getClass("NSURL"), "URLWithString:", .{url_str});
+            const pool = macos.send(
+                macos.Ref,
+                macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}),
+                "init",
+                .{},
+            );
+            defer macos.send(void, pool, "release", .{});
+
             const ws = macos.send(macos.Ref, macos.objc_getClass("NSWorkspace"), "sharedWorkspace", .{});
-            _ = macos.send(bool, ws, "openURL:", .{url});
+            const bundle_id = macos.string(spotifyBundleIdentifier());
+            defer macos.CFRelease(bundle_id);
+
+            const app_url = macos.send(
+                macos.Ref,
+                ws,
+                "URLForApplicationWithBundleIdentifier:",
+                .{bundle_id},
+            );
+            if (app_url == null) {
+                std.log.warn("spotify: official Spotify app was not found", .{});
+                return;
+            }
+
+            const config = macos.send(
+                macos.Ref,
+                macos.objc_getClass("NSWorkspaceOpenConfiguration"),
+                "configuration",
+                .{},
+            );
+            _ = macos.send(
+                void,
+                ws,
+                "openApplicationAtURL:configuration:completionHandler:",
+                .{ app_url, config, @as(macos.Ref, null) },
+            );
         }
     };
     macos.dispatch_async_f(main_q, null, Work.run);
@@ -187,6 +221,10 @@ pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usiz
     const copy_len = @min(slice.len, max_len);
     @memcpy(buf[0..copy_len], slice[0..copy_len]);
     return copy_len;
+}
+
+test "Spotify launcher targets the official application bundle" {
+    try std.testing.expectEqualStrings("com.spotify.client", spotifyBundleIdentifier());
 }
 
 test "scriptForControl generates valid AppleScript commands" {
