@@ -32,6 +32,7 @@ const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 20.0;
 const AMBIENT_FPS: f64 = 20.0;
 const AMBIENT_FRAME_INTERVAL: f64 = 1.0 / AMBIENT_FPS;
 
+
 fn playbackFrameInterval(playing: bool, dragging: bool, player_visible: bool, progress_visible: bool, timestamps_visible: bool) f64 {
     if (!playing or dragging or !player_visible) return 0;
     if (progress_visible) return PROGRESS_FRAME_INTERVAL;
@@ -91,8 +92,11 @@ pub fn animationLoop() void {
         previous_columns = columns;
         const now = window.widget_monotonic_time();
         if (state.animation_time < state.art_transition_until) {
+            // Track artwork transitions are visual-only. Keep the expensive
+            // transition shader at the ambient cadence instead of waking Metal
+            // at 60 FPS for the whole half-second effect.
             needs_draw = true;
-            high_rate_animation = true;
+            ambient_animation = true;
         }
         const menu_action = menu.widget_context_menu_action();
         if (menu_action != .none) {
