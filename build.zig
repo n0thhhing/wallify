@@ -50,6 +50,7 @@ pub fn build(b: *std.Build) void {
     native.addFileArg(b.path("src/platform/gpu.h"));
     native.addFileArg(b.path("src/platform/native.m"));
     native.addFileInput(b.path("src/platform/settings_window.m"));
+    native.addFileInput(b.path("src/platform/idle_animation.m"));
     native.addFileInput(b.path("src/platform/settings_window.h"));
     native.addFileInput(b.path("src/platform/debug_stats.h"));
     native.addArg("-o");

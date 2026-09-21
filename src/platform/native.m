@@ -972,6 +972,7 @@ bool wallify_panel_offsets(double* out_x, double* out_y) {
 }
 
 #import "settings_window.m"
+#import "idle_animation.m"
 
 void wallify_update_glass_rect(double x, double y, double w, double h, double radius, float tint_r,
                                float tint_g, float tint_b, bool active) {

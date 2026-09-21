@@ -50,6 +50,7 @@ pub fn drawUIFrame() void {
     );
 
     const card = state.layout.card(state.mode_mix);
+    @import("idle_compositor.zig").update(card);
     var canvas = gpu.Canvas{ .clip = card };
 
     // Frosted acrylic glass shell with GPU specular bevel and subtle artwork ambient diffusion

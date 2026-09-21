@@ -75,6 +75,7 @@ pub fn main() !void {
 }
 
 test {
+    _ = @import("graphics/idle_compositor.zig");
     _ = animation;
     _ = &input.wallify_pointer;
     _ = @import("graphics/canvas.zig");

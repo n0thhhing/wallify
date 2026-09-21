@@ -9,6 +9,7 @@ const spotify = @import("../media/spotify.zig");
 const spotifast = @import("../media/spotifast.zig");
 const text_cache = @import("text_cache.zig");
 const frame_wakeup = @import("../frame_wakeup.zig");
+const idle_compositor = @import("idle_compositor.zig");
 
 const FRAME_TIME_LIMIT: f64 = 0.1;
 const TARGET_FPS: f64 = 60.0;
@@ -178,6 +179,11 @@ pub fn animationLoop() void {
             high_rate_animation = state.setting_animations;
         }
         if (state.idle_mix > 0 and state.cat_pet_until > 0 and state.animation_time < state.cat_pet_until + ARTWORK_WAKE_GRACE) needs_draw = true;
+        // Account for time spent asleep at the compositor's previous speed,
+        // including the wakeup that changes speed or disables animations.
+        if (idle_compositor.active) {
+            state.cat_time += idle_compositor.elapsedAnimationTime(now - previous_time);
+        }
         if (state.idle_mix > 0 and state.setting_idle_style != .spotify and state.setting_animations) {
             const fps: f64 = switch (state.setting_idle_style) {
                 .banana_cat => 24.0,
@@ -185,7 +191,7 @@ pub fn animationLoop() void {
             };
             const previous_tick = @floor(state.cat_time * fps);
             idle_frame_interval = 1.0 / fps;
-            state.cat_time += dt;
+            if (!idle_compositor.active) state.cat_time += dt;
             if (@floor(state.cat_time * fps) != previous_tick) {
                 needs_draw = true;
             }
@@ -343,19 +349,19 @@ pub fn animationLoop() void {
             }
         }
 
+        if (needs_draw) {
+            render.drawUIFrame();
+            last_draw_time = window.widget_monotonic_time();
+        }
+
         const frame_interval = if (high_rate_animation)
             1.0 / TARGET_FPS
-        else if (idle_frame_interval > 0)
+        else if (idle_frame_interval > 0 and !idle_compositor.active)
             idle_frame_interval
         else if (playback_interval > 0)
             playback_interval
         else
             0.0;
-
-        if (needs_draw) {
-            render.drawUIFrame();
-            last_draw_time = window.widget_monotonic_time();
-        }
 
         const after = window.widget_monotonic_time();
         if (frame_interval > 0.0) {
