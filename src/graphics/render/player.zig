@@ -18,6 +18,8 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     drawPlayerDynamic(canvas, elapsed);
 }
 
+// Static content is intentionally isolated here because the native renderer can cache this whole pass.
+// Avoid putting progress, hover, timestamps, or other frame-to-frame state in this function.
 pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
     const inverse_art_mix = 1.0 - state.global_anim_art_t;
     const ease = 1.0 - inverse_art_mix * inverse_art_mix * inverse_art_mix;
@@ -62,6 +64,7 @@ pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
     }
 }
 
+// Dynamic content is deliberately small: it is composited over the cached scene on playback ticks.
 pub fn drawPlayerDynamic(canvas: *gpu.Canvas, elapsed: f64) void {
     if (state.layout.compact_mix <= 0.5) {
         if (state.layout.progressVisible(state.setting_hide_progress)) {
@@ -111,6 +114,7 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
     if (!state.setting_glow or !state.global_has_artwork or !assets.has_art) return;
 
     const glow_base_size: f64 = 132.0;
+    // Glow extent depends only on the fixed bake size, so recomputing the FFI value per frame is wasteful.
     if (cached_glow_extent < 0.0) {
         cached_glow_extent = @floatCast(native.wallify_glow_extent(@floatCast(glow_base_size)));
     }
