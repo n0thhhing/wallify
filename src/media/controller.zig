@@ -395,6 +395,7 @@ pub fn metadataLoop(io: std.Io) void {
             std.log.info("media: active source -> {s}", .{@tagName(active_source)});
             last_source = active_source;
             state.spotify_closed.store(false, .release);
+            state.spotify_has_track.store(false, .release);
             last_art_url_len = 0; // Force Spotify art re-download
             state.artwork_refresh_pending = true; // Force Now Playing art reload
             state.global_title_len = 0; // Force title change to trigger updates
@@ -423,6 +424,7 @@ pub fn metadataLoop(io: std.Io) void {
                 state.requestFrame();
             }
             if (closed) {
+                state.spotify_has_track.store(false, .release);
                 const title_span = if (active_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
                 const artist_span = "Click to Launch";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
@@ -442,6 +444,7 @@ pub fn metadataLoop(io: std.Io) void {
             }
 
             if (std.mem.eql(u8, res_buf[0..res_len], "NO_TRACK")) {
+                state.spotify_has_track.store(false, .release);
                 const title_span = if (active_source == .spotifast) "Spotifast" else "Spotify";
                 const artist_span = "No Track Playing";
                 if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
@@ -475,6 +478,12 @@ pub fn metadataLoop(io: std.Io) void {
             } else parseSpotifyPayload(res_buf[0..res_len]);
 
             if (maybe_payload) |item| {
+                // Keep the idle presentation tied to an explicit Spotify track
+                // snapshot. Query failures do not clear this, so transient IPC
+                // hiccups cannot make a playing track look idle.
+                if (active_source == .spotify) {
+                    state.spotify_has_track.store(item.title.len > 0, .release);
+                }
                 const title_changed = item.title.len != state.global_title_len or !std.mem.eql(u8, item.title, state.global_title[0..state.global_title_len]);
                 const artist_changed = item.artist.len != state.global_artist_len or !std.mem.eql(u8, item.artist, state.global_artist[0..state.global_artist_len]);
                 const now = window.widget_monotonic_time();
