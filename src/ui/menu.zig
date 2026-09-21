@@ -50,7 +50,8 @@ var menu_open: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
 
 fn chooseCallback(_: macos.Ref, _: macos.Ref, sender: macos.Ref) callconv(.c) void {
     const tag = macos.send(isize, sender, "tag", .{});
-    menu_action.store(@intCast(tag), .monotonic);
+    menu_action.store(@intCast(tag), .release);
+    state.requestFrame();
 }
 
 fn getMenuTarget() macos.Ref {
