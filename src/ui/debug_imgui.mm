@@ -284,7 +284,7 @@ static void drawInspector() {
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImGuiID dock_id = ImGui::GetID("WallifyInspectorDockspace");
-    ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockSpaceOverViewport(dock_id, viewport, ImGuiDockNodeFlags_PassthruCentralNode);
 
     if (!gDockLayoutBuilt) {
         gDockLayoutBuilt = true;
@@ -335,6 +335,11 @@ static void drawInspector() {
         self.clearColor = MTLClearColorMake(0.065, 0.068, 0.08, 1.0);
     }
     return self;
+}
+
+- (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size {
+    (void)view;
+    (void)size;
 }
 
 - (void)drawInMTKView:(MTKView*)view {
