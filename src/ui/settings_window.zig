@@ -31,6 +31,7 @@ pub const WallifySettingsSnapshot = extern struct {
     progress_thickness: c_int,
     font_scale: c_int,
     media_key_target: c_int,
+    playing: bool,
 };
 
 pub extern fn wallify_show_settings_window() void;
@@ -84,6 +85,7 @@ pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) call
             .progress_thickness = @intFromEnum(state.setting_progress_thickness),
             .font_scale = @intFromEnum(state.setting_font_scale),
             .media_key_target = @intFromEnum(state.setting_media_key_target),
+            .playing = state.global_rate > 0.0,
         };
     }
 }
