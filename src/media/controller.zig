@@ -147,6 +147,7 @@ fn commandWorkerLoop() void {
 pub fn ensureWorkerStarted() void {
     if (worker_started.swap(true, .acq_rel)) return;
     command_sema = dispatch_semaphore_create(0);
+    std.log.info("media: command worker starting", .{});
     const t = std.Thread.spawn(.{}, commandWorkerLoop, .{}) catch {
         worker_started.store(false, .release);
         return;
@@ -184,15 +185,24 @@ fn enqueueAction(action: MediaAction) void {
 }
 
 pub fn triggerSeek(target: f64) void {
+    std.log.info("media: queue seek={d:.2}s, source={s}", .{ target, @tagName(getActiveSource()) });
     enqueueAction(.{ .kind = .seek, .seek_target = target });
 }
 
 pub fn triggerCommand(cmd: MediaRemoteCommand) void {
+    std.log.info("media: queue command={s}, source={s}", .{
+        @tagName(cmd),
+        @tagName(getActiveSource()),
+    });
     enqueueAction(.{ .kind = .command, .cmd = cmd });
 }
 
 pub fn togglePlayback() void {
     const now = window.widget_monotonic_time();
+    std.log.info("media: toggle playback at position={d:.2}s, current_rate={d:.2}", .{
+        state.playback_clock.position(now, state.global_duration),
+        state.global_rate,
+    });
     const target_rate: f64 = if (state.global_rate > 0) RATE_STOPPED else RATE_PLAYING;
     const position = state.playback_clock.position(now, state.global_duration);
     state.playback_state.request(target_rate > 0, now);
@@ -297,11 +307,13 @@ fn spotifyDownloadWorker(url: []const u8, gen: u32, _: std.Io) void {
     }
 
     if (curl_ok) {
+        std.log.info("media: artwork download complete, generation={d}", .{gen});
         _ = std.posix.system.rename(@ptrCast(tmp_path_c.ptr), "/tmp/art.raw");
         state.global_has_artwork = true;
         state.artwork_refresh_pending = true;
         render.extractColor();
     } else {
+        std.log.warn("media: artwork download failed, generation={d}", .{gen});
         _ = std.posix.system.unlink(@ptrCast(tmp_path_c.ptr));
         state.global_has_artwork = false;
         _ = std.posix.system.unlink("/tmp/art.raw");
@@ -359,6 +371,7 @@ pub fn metadataLoop(io: std.Io) void {
     while (true) {
         const active_source = getActiveSource();
         if (last_source == null or active_source != last_source.?) {
+            std.log.info("media: active source -> {s}", .{@tagName(active_source)});
             last_source = active_source;
             state.spotify_closed.store(false, .release);
             last_art_url_len = 0; // Force Spotify art re-download
@@ -381,6 +394,10 @@ pub fn metadataLoop(io: std.Io) void {
             }
             const closed = std.mem.eql(u8, res_buf[0..res_len], "CLOSED");
             if (state.spotify_closed.swap(closed, .acq_rel) != closed) {
+                std.log.info("media: {s} is now {s}", .{
+                    if (active_source == .spotifast) "Spotifast" else "Spotify",
+                    if (closed) "closed" else "open",
+                });
                 last_art_url_len = 0;
                 state.requestFrame();
             }
@@ -450,6 +467,15 @@ pub fn metadataLoop(io: std.Io) void {
                 const elapsed_changed = @abs(item.elapsed - state.global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
 
                 if (title_changed or artist_changed or rate_changed or elapsed_changed) {
+                    if (title_changed or artist_changed or rate_changed) {
+                        std.log.info("media: {s} — {s} | playing={} | position={d:.2}/{d:.2}s", .{
+                            item.title,
+                            item.artist,
+                            item.playing,
+                            item.elapsed,
+                            item.duration,
+                        });
+                    }
                     if (title_changed) {
                         const title_span = utf8Prefix(item.title, state.global_title.len);
                         @memcpy(state.global_title[0..title_span.len], title_span);
@@ -472,6 +498,7 @@ pub fn metadataLoop(io: std.Io) void {
                     if (item.artwork_url.len > 0) {
                         const art_changed = item.artwork_url.len != last_art_url_len or !std.mem.eql(u8, item.artwork_url, last_art_url[0..last_art_url_len]);
                         if (art_changed) {
+                            std.log.info("media: artwork changed, url_length={d}", .{item.artwork_url.len});
                             @memcpy(last_art_url[0..item.artwork_url.len], item.artwork_url);
                             last_art_url_len = item.artwork_url.len;
 
