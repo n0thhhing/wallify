@@ -382,8 +382,7 @@ static void drawInspector() {
 
 static WallifyInspectorWindowDelegate* gInspectorDelegate = nil;
 
-extern "C" void wallify_imgui_inspector_show(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
+static void showInspectorOnMain(void) {
         if (!gInspectorPanel) {
             id<MTLDevice> device = MTLCreateSystemDefaultDevice();
             if (!device) return;
@@ -456,12 +455,19 @@ extern "C" void wallify_imgui_inspector_show(void) {
         gInspectorPanel.hidesOnDeactivate = NO;
         gInspectorPanel.becomesKeyOnlyIfNeeded = NO;
 
-        // Wallify is an accessory app, so explicitly activate it before
-        // bringing the developer panel forward.
         [NSApp activateIgnoringOtherApps:YES];
         [gInspectorPanel orderFrontRegardless];
         [gInspectorPanel makeKeyAndOrderFront:nil];
-    });
+}
+
+extern "C" void wallify_imgui_inspector_show(void) {
+    if ([NSThread isMainThread]) {
+        showInspectorOnMain();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            showInspectorOnMain();
+        });
+    }
 }
 
 extern "C" void wallify_imgui_inspector_hide(void) {
