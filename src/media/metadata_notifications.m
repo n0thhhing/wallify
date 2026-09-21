@@ -36,7 +36,7 @@ static void metadataNotificationsInitOnMain(void) {
         g_playingObserver = [center addObserverForName:
             @"kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"
             object:nil
-            queue:[NSOperationQueue mainQueue]
+            queue:nil
             usingBlock:^(NSNotification* notification) {
                 (void)notification;
                 dispatch_semaphore_signal(g_metadata_notification_semaphore);
@@ -45,7 +45,7 @@ static void metadataNotificationsInitOnMain(void) {
         g_appObserver = [center addObserverForName:
             @"kMRMediaRemoteNowPlayingApplicationDidChangeNotification"
             object:nil
-            queue:[NSOperationQueue mainQueue]
+            queue:nil
             usingBlock:^(NSNotification* notification) {
                 (void)notification;
                 dispatch_semaphore_signal(g_metadata_notification_semaphore);
