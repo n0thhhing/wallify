@@ -129,7 +129,7 @@ fn setInspectorText(label: Ref, value: []const u8) void {
     macos.send(void, label, "setStringValue:", .{ns_value});
 }
 
-fn makeDebugPane(content: Ref, index: usize, title_text: []const u8, frame: Rect) Ref {
+fn makeDebugPane(index: usize, title_text: []const u8, frame: Rect) Ref {
     const pane = macos.send(
         Ref,
         macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}),
@@ -329,7 +329,6 @@ fn updateSnapDebug() void {
             for (0..2) |column_index| {
                 const pane_index = row_index * 2 + column_index;
                 const pane = makeDebugPane(
-                    row,
                     pane_index,
                     titles[pane_index],
                     rect(0, 0, (grid_frame.size.width - gap) / 2.0, (grid_frame.size.height - gap * 2.0) / 3.0),
