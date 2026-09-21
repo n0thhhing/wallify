@@ -34,6 +34,14 @@ To prevent macOS from automatically waking Apple Music when hardware media keys 
 - The event is forwarded to `wallify_media_key_event()` in `media/controller.zig`, which routes playback through the user's chosen target (`active`, `spotify`, or `spotifast`).
 - Requires macOS Accessibility permission (`NSAccessibilityUsageDescription` declared in `Info.plist`).
 
+## App Controls & Diagnostics
+
+The status-bar menu is the fast path for common actions. It mirrors the live settings snapshot so checkmarks and the Play/Pause label stay synchronized with Settings, while media commands go through the same Zig media controller as the widget itself. In developer builds, the menu also exposes the Dear ImGui Inspector.
+
+The native Settings window is definition-driven: pages and controls are described once, then the Zig settings bridge applies the corresponding state changes and persists them. The Performance page surfaces the native renderer's current device/timing information and links directly to the Inspector. The System section uses Apple's `SMAppService` main-app login-item API for Launch at Login; registration errors are logged rather than silently changing the UI.
+
+The Inspector is a separate MetalKit + Dear ImGui window intended for development builds. Its Performance tab combines AppKit window occlusion, the renderer statistics bridge, and the frame scheduler's state to make the power model visible. The Console / Events tab captures stdout/stderr into a bounded in-memory log while mirroring the original terminal stream. This makes cache rebuilds, texture uploads, GPU failures, and visibility transitions inspectable without adding per-frame log spam.
+
 ## Configuration & Storage
 
 `src/settings.zig` handles serialization and deserialization of `widget-settings.conf`. The active path is resolved at startup by `wallify_prepare()` in `platform/native.m`:
