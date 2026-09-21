@@ -535,12 +535,14 @@ pub fn metadataLoop(io: std.Io) void {
                     state.requestFrame();
                 }
             }
-            const poll_interval: u64 = if (active_source == .spotifast) SPOTIFAST_POLL_INTERVAL_MS else SPOTIFY_POLL_INTERVAL_MS;
-            // Playback position is interpolated locally by playback_clock, so
-            // metadata does not need to be queried at frame rate. Avoid a
-            // 10 ms wakeup loop just to detect source changes.
-            _ = spotify.widget_spotify_take_state();
-            sleep_ms(poll_interval);
+            if (active_source == .spotify) {
+                // Sleep until Spotify signals a playback change, with a bounded
+                // fallback refresh so state cannot become stale if a notification is missed.
+                _ = spotify.widget_spotify_wait_for_event(SPOTIFY_POLL_INTERVAL_MS);
+            } else {
+                // Spotifast has no equivalent event stream, so use a low-rate refresh.
+                sleep_ms(SPOTIFAST_POLL_INTERVAL_MS);
+            }
         } else {
             const stream = popen(command, "r") orelse {
                 sleep_ms(SPOTIFAST_POLL_INTERVAL_MS);
