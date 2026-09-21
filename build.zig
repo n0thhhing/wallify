@@ -52,7 +52,6 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(b.path(b.fmt("{s}/backends", .{imgui_dir})));
         mod.linkFramework("MetalKit", .{});
         mod.linkFramework("GameController", .{});
-        mod.linkSystemLibrary("c++", .{});
 
         const imgui_sources = [_][]const u8{
             "imgui.cpp",
