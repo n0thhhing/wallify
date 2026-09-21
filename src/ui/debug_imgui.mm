@@ -271,21 +271,17 @@ static void drawInspector() {
     wallify_debug_get_snapshot(&s);
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
-    ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
 
     constexpr ImGuiWindowFlags rootFlags =
-        ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoBackground;
+        ImGuiWindowFlags_NoNavFocus;
 
-    ImGui::Begin("##WallifyInspectorRoot", nullptr, rootFlags);
+    ImGui::Begin("Wallify Inspector", nullptr, rootFlags);
 
     if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
         drawTab("Runtime", drawRuntime, s);
@@ -397,14 +393,12 @@ static void showInspectorOnMain(void) {
             gInspectorDelegate = [WallifyInspectorWindowDelegate new];
             gInspectorPanel = [[NSPanel alloc]
                 initWithContentRect:NSMakeRect(0, 0, 1040, 720)
-                           styleMask:(NSWindowStyleMaskTitled |
-                                      NSWindowStyleMaskClosable |
-                                      NSWindowStyleMaskResizable |
-                                      NSWindowStyleMaskMiniaturizable)
+                           styleMask:NSWindowStyleMaskBorderless
                              backing:NSBackingStoreBuffered
                                defer:NO];
 
-            gInspectorPanel.title = @"Wallify Inspector";
+            gInspectorPanel.title = @"";
+            gInspectorPanel.movableByWindowBackground = NO;
             gInspectorPanel.appearance =
                 [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
             gInspectorPanel.opaque = YES;
