@@ -17,7 +17,6 @@ const max_width = 2048;
 const max_height = 96;
 // Shared raster scratch avoids allocating a temporary pixel buffer for every cache miss.
 var scratch: [max_width * max_height]u32 = undefined;
-var scratch: [max_width * max_height]u32 = undefined;
 
 fn get(text: []const u8, size: f64, bold: bool) ?usize {
     var hash = std.hash.Wyhash.init(0);
