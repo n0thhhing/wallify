@@ -377,11 +377,7 @@ pub export fn widget_debug_window_show() callconv(.c) void {
 }
 
 pub export fn widget_debug_window_hide() callconv(.c) void {
-    macos.dispatch_async_f(macos.dispatch_get_main_queue(), null, struct {
-        fn hide(_: Ref) callconv(.c) void {
-            if (snap_debug_panel) |panel| macos.send(void, panel, "orderOut:", .{@as(Ref, null)});
-        }
-    }.hide);
+    debug_imgui.hide();
 }
 
 pub export fn widget_show_snap_outline(x: f64, y: f64, width: f64, height: f64) callconv(.c) void {
