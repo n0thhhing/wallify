@@ -13,6 +13,7 @@ const idle_compositor = @import("idle_compositor.zig");
 
 const FRAME_TIME_LIMIT: f64 = 0.1;
 const TARGET_FPS: f64 = 60.0;
+const VISUAL_FPS: f64 = 30.0;
 const IDLE_MIX_SPEED: f64 = 2.5;
 const MODE_MIX_EPSILON: f64 = 0.001;
 const MODE_MIX_SPEED: f64 = 8.0;
@@ -31,6 +32,7 @@ const ARTWORK_WAKE_GRACE: f64 = 0.1;
 const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 20.0;
 const AMBIENT_FPS: f64 = 20.0;
 const AMBIENT_FRAME_INTERVAL: f64 = 1.0 / AMBIENT_FPS;
+const VISUAL_FRAME_INTERVAL: f64 = 1.0 / VISUAL_FPS;
 
 
 fn playbackFrameInterval(playing: bool, dragging: bool, player_visible: bool, progress_visible: bool, timestamps_visible: bool) f64 {
@@ -43,6 +45,7 @@ test "ambient playback uses a lower refresh budget than interaction" {
     try std.testing.expect(AMBIENT_FRAME_INTERVAL > 1.0 / TARGET_FPS);
     try std.testing.expectEqual(@as(f64, 1.0 / 20.0), AMBIENT_FRAME_INTERVAL);
     try std.testing.expectEqual(@as(f64, 1.0 / 20.0), PROGRESS_FRAME_INTERVAL);
+    try std.testing.expectEqual(@as(f64, 1.0 / 30.0), VISUAL_FRAME_INTERVAL);
 }
 
 test "playback refreshes only visible changing content" {
@@ -85,6 +88,7 @@ pub fn animationLoop() void {
     var marquee_cached_width: f64 = 0.0;
     while (true) {
         var high_rate_animation = false;
+        var visual_animation = false;
         var ambient_animation = false;
         var idle_frame_interval: f64 = 0;
         const columns = @import("../platform/native.zig").wallify_width();
@@ -92,11 +96,10 @@ pub fn animationLoop() void {
         previous_columns = columns;
         const now = window.widget_monotonic_time();
         if (state.animation_time < state.art_transition_until) {
-            // Track artwork transitions are visual-only. Keep the expensive
-            // transition shader at the ambient cadence instead of waking Metal
-            // at 60 FPS for the whole half-second effect.
+            // Track artwork transitions are visual-only. Give them a 30 FPS
+            // budget so the morph feels smoother without paying for 60 FPS.
             needs_draw = true;
-            ambient_animation = true;
+            visual_animation = true;
         }
         const menu_action = menu.widget_context_menu_action();
         if (menu_action != .none) {
@@ -290,7 +293,7 @@ pub fn animationLoop() void {
             }
             if (title_width > MARQUEE_VIEWPORT_WIDTH and state.setting_animations) {
                 needs_draw = true;
-                high_rate_animation = true;
+                visual_animation = true;
             }
         } else {
             state.marquee_offset = 0;
@@ -337,26 +340,25 @@ pub fn animationLoop() void {
         }
         const icon_target: f64 = if (state.global_rate > 0) 1 else 0;
         if (state.play_pause_mix != icon_target) {
-            // The play/pause glyph is decorative, not input-critical. Keep its
-            // transition on the ambient cadence instead of forcing the whole
-            // renderer to 60 FPS whenever playback resumes/pauses.
-            ambient_animation = true;
+            // The play/pause glyph is decorative, not input-critical. Give its
+            // short transition a 30 FPS budget instead of forcing 60 FPS.
+            visual_animation = true;
             state.play_pause_mix = icon_transition.advance(state.play_pause_mix, state.global_rate > 0, dt);
             needs_draw = true;
         }
         for (state.layout.buttons, 0..) |button, index| {
             const target: f64 = if (state.global_hover_target == state.HitTarget.fromActionId(button.id)) 1 else 0;
             if (@abs(state.hover_amount[index] - target) > HOVER_EPSILON) {
-                high_rate_animation = state.setting_animations;
+                visual_animation = state.setting_animations;
                 state.hover_amount[index] += (target - state.hover_amount[index]) * (if (state.setting_animations) @min(1, dt * HOVER_SPEED) else 1);
                 needs_draw = true;
             }
         }
         if (state.global_rate > 0.0) {
             if (state.global_anim_art_t < 1.0) {
-                // Artwork scale/fade is visual-only. A 20 FPS cadence is enough
-                // here and avoids a 60 FPS CPU burst on every play/pause toggle.
-                ambient_animation = true;
+                // Artwork scale/fade benefits from a slightly smoother short
+                // transition while the steady-state renderer remains at 20 FPS.
+                visual_animation = true;
                 state.global_anim_art_t += dt / ART_FADE_DURATION;
                 if (state.global_anim_art_t > 1.0) state.global_anim_art_t = 1.0;
                 needs_draw = true;
@@ -377,6 +379,8 @@ pub fn animationLoop() void {
 
         const frame_interval = if (high_rate_animation)
             1.0 / TARGET_FPS
+        else if (visual_animation)
+            VISUAL_FRAME_INTERVAL
         else if (ambient_animation)
             AMBIENT_FRAME_INTERVAL
         else if (idle_frame_interval > 0 and !idle_compositor.active)
