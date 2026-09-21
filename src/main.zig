@@ -1,5 +1,5 @@
 const std = @import("std");
-const build_options = @import("build_options");
+const builtin = @import("builtin");
 const state = @import("state.zig");
 const input = @import("ui/input.zig");
 const animation = @import("graphics/animation.zig");
@@ -26,7 +26,7 @@ pub fn main() !void {
     state.mode_target_height = initial_size.height;
     spotify.widget_spotify_observe();
     if (!@import("platform/native.zig").create(state.setting_mode, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
-    if (build_options.debug_inspector) wallify_imgui_inspector_show();
+    if (builtin.mode == .Debug) wallify_imgui_inspector_show();
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
