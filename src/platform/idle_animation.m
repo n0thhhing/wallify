@@ -1,5 +1,6 @@
 // Included by native.m: repeating idle scenes are owned by Core Animation,
 // leaving the application asleep between input and metadata changes.
+// The active root is owned by the Metal surface. Replacing it removes the old animation tree from the layer hierarchy.
 static CALayer* idleAnimationLayer;
 static id idleSpriteImages[WALLIFY_MAX_TEXTURES];
 
@@ -100,8 +101,10 @@ bool wallify_idle_animation(const DrawCommand* sprites, size_t spriteCount, doub
         if (!image)
             return false;
         // The Zig samples live on its stack; retain copies across the main-queue hop.
-        NSData* spriteData = [NSData dataWithBytes:sprites length:spriteCount * sizeof(DrawCommand)];
+        // The queued main-thread block captures these immutable byte copies; the caller's Zig stack can return immediately.
+        NSData* spriteData = [NSData dataWithBytes:sprites length:spriteCount * sizeof(DrawCommand);]
         NSData* effectData = [NSData dataWithBytes:effects length:effectFrames * effectCount * sizeof(DrawCommand)];
+        // Block capture retains spriteData/effectData until the layer tree has been built.
         dispatch_async(dispatch_get_main_queue(), ^{
             [CATransaction begin];
             [CATransaction setDisableActions:YES];
