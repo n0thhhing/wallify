@@ -30,7 +30,7 @@ typedef struct {
 typedef struct {
     char device_name[128];
     uint32_t ready, profiling, pending, command_count, texture_count;
-    uint64_t texture_bytes, scene_frames, rendered_frames, uploaded_bytes;
+    uint64_t texture_bytes, scene_frames, rendered_frames, uploaded_bytes, draw_calls;
     double scene_ms, gpu_ms, logical_width, logical_height;
     double drawable_width, drawable_height, scale;
     uint32_t static_cache_valid, static_cache_rebuilds;
