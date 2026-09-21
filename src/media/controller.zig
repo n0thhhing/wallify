@@ -367,16 +367,20 @@ pub fn metadataLoop(io: std.Io) void {
         "if (!$abs) { exit(1); } " ++
         "my $libref = DynaLoader::dl_load_file($abs) or exit(2); " ++
         "my $sym = DynaLoader::dl_find_symbol($libref, \"mrc_printNowPlayingInfo\") or exit(3); " ++
+        "my $init_sym = DynaLoader::dl_find_symbol($libref, \"mrc_notifications_init\") or exit(4); " ++
+        "my $wait_sym = DynaLoader::dl_find_symbol($libref, \"mrc_wait_for_notification\") or exit(5); " ++
         "DynaLoader::dl_install_xsub(\"main::fetch\", $sym); " ++
-        "print \"$$\\n\"; " ++
+        "DynaLoader::dl_install_xsub(\"main::init_notifications\", $init_sym); " ++
+        "DynaLoader::dl_install_xsub(\"main::wait_notification\", $wait_sym); " ++
+        "print \"$\\n\"; " ++
+        "init_notifications(); " ++
         "my $wake = 1; " ++
         "$SIG{USR1} = sub { $wake = 1; }; " ++
-        "use Time::HiRes qw(usleep); " ++
-        "while (1) { if ($wake) { $wake = 0; fetch(); } else { usleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_US ++ "); fetch(); } }";
+        "while (1) { if ($wake) { $wake = 0; fetch(); } else { wait_notification(); fetch(); } }";
 
     // macOS `mediaremoted` is queried through the helper because the framework is private.
-    // Keep the helper mostly asleep and use Spotify's distributed notification to wake it immediately on playback changes.
-    // A short fallback sleep keeps the metadata fresh even when no notification is emitted.
+    // The helper blocks on MediaRemote notifications and fetches immediately when
+    // Now Playing changes. Its native wait has a bounded timeout as a safety net.
     const command = "PERL_SIGNALS=unsafe perl -e '" ++ perl_cmd ++ "'";
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
