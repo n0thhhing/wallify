@@ -28,12 +28,20 @@ const HOVER_EPSILON: f64 = 0.001;
 const HOVER_SPEED: f64 = 10.0;
 const ART_FADE_DURATION: f64 = 0.3;
 const ARTWORK_WAKE_GRACE: f64 = 0.1;
-const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 30.0;
+const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 20.0;
+const AMBIENT_FPS: f64 = 20.0;
+const AMBIENT_FRAME_INTERVAL: f64 = 1.0 / AMBIENT_FPS;
 
 fn playbackFrameInterval(playing: bool, dragging: bool, player_visible: bool, progress_visible: bool, timestamps_visible: bool) f64 {
     if (!playing or dragging or !player_visible) return 0;
     if (progress_visible) return PROGRESS_FRAME_INTERVAL;
     return if (timestamps_visible) 1.0 else 0.0;
+}
+
+test "ambient playback uses a lower refresh budget than interaction" {
+    try std.testing.expect(AMBIENT_FRAME_INTERVAL > 1.0 / TARGET_FPS);
+    try std.testing.expectEqual(@as(f64, 0.05), AMBIENT_FRAME_INTERVAL);
+    try std.testing.expectEqual(@as(f64, 0.05), PROGRESS_FRAME_INTERVAL);
 }
 
 test "playback refreshes only visible changing content" {
@@ -76,6 +84,7 @@ pub fn animationLoop() void {
     var marquee_cached_width: f64 = 0.0;
     while (true) {
         var high_rate_animation = false;
+        var ambient_animation = false;
         var idle_frame_interval: f64 = 0;
         const columns = @import("../platform/native.zig").wallify_width();
         var needs_draw = state.frame_requested.swap(false, .acq_rel) or columns != previous_columns;
@@ -356,6 +365,8 @@ pub fn animationLoop() void {
 
         const frame_interval = if (high_rate_animation)
             1.0 / TARGET_FPS
+        else if (ambient_animation)
+            AMBIENT_FRAME_INTERVAL
         else if (idle_frame_interval > 0 and !idle_compositor.active)
             idle_frame_interval
         else if (playback_interval > 0)
