@@ -372,8 +372,11 @@ static WallifyView* globalMetalView = nil;
     statusAnimationsItem.state = s.animations ? NSControlStateValueOn : NSControlStateValueOff;
     statusGlassItem.state = s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
     statusDimItem.state = s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
-    if (s.playing) {
-        statusTrackItem.title = s.glow ? [NSString stringWithFormat:@"♫ %@", s.playing ? @"Playing" : @""] : @"Playing";
+    if (s.playing && s.title_len > 0) {
+        NSString *title = [NSString stringWithUTF8String:s.title] ?: @"Playing";
+        statusTrackItem.title = [NSString stringWithFormat:@"♫ %@", title];
+    } else if (s.playing) {
+        statusTrackItem.title = @"♫ Playing";
     } else {
         statusTrackItem.title = @"Not Playing";
     }
