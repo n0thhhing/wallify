@@ -275,6 +275,16 @@ pub const Layout = struct {
         to_mode: WidgetMode,
         mix: f64,
     ) void {
+        if (self.cache_valid and
+            self.cache_width == panel_width and
+            self.cache_height == panel_height and
+            self.cache_from_mode == from_mode and
+            self.cache_to_mode == to_mode and
+            self.cache_mix == mix)
+        {
+            return;
+        }
+
         self.width = panel_width;
         self.height = panel_height;
 
@@ -310,6 +320,13 @@ pub const Layout = struct {
                 if (to_mode.isCompact()) 1.0 else 0.0,
                 t,
             );
+
+        self.cache_width = panel_width;
+        self.cache_height = panel_height;
+        self.cache_from_mode = from_mode;
+        self.cache_to_mode = to_mode;
+        self.cache_mix = mix;
+        self.cache_valid = true;
     }
 
     pub fn card(self: Layout, _: f64) hitbox.Rect {
