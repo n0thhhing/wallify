@@ -177,6 +177,13 @@ static NSView *wfMakeGlassView(NSRect frame) {
 
 #pragma mark - Generic controls
 
+static NSTextField *wfLabel(
+    NSString *text,
+    CGFloat size,
+    NSFontWeight weight,
+    NSColor *color
+);
+
 @interface WFSidebarButton : NSButton
 @property(nonatomic, strong) NSImageView *iconView;
 @property(nonatomic, strong) NSTextField *textLabel;
