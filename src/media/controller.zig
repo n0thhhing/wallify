@@ -26,6 +26,10 @@ const RATE_PLAYING: f64 = 1.0;
 const RATE_STOPPED: f64 = 0.0;
 const RATE_LOCKED: u32 = 1;
 const RATE_LOCK_DURATION: f64 = 1.5;
+const AUTO_SOURCE_RECHECK_US: u64 = 250_000;
+
+var cached_auto_source = std.atomic.Value(c_int).init(@intFromEnum(state.MediaSource.now_playing));
+var cached_auto_source_checked_us = std.atomic.Value(u64).init(0);
 
 fn sleep_ms(ms: u64) void {
     const ts = std.posix.timespec{
@@ -110,12 +114,23 @@ fn getActiveSource() state.MediaSource {
     const s = state.setting_source;
     if (s != .auto) return s;
 
+    const now_us = @as(u64, @intFromFloat(window.widget_monotonic_time() * 1_000_000.0));
+    const checked_us = cached_auto_source_checked_us.load(.acquire);
+    if (now_us >= checked_us and now_us - checked_us < AUTO_SOURCE_RECHECK_US) {
+        return @enumFromInt(cached_auto_source.load(.acquire));
+    }
+
     var tmp_buf: [32]u8 = undefined;
     const tmp_len = spotifast.widget_query_spotifast(&tmp_buf, tmp_buf.len);
-    if (tmp_len > 0 and !std.mem.eql(u8, tmp_buf[0..tmp_len], "CLOSED")) {
-        return .spotifast;
-    }
-    return .now_playing;
+    const source: state.MediaSource =
+        if (tmp_len > 0 and !std.mem.eql(u8, tmp_buf[0..tmp_len], "CLOSED"))
+            .spotifast
+        else
+            .now_playing;
+
+    cached_auto_source.store(@intFromEnum(source), .release);
+    cached_auto_source_checked_us.store(now_us, .release);
+    return source;
 }
 
 fn commandWorkerLoop() void {

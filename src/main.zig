@@ -7,6 +7,7 @@ const media = @import("media/controller.zig");
 const render = @import("graphics/render.zig");
 const window = @import("ui/window.zig");
 const spotify = @import("media/spotify.zig");
+const build_options = @import("build_options");
 
 extern fn wallify_imgui_inspector_show() void;
 extern fn wallify_debug_console_install() void;
@@ -15,7 +16,8 @@ pub const settings_window = @import("ui/settings_window.zig");
 pub fn main() !void {
     if (builtin.mode == .Debug) {
         wallify_debug_console_install();
-        std.log.info("startup: Debug build, inspector enabled, profiling={s}", .{
+        std.log.info("startup: Debug build, inspector={s}, profiling={s}", .{
+            if (build_options.debug_inspector) "enabled" else "disabled",
             if (std.c.getenv("WALLIFY_PROFILE") != null) "on" else "off",
         });
     }
@@ -45,7 +47,7 @@ pub fn main() !void {
         @as(i32, @intFromFloat(initial_size.width)),
         @as(i32, @intFromFloat(initial_size.height)),
     });
-    if (builtin.mode == .Debug) wallify_imgui_inspector_show();
+    if (build_options.debug_inspector and builtin.mode == .Debug) wallify_imgui_inspector_show();
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
