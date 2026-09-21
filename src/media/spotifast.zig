@@ -74,7 +74,7 @@ fn configureQuerySocket(sock: c_int) void {
     _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_RCVTIMEO, &timeout, @sizeOf(c.Timeval));
     _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_SNDTIMEO, &timeout, @sizeOf(c.Timeval));
     const no_sigpipe: c_int = 1;
-    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_NOSIGPIPE, &no_sigpipe, @sizeOf(no_sigpipe));
+    _ = c.setsockopt(sock, c.SOL_SOCKET, c.SO_NOSIGPIPE, &no_sigpipe, @sizeOf(c_int));
 }
 
 fn connectQuerySocket() !void {
