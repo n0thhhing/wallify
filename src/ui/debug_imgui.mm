@@ -501,37 +501,6 @@ static void drawSection(const char* label, void (*draw)(const WallifyDebugSnapsh
     }
 }
 
-static void drawWidgetOverview(const WallifyDebugSnapshot& s) {
-    const ImGuiTableFlags flags =
-        ImGuiTableFlags_SizingStretchSame |
-        ImGuiTableFlags_BordersInnerV;
-
-    if (ImGui::BeginTable("widget_overview", 4, flags)) {
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled("MODE");
-        ImGui::Text("%d × %d", s.width, s.height);
-
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled("MEDIA");
-        ImGui::TextWrapped("%s", s.title_len ? s.title : "Nothing playing");
-
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled("SOURCE");
-        ImGui::TextUnformatted(
-            s.source == 0 ? "Now Playing" :
-            s.source == 1 ? "Spotify" :
-            s.source == 2 ? "Spotifast" : "Auto");
-
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled("GLASS");
-        ImGui::TextUnformatted(s.native_glass ? "Enabled" : "Disabled");
-
-        ImGui::EndTable();
-    }
-
-    ImGui::Spacing();
-}
-
 static void drawWidget(const WallifyDebugSnapshot& s) {
     drawSection("Runtime", drawRuntime, s, true);
     drawSection("Appearance", drawAppearance, s, true);
@@ -589,10 +558,13 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
                 (s.frame_requested ? "Live" : "Idle"),
                 s.transition_active ? "Mode transition active" : "Frame updates",
                 true);
-            drawStatusMetric(
-                "MODE",
-                modeName(s.mode),
-                s.width > 0 && s.height > 0 ? nullptr : "Size unavailable");
+            char modeDetail[32];
+            if (s.width > 0 && s.height > 0)
+                snprintf(modeDetail, sizeof(modeDetail), "%d × %d pt", s.width, s.height);
+            else
+                snprintf(modeDetail, sizeof(modeDetail), "Size unavailable");
+
+            drawStatusMetric("MODE", modeName(s.mode), modeDetail);
             drawStatusMetric(
                 "MEDIA",
                 s.title_len ? s.title : "Nothing playing",
