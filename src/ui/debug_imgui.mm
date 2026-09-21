@@ -8,6 +8,7 @@
 #import <MetalKit/MetalKit.h>
 
 #include <algorithm>
+#include <cstdarg>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -114,16 +115,20 @@ static void propertyText(const char* label, const char* value) {
 
 static void propertyBool(const char* label, bool value, int key) {
     propertyHeader(label);
+    ImGui::PushID(label);
     bool changed = value;
     if (ImGui::Checkbox("##value", &changed))
         wallify_debug_set_bool(key, changed ? 1 : 0);
+    ImGui::PopID();
 }
 
 static void propertyInt(const char* label, int value, int key) {
     propertyHeader(label);
+    ImGui::PushID(label);
     int changed = value;
     if (ImGui::InputInt("##value", &changed, 1, 10))
         wallify_debug_set_int(key, changed);
+    ImGui::PopID();
 }
 
 static void propertyReadout(const char* label, const char* fmt, ...) {
@@ -394,23 +399,6 @@ extern "C" void wallify_imgui_inspector_show(void) {
                 initWithFrame:NSMakeRect(0, 0, 1040, 720)
                         device:device];
 
-            if (!ImGui_ImplMetal_Init(device)) {
-                [gInspectorView release];
-                gInspectorView = nil;
-                ImGui::DestroyContext();
-                gInspectorQueue = nil;
-                return;
-            }
-
-            if (!ImGui_ImplOSX_Init(gInspectorView)) {
-                ImGui_ImplMetal_Shutdown();
-                [gInspectorView release];
-                gInspectorView = nil;
-                ImGui::DestroyContext();
-                gInspectorQueue = nil;
-                return;
-            }
-
             gInspectorDelegate = [WallifyInspectorWindowDelegate new];
             gInspectorPanel = [[NSPanel alloc]
                 initWithContentRect:NSMakeRect(0, 0, 1040, 720)
@@ -437,6 +425,26 @@ extern "C" void wallify_imgui_inspector_show(void) {
             gInspectorPanel.contentMinSize = NSMakeSize(720, 500);
             setInspectorFrame(gInspectorPanel);
             [gInspectorPanel setContentView:gInspectorView];
+
+            if (!ImGui_ImplMetal_Init(device)) {
+                gInspectorPanel = nil;
+                gInspectorDelegate = nil;
+                gInspectorView = nil;
+                ImGui::DestroyContext();
+                gInspectorQueue = nil;
+                return;
+            }
+
+            if (!ImGui_ImplOSX_Init(gInspectorView)) {
+                ImGui_ImplMetal_Shutdown();
+                gInspectorPanel = nil;
+                gInspectorDelegate = nil;
+                gInspectorView = nil;
+                ImGui::DestroyContext();
+                gInspectorQueue = nil;
+                return;
+            }
+
             gInspectorInitialized = true;
         }
 
