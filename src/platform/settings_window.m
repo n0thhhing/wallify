@@ -1,6 +1,7 @@
 #import "settings_window.h"
 #import <objc/message.h>
 #import <QuartzCore/QuartzCore.h>
+#import <ServiceManagement/ServiceManagement.h>
 
 extern const char *wallify_settings_path(void);
 
@@ -1816,6 +1817,31 @@ void wallify_close_settings_window(void) {
                 closeSettingsWindow];
         }
     );
+}
+
+bool wallify_launch_at_login_enabled(void) {
+    if (@available(macOS 13.0, *)) {
+        return [SMAppService.mainAppService status] == SMAppServiceStatusEnabled;
+    }
+    return false;
+}
+
+bool wallify_launch_at_login_set(bool enabled) {
+    if (@available(macOS 13.0, *)) {
+        SMAppService *service = SMAppService.mainAppService;
+        NSError *error = nil;
+        BOOL success = enabled
+            ? [service registerAndReturnError:&error]
+            : [service unregisterAndReturnError:&error];
+
+        if (success) {
+            NSLog(@"Wallify: launch at login -> %@", enabled ? @"enabled" : @"disabled");
+        } else {
+            NSLog(@"Wallify: launch at login %@ failed: %@", enabled ? @"enable" : @"disable", error);
+        }
+        return success;
+    }
+    return false;
 }
 
 void wallify_settings_notify_position_changed(void) {
