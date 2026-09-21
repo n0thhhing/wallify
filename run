@@ -247,19 +247,28 @@ if [[ "$DO_FOREGROUND" == true ]]; then
 elif [[ "$DO_RELAUNCH" == true ]]; then
     ./scripts/relaunch.sh
 else
-    echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME}...${RESET}"
+    EXEC_PATH="${TARGET_APP}/Contents/MacOS/${APP_NAME}"
+    echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME} directly...${RESET}"
+
     if [[ ${#APP_ARGS[@]} -gt 0 ]]; then
-        open "$TARGET_APP" --args ${APP_ARGS[@]:-}
+        "$EXEC_PATH" "${APP_ARGS[@]}" >/dev/null 2>&1 &
     else
-        open "$TARGET_APP"
+        "$EXEC_PATH" >/dev/null 2>&1 &
     fi
-    
-    # Confirm process started
+
+    LAUNCH_PID=$!
     sleep 0.3
-    NEW_PID=$(pgrep -x "$APP_NAME" 2>/dev/null | head -n 1 || true)
-    if [[ -n "$NEW_PID" ]]; then
-        echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${NEW_PID})${RESET}"
+
+    # Confirm the process started, preferring the PID we just launched.
+    if kill -0 "$LAUNCH_PID" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${LAUNCH_PID})${RESET}"
     else
-        echo -e "  ${YELLOW}Notice:${RESET} ${APP_NAME} launched via LaunchServices."
+        NEW_PID=$(pgrep -x "$APP_NAME" 2>/dev/null | head -n 1 || true)
+        if [[ -n "$NEW_PID" ]]; then
+            echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${NEW_PID})${RESET}"
+        else
+            echo -e "  ${YELLOW}Notice:${RESET} ${APP_NAME} exited during startup."
+            exit 1
+        fi
     fi
 fi
