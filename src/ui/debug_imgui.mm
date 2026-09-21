@@ -453,6 +453,12 @@ extern "C" void wallify_imgui_inspector_show(void) {
         }
 
         gInspectorVisible = true;
+        gInspectorPanel.hidesOnDeactivate = NO;
+        gInspectorPanel.becomesKeyOnlyIfNeeded = NO;
+
+        // Wallify is an accessory app, so explicitly activate it before
+        // bringing the developer panel forward.
+        [NSApp activateIgnoringOtherApps:YES];
         [gInspectorPanel orderFrontRegardless];
         [gInspectorPanel makeKeyAndOrderFront:nil];
     });
