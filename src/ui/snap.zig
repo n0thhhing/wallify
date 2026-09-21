@@ -172,6 +172,75 @@ pub const DebugSnapshot = extern struct {
     artist: [256]u8,
 };
 
+fn debugApplyBool(key: isize, value: bool) void {
+    switch (key) {
+        0 => state.setting_glow = value,
+        1 => state.setting_aurora = value,
+        2 => state.setting_animations = value,
+        3 => state.setting_dim = value,
+        5 => state.setting_native_glass = value,
+        6 => state.setting_hide_text = value,
+        7 => state.setting_hide_progress = value,
+        8 => state.setting_show_controls = value,
+        9 => state.setting_show_timestamps = value,
+        19 => state.setting_artwork_border = value,
+        20 => state.setting_compact_gradient = value,
+        else => {},
+    }
+    state.saveWidgetSettings();
+    state.requestFrame();
+}
+
+fn debugApplyInt(key: isize, value: isize) void {
+    switch (key) {
+        10 => state.setting_frame = @enumFromInt(std.math.clamp(value, 0, 2)),
+        11 => state.setting_intensity = @enumFromInt(std.math.clamp(value, 0, 2)),
+        12 => state.setting_speed = @enumFromInt(std.math.clamp(value, 0, 2)),
+        13 => state.setting_source = @enumFromInt(std.math.clamp(value, 0, 3)),
+        14 => {
+            const mode: state.WidgetMode = @enumFromInt(std.math.clamp(value, 0, 4));
+            const width: f64 = @floatFromInt(native.wallify_width());
+            const height: f64 = @floatFromInt(native.wallify_height());
+            state.beginModeTransition(mode, width, height, state.setting_animations);
+            if (!state.mode_transition_active) native.resizeForMode(mode);
+        },
+        16 => state.setting_transition = @enumFromInt(std.math.clamp(value, 0, 5)),
+        17 => state.setting_font_scale = @enumFromInt(std.math.clamp(value, 0, 2)),
+        18 => {
+            state.setting_media_key_target = @enumFromInt(std.math.clamp(value, 0, 3));
+            native.wallify_update_media_key_tap(@intCast(value));
+        },
+        21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(value, 0, 2)),
+        22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(value, 0, 2)),
+        1000 => snap_debug_mode_mix = std.math.clamp(@as(f64, @floatFromInt(value)) / 100.0, 0.0, 1.0),
+        1001 => {
+            snap_debug_card_width = @max(1.0, @as(f64, @floatFromInt(value)));
+            native.resizeTo(snap_debug_card_width, @floatFromInt(native.wallify_height()));
+        },
+        1002 => {
+            snap_debug_card_height = @max(1.0, @as(f64, @floatFromInt(value)));
+            native.resizeTo(@floatFromInt(native.wallify_width()), snap_debug_card_height);
+        },
+        1003 => {
+            state.widget_margin_left = @intCast(value);
+            state.panel_position_dirty = true;
+            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
+        },
+        1004 => {
+            state.widget_margin_top = @intCast(value);
+            state.panel_position_dirty = true;
+            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
+        },
+        1005 => snap_outline_rect.origin.x = @floatFromInt(value),
+        1006 => snap_outline_rect.origin.y = @floatFromInt(value),
+        1007 => snap_outline_rect.size.width = @max(1.0, @as(f64, @floatFromInt(value))),
+        1008 => snap_outline_rect.size.height = @max(1.0, @as(f64, @floatFromInt(value))),
+        else => {},
+    }
+    state.saveWidgetSettings();
+    state.requestFrame();
+}
+
 pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void {
     const player = playerWindowInfo();
     const actual = player.frame;
