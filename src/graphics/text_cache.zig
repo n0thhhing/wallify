@@ -4,16 +4,19 @@ const raster = @import("text.zig");
 const gpu = @import("canvas.zig");
 const density = @import("../state.zig").render_scale;
 // Deliberately bounded: every entry maps to one reusable Metal texture slot, so text churn cannot grow memory without limit.
-const capacity = 32;
+// 16 entries cover the handful of title/artist/timestamp strings Wallify can show without
+// retaining dozens of stale song titles. The smaller raster ceiling also keeps texture RAM bounded.
+const capacity = 16;
 const first_texture = @intFromEnum(gpu.Texture.text_start);
 const Entry = struct { hash: u64 = 0, valid: bool = false, width: f64 = 0, height: f64 = 0, stamp: u64 = 0 };
 var entries = [_]Entry{.{}} ** capacity;
 var hot_hashes = [_]u64{0} ** 4;
 var hot_indices = [_]usize{0} ** 4;
 var tick: u64 = 0;
-const max_width = 4096;
-const max_height = 128;
+const max_width = 2048;
+const max_height = 96;
 // Shared raster scratch avoids allocating a temporary pixel buffer for every cache miss.
+var scratch: [max_width * max_height]u32 = undefined;
 var scratch: [max_width * max_height]u32 = undefined;
 
 fn get(text: []const u8, size: f64, bold: bool) ?usize {
