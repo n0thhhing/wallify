@@ -113,9 +113,13 @@ static void startInspectorConsoleCapture() {
 }
 
 extern "C" void wallify_debug_console_install(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    if ([NSThread isMainThread]) {
         startInspectorConsoleCapture();
-    });
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            startInspectorConsoleCapture();
+        });
+    }
 }
 
 static void setInspectorFrame(NSPanel* panel) {
