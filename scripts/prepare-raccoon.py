@@ -1,28 +1,21 @@
 #!/usr/bin/env python3
-"""Prepare the reference-style curled raccoon atlas and breathing preview (requires Pillow)."""
+"""Prepare the original sleeping raccoon atlas and breathing preview (requires Pillow)."""
 from pathlib import Path
 from math import sin, pi
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 source = Image.open(ROOT / "assets/sprites/raccoon-source.png").convert("RGBA")
+# Strip low-alpha halo pixels before downsampling the transparent artwork.
+source.putalpha(source.getchannel("A").point(lambda a: 255 if a >= 128 else 0))
 box = source.getchannel("A").point(lambda a: 255 if a >= 128 else 0).getbbox()
 body = source.crop(box)
-body.thumbnail((108, 64), Image.Resampling.NEAREST)
+body.thumbnail((108, 64), Image.Resampling.LANCZOS)
 base = Image.new("RGBA", (110, 68))
 base.paste(body, ((110 - body.width) // 2, 67 - body.height))
-# Flat colors sampled from the user's pixel-art style reference.
-# Keep clean stepped edges and remove the generated image's subtle gradients.
-palette = [(209, 210, 212), (0, 0, 0), (201, 192, 185),
-           (169, 123, 80), (88, 88, 90), (118, 76, 41)]
-pixels = []
-for r, g, b, a in base.getdata():
-    if a < 128:
-        pixels.append((0, 0, 0, 0))
-    else:
-        color = min(palette, key=lambda c: (c[0] - r)**2 + (c[1] - g)**2 + (c[2] - b)**2)
-        pixels.append((*color, 255))
-base.putdata(pixels)
+# Preserve the new artwork's silver-gray fur, cream cheeks and pink accents.
+base.putdata([(r, g, b, a) if a >= 16 else (0, 0, 0, 0)
+              for r, g, b, a in base.getdata()])
 
 frames = []
 for rise in (0, 1, 2, 1, 0):
