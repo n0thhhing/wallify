@@ -7,6 +7,8 @@ const capacity = 32;
 const first_texture = @intFromEnum(gpu.Texture.text_start);
 const Entry = struct { hash: u64 = 0, valid: bool = false, width: f64 = 0, height: f64 = 0, stamp: u64 = 0 };
 var entries = [_]Entry{.{}} ** capacity;
+var hot_hashes = [_]u64{0} ** 4;
+var hot_indices = [_]usize{0} ** 4;
 var tick: u64 = 0;
 const max_width = 4096;
 const max_height = 128;
@@ -19,6 +21,16 @@ fn get(text: []const u8, size: f64, bold: bool) ?usize {
     hash.update(&.{@intFromBool(bold)});
     const key = hash.final();
     tick += 1;
+
+    // Most frames reuse the same title/artist/timestamp textures. Keep a tiny
+    // direct-mapped hot cache so common lookups avoid scanning all 32 entries.
+    const hot_slot: usize = @intCast(key & 3);
+    const hot_idx = hot_indices[hot_slot];
+    if (hot_hashes[hot_slot] == key and entries[hot_idx].valid and entries[hot_idx].hash == key) {
+        entries[hot_idx].stamp = tick;
+        return hot_idx;
+    }
+
     var oldest: usize = 0;
     for (&entries, 0..) |*entry, i| {
         if (entry.valid and entry.hash == key) {
@@ -36,6 +48,8 @@ fn get(text: []const u8, size: f64, bold: bool) ?usize {
     raster.widget_text(&scratch, w, h, text.ptr, text.len, 0, 0, raster_width, size * density, @intFromBool(bold), 0, 255, 255, 255);
     native.wallify_load_texture(@intCast(first_texture + oldest), &scratch, w, h);
     entries[oldest] = .{ .valid = true, .hash = key, .width = raster_width / density, .height = height / density, .stamp = tick };
+    hot_hashes[hot_slot] = key;
+    hot_indices[hot_slot] = oldest;
     return oldest;
 }
 
