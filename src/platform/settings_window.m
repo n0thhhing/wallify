@@ -4,7 +4,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <ServiceManagement/ServiceManagement.h>
 
-extern void wallify_imgui_inspector_show(void) __attribute__((weak_import));
+extern void wallify_open_inspector(void);
 
 extern const char *wallify_settings_path(void);
 
@@ -625,7 +625,7 @@ static NSImageView *wfSymbol(
         detail.tag = 1102;
         NSButton *inspector = wfButton(@"Open Inspector", target, @selector(openInspectorClicked:));
         inspector.tag = 1103;
-        inspector.enabled = wallify_imgui_inspector_show != NULL;
+        inspector.enabled = YES;
         [content addSubview:status];
         [content addSubview:detail];
         [content addSubview:inspector];
@@ -1699,8 +1699,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
 
 - (void)openInspectorClicked:(id)sender {
     (void)sender;
-    if (wallify_imgui_inspector_show)
-        wallify_imgui_inspector_show();
+    wallify_open_inspector();
 }
 
 - (void)launchAtLoginChanged:(NSButton *)sender {
