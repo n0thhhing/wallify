@@ -1286,6 +1286,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         @"General",
         @"Appearance",
         @"Playback",
+        @"Performance",
         @"Desktop"
     ];
 
@@ -1293,6 +1294,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         @"slider.horizontal.3",
         @"paintbrush",
         @"play.circle",
+        @"gauge.with.dots.needle.67percent",
         @"rectangle.on.rectangle"
     ];
 
@@ -1925,14 +1927,14 @@ void wallify_close_settings_window(void) {
 
 bool wallify_launch_at_login_enabled(void) {
     if (@available(macOS 13.0, *)) {
-        return [SMAppService.mainAppService status] == SMAppServiceStatusEnabled;
+        return [[SMAppService mainAppService] status] == SMAppServiceStatusEnabled;
     }
     return false;
 }
 
 bool wallify_launch_at_login_set(bool enabled) {
     if (@available(macOS 13.0, *)) {
-        SMAppService *service = SMAppService.mainAppService;
+        SMAppService *service = [SMAppService mainAppService];
         NSError *error = nil;
         BOOL success = enabled
             ? [service registerAndReturnError:&error]
