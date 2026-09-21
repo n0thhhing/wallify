@@ -56,7 +56,7 @@ glow_intensity      = normal        # low | normal | high
 animation_speed     = normal        # slow | normal | fast
 
 [Behavior]
-widget_mode         = expanded      # compact | expanded
+widget_mode         = expanded      # compact | two_by_one | expanded | one_by_two | two_by_two
 media_source        = auto          # now_playing | spotify | spotifast | auto
 idle_style          = pixel_cat     # cat | banana_cat | raccoon | spotify
 track_transition    = cinematic     # default | cinematic | ripple | flip | vinyl | glitch
