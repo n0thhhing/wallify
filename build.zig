@@ -4,6 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const debug_inspector = b.option(bool, "debug-inspector", "Build the Dear ImGui developer inspector") orelse false;
+    const macos_sdk = std.mem.trim(u8, b.run(&.{ "xcrun", "--sdk", "macosx", "--show-sdk-path" }), " \n\r\t");
 
     const build_options = b.addOptions();
     build_options.addOption(bool, "debug_inspector", debug_inspector);
@@ -49,7 +50,7 @@ pub fn build(b: *std.Build) void {
     if (debug_inspector) {
         const imgui_dir = ".zig-cache/wallify-imgui";
         mod.addIncludePath(b.path(imgui_dir));
-        mod.addObjectFile(.{ .cwd_relative = "/usr/lib/libc++.tbd" });
+        mod.addObjectFile(.{ .cwd_relative = b.fmt("{s}/usr/lib/libc++.tbd", .{macos_sdk}) });
         mod.addIncludePath(b.path(b.fmt("{s}/backends", .{imgui_dir})));
         mod.linkFramework("MetalKit", .{});
         mod.linkFramework("GameController", .{});
