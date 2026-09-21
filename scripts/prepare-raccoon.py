@@ -1,48 +1,49 @@
 #!/usr/bin/env python3
-"""Prepare the raccoon atlas and anchored breathing frames (requires Pillow)."""
+"""Prepare the detailed curled raccoon atlas and breathing preview (requires Pillow)."""
 from pathlib import Path
+from math import sin, pi
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 source = Image.open(ROOT / "assets/sprites/raccoon-source.png").convert("RGBA")
-cell = source.crop((0, 0, round(source.width / 5), source.height))
-left, top, right, bottom = cell.getchannel("A").point(lambda a: 255 if a >= 128 else 0).getbbox()
-base = cell.crop((left - 5, top - 10, right + 5, bottom + 5)).resize((40, 28), Image.Resampling.NEAREST)
-
-# Flat color clusters keep the small sprite readable and remove generated dithering.
-palette = [(36, 29, 25), (57, 49, 43), (86, 77, 70), (119, 110, 103),
-           (153, 144, 135), (190, 178, 159), (252, 231, 197), (230, 155, 119)]
-pixels = []
-for r, g, b, a in base.getdata():
-    if a < 128:
-        pixels.append((0, 0, 0, 0))
-    else:
-        color = min(palette, key=lambda c: (c[0]-r)**2 + (c[1]-g)**2 + (c[2]-b)**2)
-        pixels.append((*color, 255))
-base.putdata(pixels)
+box = source.getchannel("A").point(lambda a: 255 if a >= 128 else 0).getbbox()
+body = source.crop(box)
+body.thumbnail((108, 64), Image.Resampling.LANCZOS)
+base = Image.new("RGBA", (110, 68))
+base.paste(body, ((110 - body.width) // 2, 67 - body.height))
+# Preserve fine shading and edge alpha, like the existing cat atlas.
+# Remove nearly transparent generation noise outside the silhouette.
+base.putdata([(r, g, b, a) if a >= 16 else (0, 0, 0, 0)
+              for r, g, b, a in base.getdata()])
 
 frames = []
 for rise in (0, 1, 2, 1, 0):
     frame = base.copy()
-    # Expand only the upper back. The face, ears, paws and foreground tail
-    # remain exactly the same pixels in every frame. Taper at both shoulders.
-    for x in range(25, 39):
-        lift = round(rise * min(1, (x - 24) / 4, (39 - x) / 4))
-        for y in range(17):
-            source_y = round(17 - (17 - y) * 17 / (17 + lift))
-            frame.putpixel((x, y), base.getpixel((x, max(0, source_y))))
+    # Gently raise the torso, tapering to zero at the face and hind paws.
+    # Native one-pixel motion keeps the breathing subtle at the cat's scale.
+    for x in range(68, 106):
+        lift = round(rise * sin(pi * (x - 67) / 39))
+        top = next((y for y in range(36) if base.getpixel((x, y))[3] >= 128), 36)
+        if top == 36 or lift == 0:
+            continue
+        for y in range(36):
+            if y < top - lift:
+                frame.putpixel((x, y), (0, 0, 0, 0))
+            else:
+                source_y = round(top + (y - top + lift) * (36 - top) / (36 - top + lift))
+                frame.putpixel((x, y), base.getpixel((x, source_y)))
     frames.append(frame)
 
-sheet = Image.new("RGBA", (200, 28))
+sheet = Image.new("RGBA", (550, 68))
 for index, frame in enumerate(frames):
-    sheet.paste(frame, (index * 40, 0))
+    sheet.paste(frame, (index * 110, 0))
 sheet.save(ROOT / "assets/sprites/raccoon.png")
 
-# Preview uses the same frame durations as the runtime on the idle card color.
 preview = []
 for frame in frames:
     background = Image.new("RGBA", frame.size, (30, 29, 32, 255))
     background.alpha_composite(frame)
-    preview.append(background.convert("RGB").resize((240, 168), Image.Resampling.NEAREST))
+    preview.append(background.convert("RGB").resize((440, 272), Image.Resampling.NEAREST))
+# GIF timing is quantized to 10ms; the runtime uses exactly 3fps like the cat.
 preview[0].save(ROOT / "assets/sprites/raccoon-preview.gif", save_all=True,
-                append_images=preview[1:], duration=[900, 400, 700, 500, 1100], loop=0)
+                append_images=preview[1:], duration=[330, 340, 330, 330, 340], loop=0)

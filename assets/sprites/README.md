@@ -1,25 +1,27 @@
 # Raccoon sprite
 
-`raccoon.png` is the runtime source atlas: five horizontal 40×28 RGBA frames,
-rendered at 3× with nearest-neighbor sampling and an eight-color palette.
-The 3.6-second breathing cycle uses frame durations of 900, 400, 700, 500,
-and 1100 ms. The first and last poses match for a seamless resting pause.
+`raccoon.png` contains five horizontal 110×68 RGBA frames, drawn at native
+size with nearest-neighbor texture sampling, matching the Pixel Cat's width.
+The raccoon keeps its curled-up pose with a finer shaded pixel-art style.
+The face is no longer enlarged from a coarse 40×28 sprite.
+
+The five frames play at 3 fps (a 1⅔-second breathing cycle), matching the cat.
+The torso rises by up to two native pixels and settles back down; the face,
+paws and tail stay anchored. The first and last poses match at the seam.
 Sleep Zs and petting hearts use the shared Pixel Cat effect.
 
-`raccoon-source.png` preserves the artwork generated using the built-in imagegen
-tool. The first pose is reduced with nearest-neighbor sampling and quantized
-to flat colors. The upper back expands by up to two pixels while the head,
-paws and foreground tail remain anchored. Transparency is binary.
+`raccoon-source.png` is the artwork created with the built-in imagegen tool
+for the curled-up raccoon. The exact
+prompt is in `raccoon-prompt.txt`. Fine shading and edge alpha are preserved
+when reducing the artwork. `raccoon-preview.gif` shows the breathing loop;
+its timing rounds to GIF's 10ms resolution.
 
-The current generation prompt is in `raccoon-prompt.txt`. The animated
-`raccoon-preview.gif` uses the runtime frame durations on the idle card color.
-
-Regenerate the embedded binary with Python and Pillow:
+Regenerate the atlas and embedded binary with Python and Pillow:
 
 ```sh
 python3 scripts/prepare-raccoon.py
 python3 scripts/encode-sprite.py assets/sprites/raccoon.png src/assets/bin/raccoon_pixels.bin
 ```
 
-The encoder uses the same RGBA run format as the cat and banana atlases;
-the existing Zig decoder handles premultiplication when uploading the texture.
+The binary uses the same RGBA run format as the cat and banana atlases.
+The Zig decoder premultiplies alpha when uploading the texture.
