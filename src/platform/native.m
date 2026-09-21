@@ -815,7 +815,12 @@ void wallify_blur_texture(int source, int destination, float artSize) {
             return;
         }
 
-        NSUInteger extent = (NSUInteger)wallify_glow_extent(artSize);
+        // The glow is heavily blurred, so rendering it at half resolution is
+        // visually stable while reducing the Gaussian workload by about 4x.
+        const bakeScale = WALLIFY_GLOW_BAKE_SCALE;
+        NSUInteger extent = (NSUInteger)ceilf(wallify_glow_extent(artSize) * bakeScale);
+        NSUInteger artWidth = (NSUInteger)(artSize * WALLIFY_GLOW_SCALE_X * bakeScale);
+        NSUInteger artHeight = (NSUInteger)(artSize * WALLIFY_GLOW_SCALE_Y * bakeScale);
 
         MTLTextureDescriptor* desc =
             [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
@@ -854,29 +859,23 @@ void wallify_blur_texture(int source, int destination, float artSize) {
 
         c.kind = WALLIFY_GLOW_SOURCE;
 
-        c.dw = artSize * WALLIFY_GLOW_SCALE_X;
+        c.dw = (float)artWidth;
+        c.dh = (float)artHeight;
 
-        c.dh = artSize * WALLIFY_GLOW_SCALE_Y;
-
-        c.dx = (extent - c.dw) * 0.5;
-
-        c.dy = (extent - c.dh) * 0.5;
+        c.dx = ((float)extent - c.dw) * 0.5f;
+        c.dy = ((float)extent - c.dh) * 0.5f;
 
         c.sw = 1;
-
         c.sh = 1;
 
         c.r = 1;
-
         c.g = 1;
-
         c.b = 1;
-
         c.alpha = 1;
 
-        c.radius = artSize * 0.1;
+        c.radius = artSize * 0.1f * bakeScale;
 
-        simd_float2 size = {extent, extent};
+        simd_float2 size = {(float)extent, (float)extent};
 
         id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:pass];
 
@@ -904,7 +903,7 @@ void wallify_blur_texture(int source, int destination, float artSize) {
         [encoder endEncoding];
 
         MPSImageGaussianBlur* blur =
-            [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:WALLIFY_GLOW_BLUR];
+            [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:WALLIFY_GLOW_BAKE_BLUR];
 
         blur.edgeMode = MPSImageEdgeModeZero;
 
