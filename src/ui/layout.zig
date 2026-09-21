@@ -275,6 +275,8 @@ pub const Layout = struct {
     }
 
     /// Updates responsive geometry while smoothly morphing between two form factors.
+    // Layout is pure geometry: keeping this cache stable lets rendering skip all interpolation math
+    // when neither the window size nor the active form-factor transition changed.
     pub fn update(
         self: *Layout,
         panel_width: f64,
@@ -337,6 +339,7 @@ pub const Layout = struct {
         self.cache_valid = true;
     }
 
+    // Keep the visual card inset from the window so the native glass/rim and hit testing share one boundary.
     pub fn card(self: Layout, _: f64) hitbox.Rect {
         return .{
             .x = 8.0,
