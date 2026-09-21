@@ -14,9 +14,10 @@ extern "c" fn dispatch_semaphore_create(value: isize) ?*anyopaque;
 extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
 extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 
-const POLL_INTERVAL_MS: u64 = 250;
+const SPOTIFY_POLL_INTERVAL_MS: u64 = 250;
+const SPOTIFAST_POLL_INTERVAL_MS: u64 = 500;
 const QUERY_FAILURE_RETRY_MS: u64 = 500;
-const METADATA_HELPER_INTERVAL_US: []const u8 = "150000";
+const METADATA_HELPER_FALLBACK_INTERVAL_S: []const u8 = "2";
 const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
 const METADATA_LINE_BUFFER_SIZE: usize = 2048;
@@ -368,8 +369,9 @@ pub fn metadataLoop(io: std.Io) void {
         "my $sym = DynaLoader::dl_find_symbol($libref, \"mrc_printNowPlayingInfo\") or exit(3); " ++
         "DynaLoader::dl_install_xsub(\"main::fetch\", $sym); " ++
         "print \"$$\\n\"; " ++
-        "$SIG{USR1} = sub { fetch(); }; " ++
-        "use Time::HiRes qw(usleep); while (1) { fetch(); usleep(" ++ METADATA_HELPER_INTERVAL_US ++ "); }";
+        "my $wake = 1; " ++
+        "$SIG{USR1} = sub { $wake = 1; }; " ++
+        "while (1) { if ($wake) { $wake = 0; fetch(); } sleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_S ++ "); }";
 
     // HACK: macOS `mediaremoted` strictly throttles rapid polling, placing requesters in an XPC penalty box.
     // To bypass this and achieve instant `.now_playing` responsiveness, we spawn this Perl subprocess and hijack its UNIX signal handler.
@@ -450,7 +452,7 @@ pub fn metadataLoop(io: std.Io) void {
                     render.clearArtwork();
                     state.requestFrame();
                 }
-                sleep_ms(POLL_INTERVAL_MS);
+                sleep_ms(SPOTIFY_POLL_INTERVAL_MS);
                 continue;
             }
 
@@ -534,17 +536,15 @@ pub fn metadataLoop(io: std.Io) void {
                     state.requestFrame();
                 }
             }
-            var waited: usize = 0;
-            const poll_interval: usize = if (active_source == .spotifast) 50 else POLL_INTERVAL_MS;
-            while (waited < poll_interval) {
-                if ((active_source == .spotify or active_source == .spotifast) and spotify.widget_spotify_take_state() != -1) break;
-                if (getActiveSource() != last_source.?) break;
-                sleep_ms(10);
-                waited += 10;
-            }
+            const poll_interval: u64 = if (active_source == .spotifast) SPOTIFAST_POLL_INTERVAL_MS else SPOTIFY_POLL_INTERVAL_MS;
+            // Playback position is interpolated locally by playback_clock, so
+            // metadata does not need to be queried at frame rate. Avoid a
+            // 10 ms wakeup loop just to detect source changes.
+            _ = spotify.widget_spotify_take_state();
+            sleep_ms(poll_interval);
         } else {
             const stream = popen(command, "r") orelse {
-                sleep_ms(POLL_INTERVAL_MS);
+                sleep_ms(SPOTIFAST_POLL_INTERVAL_MS);
                 continue;
             };
             var line: [METADATA_LINE_BUFFER_SIZE]u8 = undefined;
@@ -663,7 +663,7 @@ pub fn metadataLoop(io: std.Io) void {
             }
             spotify.widget_spotify_set_helper_pid(-1);
             _ = pclose(stream);
-            sleep_ms(POLL_INTERVAL_MS); // Restart the helper if its stream closes.
+            sleep_ms(SPOTIFY_POLL_INTERVAL_MS); // Restart the helper if its stream closes.
         }
     }
 }
