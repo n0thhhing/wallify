@@ -451,7 +451,9 @@ static void drawPerformance(const WallifyDebugSnapshot& s) {
         propertyText("Renderer", renderer.ready ? "Metal ready" : "Unavailable");
         propertyReadout("Dynamic commands", "%u / %d", renderer.command_count, WALLIFY_MAX_COMMANDS);
         propertyReadout("Draw calls / completed frame", "%.2f",
-                        renderer.rendered_frames ? (double)renderer.command_count : 0.0);
+                        renderer.rendered_frames
+                            ? (double)renderer.draw_calls / renderer.rendered_frames
+                            : 0.0);
         propertyReadout("Scene CPU average", "%.3f ms", renderer.scene_ms);
         propertyReadout("GPU average", "%.3f ms", renderer.gpu_ms);
         propertyReadout("Textures", "%u • %.2f MiB", renderer.texture_count, renderer.texture_bytes / 1048576.0);
