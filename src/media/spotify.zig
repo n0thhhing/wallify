@@ -10,9 +10,18 @@ pub const SpotifyControl = enum(c_int) {
 };
 
 var pending_state: std.atomic.Value(c_int) = std.atomic.Value(c_int).init(-1);
+var media_helper_pid = std.atomic.Value(c_int).init(-1);
+
+extern "c" fn kill(pid: c_int, sig: c_int) c_int;
+const SIGUSR1: c_int = 30;
 
 fn spotifyCallback(_: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref, _: macos.Ref) callconv(.c) void {
     pending_state.store(1, .monotonic);
+
+    // Wake the MediaRemote Perl bridge immediately instead of a dedicated 10 ms
+    // polling thread. kill(2) is async-signal-safe and this callback stays tiny.
+    const pid = media_helper_pid.load(.acquire);
+    if (pid > 0) _ = kill(pid, SIGUSR1);
 }
 
 pub export fn widget_spotify_observe() callconv(.c) void {
@@ -24,6 +33,12 @@ pub export fn widget_spotify_observe() callconv(.c) void {
 
 pub export fn widget_spotify_take_state() callconv(.c) c_int {
     return pending_state.swap(-1, .monotonic);
+}
+
+/// Install the PID of the MediaRemote Perl helper that should be interrupted
+/// when Spotify broadcasts PlaybackStateChanged.
+pub export fn widget_spotify_set_helper_pid(pid: c_int) void {
+    media_helper_pid.store(pid, .release);
 }
 
 pub export fn widget_open_spotify() callconv(.c) void {
