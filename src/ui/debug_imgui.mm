@@ -50,8 +50,6 @@ static const CGFloat kInspectorWidth = 1040.0;
 static const CGFloat kInspectorExpandedHeight = 720.0;
 static const CGFloat kInspectorCollapsedSize = 96.0;
 static const CGFloat kInspectorHeaderHeight = 42.0;
-static const CGFloat kInspectorMinWidth = 520.0;
-static const CGFloat kInspectorMinHeight = 420.0;
 
 static CGFloat gInspectorExpandedWidth = kInspectorWidth;
 static CGFloat gInspectorExpandedHeight = kInspectorExpandedHeight;
@@ -302,7 +300,9 @@ static void resizeInspector(CGFloat width, CGFloat height, bool saveExpandedSize
 static void drawInspectorHeader() {
     ImGuiStyle& style = ImGui::GetStyle();
     ImGuiIO& io = ImGui::GetIO();
-    const float headerHeight = (float)kInspectorHeaderHeight;
+    const float headerHeight = gInspectorCollapsed
+        ? (float)kInspectorCollapsedSize
+        : (float)kInspectorHeaderHeight;
     const float buttonWidth = 36.0f;
     const float width = io.DisplaySize.x;
 
@@ -538,7 +538,7 @@ static void showInspectorOnMain(void) {
                 NSWindowCollectionBehaviorFullScreenAuxiliary;
             gInspectorPanel.releasedWhenClosed = NO;
             gInspectorPanel.delegate = gInspectorDelegate;
-            gInspectorPanel.contentMinSize = NSMakeSize(kInspectorMinWidth, kInspectorMinHeight);
+            gInspectorPanel.contentMinSize = NSMakeSize(kInspectorCollapsedSize, kInspectorCollapsedSize);
             setInspectorFrame(gInspectorPanel);
             [gInspectorPanel setContentView:gInspectorView];
 
