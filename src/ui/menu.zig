@@ -322,7 +322,8 @@ pub const ContextMenuCtx = struct {
         if (context_event) |event| {
             // This is an NSMenu class method. Pass the actual right-click event
             // so AppKit starts tracking/highlighting immediately.
-            _ = macos.send(void, menu_cls, "popUpContextMenu:withEvent:forView:", .{ menu, event, @as(macos.Ref, null) });
+            const context_view = native.wallify_context_menu_view();
+            _ = macos.send(void, menu_cls, "popUpContextMenu:withEvent:forView:", .{ menu, event, context_view });
         } else {
             const location = macos.send(macos.Point, macos.objc_getClass("NSEvent"), "mouseLocation", .{});
             _ = macos.send(bool, menu, "popUpMenuPositioningItem:atLocation:inView:", .{ @as(macos.Ref, null), location, @as(macos.Ref, null) });
