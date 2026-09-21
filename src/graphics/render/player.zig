@@ -97,13 +97,11 @@ fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, ease: f64, mix: f64) voi
                 @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
             );
         } else {
-            if (mix < 1.0) canvas.image(.previous_artwork, art, 1.0);
-            canvas.image(.artwork, art, @floatCast(mix));
+            const dim = if (state.setting_dim) @as(f32, 0.6) else @as(f32, 1.0);
+            if (mix < 1.0) canvas.imageTint(.previous_artwork, art, .{ dim, dim, dim, 1.0 });
+            canvas.imageTint(.artwork, art, .{ dim, dim, dim, @floatCast(mix) });
         }
 
-        if (state.setting_dim) {
-            canvas.fill(art, .{ 0.0, 0.0, 0.0, @floatCast(0.4 * (1.0 - ease)) });
-        }
         if (state.layout.compact_mix < 0.5 and state.setting_artwork_border) {
             canvas.stroke(art, 0.5, .{ 1.0, 1.0, 1.0, 0.11 });
         }
