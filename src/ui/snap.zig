@@ -209,28 +209,28 @@ fn updateSnapDebug() void {
 
     const first = std.fmt.bufPrint(
         message[offset..],
-        "wallify(debug) :: live session\\n" ++
-            "---------------------------------------------\\n" ++
-            "[RUNTIME]\\n" ++
-            "  tick        = {d}\\n" ++
-            "  playback    = {s} — {s}\\n" ++
-            "  time        = {d:.1}s / {d:.1}s\\n" ++
-            "  artwork     = {s}\\n" ++
-            "  mode        = {d}\\n" ++
-            "  mode_mix    = {d:.3}\\n" ++
-            "  render_size = {d:.0} × {d:.0}\\n" ++
-            "  dragging    = {s}\\n" ++
-            "\\n" ++
-            "[MATERIAL]\\n" ++
-            "  glass       = {s}\\n" ++
-            "  glow        = {s}\\n" ++
-            "  aurora      = {s}\\n" ++
-            "  animations  = {s}\\n" ++
-            "  anim_speed  = {d}\\n" ++
-            "\\n" ++
-            "[MEDIA]\\n" ++
-            "  source      = {d}\\n" ++
-            "  transition  = {d}\\n",
+        "wallify(debug) :: live session\n" ++
+            "---------------------------------------------\n" ++
+            "[RUNTIME]\n" ++
+            "  tick        = {d}\n" ++
+            "  playback    = {s} — {s}\n" ++
+            "  time        = {d:.1}s / {d:.1}s\n" ++
+            "  artwork     = {s}\n" ++
+            "  mode        = {d}\n" ++
+            "  mode_mix    = {d:.3}\n" ++
+            "  render_size = {d:.0} × {d:.0}\n" ++
+            "  dragging    = {s}\n" ++
+            "\n" ++
+            "[MATERIAL]\n" ++
+            "  glass       = {s}\n" ++
+            "  glow        = {s}\n" ++
+            "  aurora      = {s}\n" ++
+            "  animations  = {s}\n" ++
+            "  anim_speed  = {d}\n" ++
+            "\n" ++
+            "[MEDIA]\n" ++
+            "  source      = {d}\n" ++
+            "  transition  = {d}\n",
         .{
             snap_debug_tick,
             state.global_title[0..state.global_title_len],
@@ -256,20 +256,20 @@ fn updateSnapDebug() void {
 
     const second = std.fmt.bufPrint(
         message[offset..],
-        "[WINDOW]\\n" ++
-            "  wallify.id   = #{d}\\n" ++
-            "  wallify.layer= {d}\\n" ++
-            "  screen       = {d:.0} × {d:.0}\\n" ++
-            "  margin       = {d:.0}, {d:.0}\\n" ++
-            "  visual       = {d:.0}, {d:.0}\\n" ++
-            "  panel_frame  = {d:.0}, {d:.0}  {d:.0} × {d:.0}\\n" ++
-            "\\n" ++
-            "[WINDOWSERVER]\\n" ++
-            "  candidates   = {d}\\n" ++
-            "  outline      = {s}\\n" ++
-            "  distance²    = {d:.0}\\n" ++
-            "  outline.id   = #{d}\\n" ++
-            "  outline.lvl  = {d}\\n",
+        "[WINDOW]\n" ++
+            "  wallify.id   = #{d}\n" ++
+            "  wallify.layer= {d}\n" ++
+            "  screen       = {d:.0} × {d:.0}\n" ++
+            "  margin       = {d:.0}, {d:.0}\n" ++
+            "  visual       = {d:.0}, {d:.0}\n" ++
+            "  panel_frame  = {d:.0}, {d:.0}  {d:.0} × {d:.0}\n" ++
+            "\n" ++
+            "[WINDOWSERVER]\n" ++
+            "  candidates   = {d}\n" ++
+            "  outline      = {s}\n" ++
+            "  distance²    = {d:.0}\n" ++
+            "  outline.id   = #{d}\n" ++
+            "  outline.lvl  = {d}\n",
         .{
             player.number,
             player.layer,
@@ -294,17 +294,17 @@ fn updateSnapDebug() void {
 
     const third = std.fmt.bufPrint(
         message[offset..],
-        "[SNAP]\\n" ++
-            "  target       = {d:.0}, {d:.0}\\n" ++
-            "  target_size  = {d:.0} × {d:.0}\\n" ++
-            "  threshold²   = {d:.0}\\n" ++
-            "  snap_status  = {s}\\n" ++
-            "\\n" ++
-            "[CACHE]\\n" ++
-            "  offset       = {d:.0}, {d:.0}\\n" ++
-            "  valid        = {s}\\n" ++
-            "---------------------------------------------\\n" ++
-            "$ live debug stream (read-only)\\n",
+        "[SNAP]\n" ++
+            "  target       = {d:.0}, {d:.0}\n" ++
+            "  target_size  = {d:.0} × {d:.0}\n" ++
+            "  threshold²   = {d:.0}\n" ++
+            "  snap_status  = {s}\n" ++
+            "\n" ++
+            "[CACHE]\n" ++
+            "  offset       = {d:.0}, {d:.0}\n" ++
+            "  valid        = {s}\n" ++
+            "---------------------------------------------\n" ++
+            "$ live debug stream (read-only)\n",
         .{
             snap_outline_rect.origin.x,
             snap_outline_rect.origin.y,
