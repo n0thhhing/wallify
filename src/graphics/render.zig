@@ -51,15 +51,18 @@ pub fn drawUIFrame() void {
 
     const card = state.layout.card(state.mode_mix);
     @import("idle_compositor.zig").update(card);
+
     // Native Liquid Glass already clips the Metal subview to the card bounds.
-    // Avoid repeating the rounded-card SDF for every fragment in that mode.
+    // The static scene cache keeps unchanged artwork/glow/buttons off the
+    // per-progress-frame render path.
     const clip: gpu.Rect = if (state.setting_native_glass)
         .{ .x = 0.0, .y = 0.0, .w = 0.0, .h = 0.0, .radius = 0.0 }
     else
         card;
-    var canvas = gpu.Canvas{ .clip = clip };
 
-    // Frosted acrylic glass shell with GPU specular bevel and subtle artwork ambient diffusion
+    var static_canvas = gpu.Canvas{ .clip = clip };
+    var dynamic_canvas = gpu.Canvas{ .clip = clip };
+
     const ambient_intensity: f32 = if (state.global_has_artwork and assets.has_art and state.setting_glow) 0.12 else 0.0;
     native.wallify_update_glass_rect(
         card.x,
@@ -72,8 +75,9 @@ pub fn drawUIFrame() void {
         @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
         state.setting_native_glass,
     );
+
     if (!state.setting_native_glass) {
-        canvas.glass(
+        static_canvas.glass(
             card,
             cardBackgroundColor(),
             @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
@@ -83,8 +87,15 @@ pub fn drawUIFrame() void {
         );
     }
 
-    // Dynamic fluid Aurora wave layer (Apple Music style) — skipped in native glass mode
-    // because it adds a semi-opaque tinted overlay that obscures the Liquid Glass material
+    // Unchanged active-player content is rendered once into the GPU cache.
+    if (state.idle_mix < 1.0) {
+        player.drawPlayerStatic(&static_canvas, card);
+    }
+
+    // Dynamic pass always begins with the cached static scene.
+    dynamic_canvas.compositeCachedScene(state.layout.width, state.layout.height);
+
+    // Dynamic fluid Aurora wave layer (Apple Music style).
     if (!state.setting_native_glass and state.aurora_mix > 0.001 and state.global_has_artwork and assets.has_art) {
         const pri = [3]f32{
             @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
@@ -93,19 +104,24 @@ pub fn drawUIFrame() void {
         };
         const dim_factor: f32 = if (state.setting_dim and state.global_rate == 0) 0.65 else 1.0;
         const alpha: f32 = @floatCast(0.32 * state.aurora_mix * (1.0 - state.idle_mix) * dim_factor);
-        canvas.aurora(card, pri, pri, @floatCast(state.animation_time), alpha);
+        dynamic_canvas.aurora(card, pri, pri, @floatCast(state.animation_time), alpha);
     }
 
-    // Active media player or idle view
-    if (state.idle_mix < 1.0) player.drawPlayer(&canvas, card);
-    if (state.idle_mix > 0.0 and !@import("idle_compositor.zig").active) idle.drawIdle(&canvas, card);
+    if (state.idle_mix < 1.0) {
+        player.drawPlayerDynamic(&dynamic_canvas, state.global_rate == 0.0 or state.global_is_dragging
+            ? state.global_elapsed
+            : state.playback_clock.position(window.widget_monotonic_time(), state.global_duration));
+    } else if (state.idle_mix > 0.0 and !@import("idle_compositor.zig").active) {
+        idle.drawIdle(&dynamic_canvas, card);
+    }
 
-    // Optional border frame outline
-    canvas.opacity = 1.0;
+    // Static frame outline belongs in the cache, so it does not get shaded
+    // again every progress frame.
     const frame_strength = state.setting_frame.multiplier();
     if (!state.setting_native_glass and frame_strength > 0.0) {
-        canvas.stroke(card, 0.8, .{ 1.0, 1.0, 1.0, @floatCast(0.12 * frame_strength) });
+        static_canvas.stroke(card, 0.8, .{ 1.0, 1.0, 1.0, @floatCast(0.12 * frame_strength) });
     }
 
-    canvas.submit(state.layout.width, state.layout.height);
+    gpu.Canvas.submitSplit(&static_canvas, &dynamic_canvas, state.layout.width, state.layout.height);
 }
+
