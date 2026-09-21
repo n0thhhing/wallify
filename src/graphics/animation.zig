@@ -333,7 +333,10 @@ pub fn animationLoop() void {
         }
         const icon_target: f64 = if (state.global_rate > 0) 1 else 0;
         if (state.play_pause_mix != icon_target) {
-            high_rate_animation = true;
+            // The play/pause glyph is decorative, not input-critical. Keep its
+            // transition on the ambient cadence instead of forcing the whole
+            // renderer to 60 FPS whenever playback resumes/pauses.
+            ambient_animation = true;
             state.play_pause_mix = icon_transition.advance(state.play_pause_mix, state.global_rate > 0, dt);
             needs_draw = true;
         }
@@ -347,14 +350,16 @@ pub fn animationLoop() void {
         }
         if (state.global_rate > 0.0) {
             if (state.global_anim_art_t < 1.0) {
-                high_rate_animation = true;
+                // Artwork scale/fade is visual-only. A 20 FPS cadence is enough
+                // here and avoids a 60 FPS CPU burst on every play/pause toggle.
+                ambient_animation = true;
                 state.global_anim_art_t += dt / ART_FADE_DURATION;
                 if (state.global_anim_art_t > 1.0) state.global_anim_art_t = 1.0;
                 needs_draw = true;
             }
         } else {
             if (state.global_anim_art_t > 0.0) {
-                high_rate_animation = true;
+                ambient_animation = true;
                 state.global_anim_art_t -= dt / ART_FADE_DURATION;
                 if (state.global_anim_art_t < 0.0) state.global_anim_art_t = 0.0;
                 needs_draw = true;
