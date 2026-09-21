@@ -38,7 +38,6 @@ pub var seek_expansion: f64 = 0.0;
 pub var seek_velocity: f64 = 0.0;
 pub var aurora_mix: f64 = 0.0;
 pub var hover_amount = [_]f64{ 0, 0, 0 };
-pub var spotify_event_until: f64 = 0;
 pub var spotify_closed = std.atomic.Value(bool).init(false);
 pub var clock = PlaybackClock{};
 
