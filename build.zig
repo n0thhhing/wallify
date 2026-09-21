@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     if (debug_inspector) {
         const imgui_dir = ".zig-cache/wallify-imgui";
         mod.addIncludePath(b.path(imgui_dir));
-        mod.addIncludePath(b.path(imgui_dir ++ "/backends"));
+        mod.addIncludePath(b.path(b.fmt("{s}/backends", .{imgui_dir})));
         mod.linkFramework("MetalKit", .{});
         mod.linkFramework("GameController", .{});
         mod.linkSystemLibrary("c++", .{});
@@ -74,7 +74,7 @@ pub fn build(b: *std.Build) void {
                 "-I.zig-cache/wallify-imgui/backends",
                 "-c",
             });
-            compile.addFileArg(b.path(".zig-cache/wallify-imgui/" ++ source));
+            compile.addFileArg(b.path(b.fmt(".zig-cache/wallify-imgui/{s}", .{source})));
             compile.addArg("-o");
             mod.addObjectFile(compile.addOutputFileArg(
                 b.fmt("wallify-imgui-{d}.o", .{index}),
