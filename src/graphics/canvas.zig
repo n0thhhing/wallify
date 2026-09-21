@@ -18,6 +18,8 @@ pub const Texture = enum(c_int) {
     next,
     raccoon,
     text_start,
+    // Reserved texture slot: native.m binds this to the persistent static-scene render target.
+    // It must stay outside the normal texture-upload range.
     cached_scene = native.gpu.WALLIFY_CACHED_SCENE_TEXTURE,
 };
 
@@ -143,10 +145,12 @@ pub const Canvas = struct {
         native.wallify_present(@floatCast(width), @floatCast(height), &self.commands, self.count);
     }
 
+    // Dynamic frames start by sampling the cached static scene, then add only content that can change.
     pub fn compositeCachedScene(self: *Canvas, width: f64, height: f64) void {
         self.image(.cached_scene, .{ .x = 0, .y = 0, .w = width, .h = height }, 1.0);
     }
 
+    // Keep static and dynamic command lists separate so unchanged artwork/glow never re-enters the hot pass.
     pub fn submitSplit(static_canvas: *Canvas, dynamic_canvas: *Canvas, width: f64, height: f64) void {
         native.wallify_present_split(
             @floatCast(width),
