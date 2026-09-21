@@ -34,7 +34,7 @@ static BOOL lastGlassUpdateValid;
 static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
-static NSEvent* pendingContextMenuEvent;
+static __strong NSEvent* pendingContextMenuEvent;
 
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     *out = (WallifyRendererStats){0};
@@ -625,6 +625,10 @@ static void presentLatest(void) {
 
 void* wallify_context_menu_event(void) {
     return (__bridge void*)pendingContextMenuEvent;
+}
+
+void* wallify_context_menu_view(void) {
+    return (__bridge void*)globalMetalView;
 }
 
 void wallify_clear_context_menu_event(void) {
