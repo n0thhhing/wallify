@@ -240,6 +240,15 @@ pub fn beginModeTransition(
 ) void {
     const target = new_mode.dimensions();
 
+    std.log.info("layout: mode {s} -> {s}, {d:.0}x{d:.0} -> {d:.0}x{d:.0}, animate={}", .{
+        @tagName(setting_mode),
+        @tagName(new_mode),
+        current_width,
+        current_height,
+        target.width,
+        target.height,
+        animate,
+    });
     mode_from = setting_mode;
     setting_mode = new_mode;
     mode_start_width = current_width;
@@ -251,6 +260,11 @@ pub fn beginModeTransition(
 }
 
 pub fn modeAnimationFinished() void {
+    std.log.info("layout: mode transition finished, mode={s}, size={d:.0}x{d:.0}", .{
+        @tagName(setting_mode),
+        mode_target_width,
+        mode_target_height,
+    });
     mode_mix = 1.0;
     mode_transition_active = false;
     mode_from = setting_mode;
