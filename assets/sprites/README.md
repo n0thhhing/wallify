@@ -1,20 +1,23 @@
 # Raccoon sprite
 
-`raccoon.png` is the runtime source atlas: five horizontal 48×32 RGBA frames,
-rendered at 2× with nearest-neighbor sampling and animated at 3 fps, matching
-the Pixel Cat's sleep cycle. Sleep Zs and petting hearts use the shared effect.
+`raccoon.png` is the runtime source atlas: five horizontal 40×28 RGBA frames,
+rendered at 3× with nearest-neighbor sampling and an eight-color palette.
+The 3.6-second breathing cycle uses frame durations of 900, 400, 700, 500,
+and 1100 ms. The first and last poses match for a seamless resting pause.
+Sleep Zs and petting hearts use the shared Pixel Cat effect.
 
 `raccoon-source.png` preserves the artwork generated using the built-in imagegen
-tool. Each cell was centered, cropped to a common vertical range, and reduced
-with nearest-neighbor sampling. Transparency is binary in the runtime atlas.
+tool. The first pose is reduced with nearest-neighbor sampling and quantized
+to flat colors. The upper back expands by up to two pixels while the head,
+paws and foreground tail remain anchored. Transparency is binary.
 
-Final imagegen prompt:
-
-> Create a beautiful professional indie-game pixel art sprite sheet: five animation frames in one horizontal row, transparent background. A VERY CUTE SLEEPING BABY RACCOON curled into a low soft oval, big ROUND head on left resting on little cream paws, petite button nose, TWO gently closed smiling eyelids clearly readable in medium-charcoal mask, rounded cream-rimmed ears, fluffy silver-gray body, plump ringed tail wrapping around right side and under chin. Kawaii proportions, peaceful expression, soft warm-gray and cream palette with peach blush, confident dark-brown pixel outline. Low-resolution 48x32 sprite art with crisp blocky square pixels, clean pixel clusters and 8 flat colors, NO gradient NO fuzzy texture NO photorealism. Five matching frames with only a subtle breathing rise and fall; same character size, same baseline, identical face, tail and paws anchored. Each sprite takes up its equal-width cell, generous transparent gap between them. No text, letters, Z, hearts, shadow, grid or environment. Visually polished, lovable and readable at 100 pixels wide. Landscape image.
+The current generation prompt is in `raccoon-prompt.txt`. The animated
+`raccoon-preview.gif` uses the runtime frame durations on the idle card color.
 
 Regenerate the embedded binary with Python and Pillow:
 
 ```sh
+python3 scripts/prepare-raccoon.py
 python3 scripts/encode-sprite.py assets/sprites/raccoon.png src/assets/bin/raccoon_pixels.bin
 ```
 

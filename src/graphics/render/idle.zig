@@ -55,9 +55,9 @@ test "pets emit clipped GPU commands within the scene budget" {
     try std.testing.expectApproxEqAbs(@as(f32, 1.0 / 45.0), banana.commands[0].sh, 0.0001);
 
     for ([_]bool{ false, true }) |petted| {
-        for (0..5) |frame| {
+        for ([_]f64{ 0.4, 1.1, 1.6, 2.2, 3.0 }, 0..) |time, frame| {
             var raccoon = gpu.Canvas{ .clip = card };
-            @import("../pets/idle_raccoon.zig").draw(&raccoon, card, @as(f64, @floatFromInt(frame)) / 3.0, petted);
+            @import("../pets/idle_raccoon.zig").draw(&raccoon, card, time, petted);
             try std.testing.expectEqual(@as(usize, if (petted) 49 else 40), raccoon.count);
             try std.testing.expectEqual(@as(c_int, @intFromEnum(gpu.Texture.raccoon)), raccoon.commands[0].texture_id);
             try std.testing.expectApproxEqAbs(@as(f32, @floatFromInt(frame)) / 5, raccoon.commands[0].sx, 0.0001);
@@ -68,4 +68,13 @@ test "pets emit clipped GPU commands within the scene budget" {
             }
         }
     }
+}
+
+test "raccoon breathing rests and loops without a jump" {
+    const raccoon = @import("../pets/idle_raccoon.zig");
+    try std.testing.expectEqual(@as(usize, 0), raccoon.frameAt(0));
+    try std.testing.expectEqual(@as(usize, 0), raccoon.frameAt(0.89));
+    try std.testing.expectEqual(@as(usize, 1), raccoon.frameAt(0.9));
+    try std.testing.expectEqual(@as(usize, 4), raccoon.frameAt(3.59));
+    try std.testing.expectEqual(@as(usize, 0), raccoon.frameAt(3.6));
 }
