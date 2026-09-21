@@ -49,6 +49,8 @@ void wallify_show_settings_window(void);
 void wallify_close_settings_window(void);
 bool wallify_has_settings_flag(void);
 void wallify_settings_notify_position_changed(void);
+bool wallify_launch_at_login_enabled(void);
+bool wallify_launch_at_login_set(bool enabled);
 
 #ifdef __cplusplus
 }
