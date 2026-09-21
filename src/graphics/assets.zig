@@ -11,6 +11,7 @@ var art_hash: ?u64 = null;
 pub const transition_duration = 0.5;
 
 fn upload(texture: Texture, pixels: []const u32, w: usize, h: usize) void {
+    // `pixels` only needs to stay alive for the synchronous Metal upload; the GPU keeps its own texture storage.
     native.wallify_load_texture(@intFromEnum(texture), pixels.ptr, w, h);
 }
 
@@ -119,6 +120,7 @@ pub fn refreshArtwork() void {
 
     const w = 180;
     const h = 180;
+    // CPU artwork pixels are intentionally short-lived; the Metal texture becomes the long-lived copy.
     const pixels = std.heap.page_allocator.alloc(u32, w * h) catch {
         clearArtwork();
         state.global_has_artwork = false;
