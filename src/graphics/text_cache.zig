@@ -3,6 +3,7 @@ const native = @import("../platform/native.zig");
 const raster = @import("text.zig");
 const gpu = @import("canvas.zig");
 const density = @import("../state.zig").render_scale;
+// Deliberately bounded: every entry maps to one reusable Metal texture slot, so text churn cannot grow memory without limit.
 const capacity = 32;
 const first_texture = @intFromEnum(gpu.Texture.text_start);
 const Entry = struct { hash: u64 = 0, valid: bool = false, width: f64 = 0, height: f64 = 0, stamp: u64 = 0 };
@@ -12,7 +13,7 @@ var hot_indices = [_]usize{0} ** 4;
 var tick: u64 = 0;
 const max_width = 4096;
 const max_height = 128;
-var scratch: [max_width * max_height]u32 = undefined;
+// Shared raster scratch avoids allocating a temporary pixel buffer for every cache miss.
 
 fn get(text: []const u8, size: f64, bold: bool) ?usize {
     var hash = std.hash.Wyhash.init(0);
@@ -46,6 +47,7 @@ fn get(text: []const u8, size: f64, bold: bool) ?usize {
     if (w == 0 or h == 0) return null;
     @memset(scratch[0 .. w * h], 0);
     raster.widget_text(&scratch, w, h, text.ptr, text.len, 0, 0, raster_width, size * density, @intFromBool(bold), 0, 255, 255, 255);
+    // The native layer owns the GPU texture slot; replacing an old entry releases its previous texture under ARC.
     native.wallify_load_texture(@intCast(first_texture + oldest), &scratch, w, h);
     entries[oldest] = .{ .valid = true, .hash = key, .width = raster_width / density, .height = height / density, .stamp = tick };
     hot_hashes[hot_slot] = key;
