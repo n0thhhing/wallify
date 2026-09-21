@@ -33,6 +33,8 @@ typedef struct {
     uint64_t texture_bytes, scene_frames, rendered_frames, uploaded_bytes;
     double scene_ms, gpu_ms, logical_width, logical_height;
     double drawable_width, drawable_height, scale;
+    uint32_t static_cache_valid, static_cache_rebuilds;
+    double static_cache_width, static_cache_height;
 } WallifyRendererStats;
 
 #ifdef __cplusplus
