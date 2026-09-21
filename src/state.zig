@@ -306,6 +306,13 @@ pub var global_click_target: HitTarget = .none;
 const frame_wakeup = @import("frame_wakeup.zig");
 
 pub var frame_requested = std.atomic.Value(bool).init(true);
+pub var window_visible = std.atomic.Value(bool).init(true);
+
+pub fn setWindowVisible(visible: bool) void {
+    if (window_visible.swap(visible, .acq_rel) != visible) {
+        requestFrame();
+    }
+}
 
 pub fn requestFrame() void {
     if (!frame_requested.swap(true, .acq_rel)) {
