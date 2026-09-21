@@ -127,12 +127,7 @@ pub const ContextMenuCtx = struct {
         const self: *ContextMenuCtx = @ptrCast(@alignCast(ctx_ptr));
         defer std.heap.c_allocator.destroy(self);
 
-        const ns_app = macos.send(macos.Ref, macos.objc_getClass("NSApplication"), "sharedApplication", .{});
-        const ns_ws = macos.send(macos.Ref, macos.objc_getClass("NSWorkspace"), "sharedWorkspace", .{});
-        const previous_app = macos.send(macos.Ref, ns_ws, "frontmostApplication", .{});
         const context_event = native.wallify_context_menu_event();
-
-        _ = macos.send(bool, ns_app, "activateIgnoringOtherApps:", .{true});
 
         const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
         defer macos.send(void, pool, "release", .{});
@@ -348,10 +343,6 @@ pub const ContextMenuCtx = struct {
             });
         }
         native.wallify_clear_context_menu_event();
-
-        if (previous_app != null) {
-            _ = macos.send(bool, previous_app, "activateWithOptions:", .{@as(usize, 0)});
-        }
         menu_open.store(false, .monotonic);
     }
 };
