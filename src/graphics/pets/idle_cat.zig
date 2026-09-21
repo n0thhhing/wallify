@@ -3,6 +3,23 @@ const gpu = @import("../canvas.zig");
 const native = @import("../../platform/native.zig");
 const sprites = @import("../sprites.zig");
 
+const Strip = struct { x: u8, y: u8, width: u8 };
+const sleep_strips = [_]Strip{
+    .{ .x = 0, .y = 0, .width = 5 },
+    .{ .x = 3, .y = 1, .width = 1 },
+    .{ .x = 2, .y = 2, .width = 1 },
+    .{ .x = 1, .y = 3, .width = 1 },
+    .{ .x = 0, .y = 4, .width = 5 },
+};
+const heart_strips = [_]Strip{
+    .{ .x = 1, .y = 0, .width = 1 },
+    .{ .x = 3, .y = 0, .width = 1 },
+    .{ .x = 0, .y = 1, .width = 5 },
+    .{ .x = 0, .y = 2, .width = 5 },
+    .{ .x = 1, .y = 3, .width = 3 },
+    .{ .x = 2, .y = 4, .width = 1 },
+};
+
 pub fn draw(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: bool) void {
     const sprite = sprites.catFrame(time);
     const w: f64 = @floatFromInt(sprite.w);
@@ -35,23 +52,31 @@ pub fn drawSleepEffects(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: 
         const x = @floor(card.x + (card.w - 110.0) / 2.0 + 20.0 + phase * 23.0);
         const y = @floor(card.y + 105.0 - phase * 42.0);
 
-        for (0..5) |row| for (0..5) |col| {
-            const draw_pixel = if (petted)
-                (row == 0 and (col == 1 or col == 3)) or
-                    (row == 1 and col >= 0 and col <= 4) or
-                    (row == 2 and col >= 0 and col <= 4) or
-                    (row == 3 and col >= 1 and col <= 3) or
-                    (row == 4 and col == 2)
-            else
-                (row == 0 or row == 4 or col == 4 - row);
-            if (!draw_pixel) continue;
-
+        // Adjacent pixels share color and opacity, so submit one strip per run.
+        const strips: []const Strip = if (petted) &heart_strips else &sleep_strips;
+        for (strips) |strip| {
             canvas.fill(.{
-                .x = x + @as(f64, @floatFromInt(col)) * size,
-                .y = y + @as(f64, @floatFromInt(row)) * size,
-                .w = size,
+                .x = x + @as(f64, @floatFromInt(strip.x)) * size,
+                .y = y + @as(f64, @floatFromInt(strip.y)) * size,
+                .w = @as(f64, @floatFromInt(strip.width)) * size,
                 .h = size,
             }, .{ color[0], color[1], color[2], @floatCast(opacity * color[3]) });
-        };
+        }
+    }
+}
+
+test "effect strips preserve every glyph pixel without overlap" {
+    const masks = [_][5][]const u8{
+        .{ "11111", "00010", "00100", "01000", "11111" },
+        .{ "01010", "11111", "11111", "01110", "00100" },
+    };
+    for ([_][]const Strip{ &sleep_strips, &heart_strips }, masks) |strips, mask| {
+        var coverage = [_][5]u8{.{0} ** 5} ** 5;
+        for (strips) |strip| {
+            for (strip.x..strip.x + strip.width) |x| coverage[strip.y][x] += 1;
+        }
+        for (mask, 0..) |row, y| {
+            for (row, 0..) |pixel, x| try std.testing.expectEqual(pixel - '0', coverage[y][x]);
+        }
     }
 }

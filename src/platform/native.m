@@ -528,8 +528,11 @@ static void presentLatest(void) {
             }
         }
 
-        surface.drawableSize =
+        CGSize drawableSize =
             CGSizeMake(size.x * surface.contentsScale, size.y * surface.contentsScale);
+        if (!CGSizeEqualToSize(surface.drawableSize, drawableSize)) {
+            surface.drawableSize = drawableSize;
+        }
 
         id<CAMetalDrawable> drawable = [surface nextDrawable];
 
@@ -591,9 +594,16 @@ static void presentLatest(void) {
 
           dispatch_semaphore_signal(inFlight);
 
-          dispatch_async(dispatch_get_main_queue(), ^{
-            presentLatest();
-          });
+          // Only retry if a scene was waiting for an in-flight slot. A new
+          // submission after this check schedules its own presentation.
+          [frameLock lock];
+          BOOL hasPendingScene = scheduled;
+          [frameLock unlock];
+          if (hasPendingScene) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                presentLatest();
+              });
+          }
         }];
 
         [command commit];

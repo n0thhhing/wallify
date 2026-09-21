@@ -48,7 +48,7 @@ test "pets emit clipped GPU commands within the scene budget" {
     const card = gpu.Rect{ .x = 0, .y = 0, .w = 531, .h = 164, .radius = 26 };
     var cat = gpu.Canvas{ .clip = card };
     @import("../pets/idle_cat.zig").draw(&cat, card, 0.7, false);
-    try std.testing.expectEqual(@as(usize, 40), cat.count);
+    try std.testing.expectEqual(@as(usize, 16), cat.count);
     try std.testing.expectEqual(@as(c_int, @intFromEnum(gpu.Texture.cat)), cat.commands[0].texture_id);
     for (cat.commands[0..cat.count]) |c| try std.testing.expectEqual(@as(f32, 26), c.clip_radius);
 
@@ -62,7 +62,7 @@ test "pets emit clipped GPU commands within the scene budget" {
         for (0..5) |frame| {
             var raccoon = gpu.Canvas{ .clip = card };
             @import("../pets/idle_raccoon.zig").draw(&raccoon, card, (@as(f64, @floatFromInt(frame)) + 0.5) / 3.0, petted);
-            try std.testing.expectEqual(@as(usize, if (petted) 49 else 40), raccoon.count);
+            try std.testing.expectEqual(@as(usize, if (petted) 19 else 16), raccoon.count);
             try std.testing.expectEqual(@as(c_int, @intFromEnum(gpu.Texture.raccoon)), raccoon.commands[0].texture_id);
             try std.testing.expectApproxEqAbs(@as(f32, @floatFromInt(frame)) / 5, raccoon.commands[0].sx, 0.0001);
             try std.testing.expectApproxEqAbs(@as(f32, 0.2), raccoon.commands[0].sw, 0.0001);
