@@ -980,7 +980,6 @@ void wallify_resize(int width, int height) {
     atomic_store(&surfaceWidth, width);
 
     atomic_store(&surfaceHeight, height);
-    NSLog(@"Wallify: requested surface resize -> %dx%d", width, height);
 }
 
 void wallify_move(int left, int top) {
