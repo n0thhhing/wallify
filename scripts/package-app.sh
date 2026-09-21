@@ -69,7 +69,14 @@ if [[ "$DO_BUILD" == true ]] || [[ ! -f "zig-out/bin/wallify" ]] || [[ ! -f "zig
         echo -e "${RED}Error: 'zig' command not found in PATH.${RESET}" >&2
         exit 1
     fi
-    zig build -Doptimize="${OPTIMIZE}"
+    BUILD_ARGS=(-Doptimize="${OPTIMIZE}")
+    if [[ "${OPTIMIZE}" == "Debug" ]]; then
+        if [[ ! -d ".zig-cache/wallify-imgui" ]]; then
+            bash ./scripts/fetch-imgui.sh
+        fi
+        BUILD_ARGS+=(-Ddebug-inspector=true)
+    fi
+    zig build "${BUILD_ARGS[@]}"
 fi
 
 # Sanity check required binaries
