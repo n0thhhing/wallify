@@ -140,8 +140,6 @@ static void propertyReadout(const char* label, const char* fmt, ...) {
 }
 
 static void drawRuntime(const WallifyDebugSnapshot& s) {
-    if (!ImGui::Begin("Runtime")) { ImGui::End(); return; }
-
     if (beginProperties("runtime")) {
         static const char* modes[] = {"1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"};
         int mode = s.mode;
@@ -168,13 +166,9 @@ static void drawRuntime(const WallifyDebugSnapshot& s) {
                         s.window_x, s.window_y, s.window_width, s.window_height);
         ImGui::EndTable();
     }
-
-    ImGui::End();
 }
 
 static void drawAppearance(const WallifyDebugSnapshot& s) {
-    if (!ImGui::Begin("Appearance")) { ImGui::End(); return; }
-
     if (beginProperties("appearance")) {
         propertyBool("Native Glass", s.native_glass != 0, 5);
         propertyBool("Glow", s.glow != 0, 0);
@@ -195,13 +189,9 @@ static void drawAppearance(const WallifyDebugSnapshot& s) {
         propertyBool("Compact Gradient", s.compact_gradient != 0, 20);
         ImGui::EndTable();
     }
-
-    ImGui::End();
 }
 
 static void drawMedia(const WallifyDebugSnapshot& s) {
-    if (!ImGui::Begin("Media")) { ImGui::End(); return; }
-
     if (beginProperties("media")) {
         static const char* sources[] = {"Now Playing", "Spotify", "Spotifast", "Auto"};
         int source = s.source;
@@ -225,13 +215,9 @@ static void drawMedia(const WallifyDebugSnapshot& s) {
         propertyText("Artist", s.artist_len ? s.artist : "—");
         ImGui::EndTable();
     }
-
-    ImGui::End();
 }
 
 static void drawWindow(const WallifyDebugSnapshot& s) {
-    if (!ImGui::Begin("Window")) { ImGui::End(); return; }
-
     if (beginProperties("window")) {
         propertyInt("Margin Left", s.margin_left, 1003);
         propertyInt("Margin Top", s.margin_top, 1004);
@@ -245,12 +231,9 @@ static void drawWindow(const WallifyDebugSnapshot& s) {
     ImGui::SeparatorText("Widget");
     ImGui::Text("Size: %d × %d", s.width, s.height);
     ImGui::Text("Margins: %d, %d", s.margin_left, s.margin_top);
-    ImGui::End();
 }
 
 static void drawWindowServer(const WallifyDebugSnapshot& s) {
-    if (!ImGui::Begin("WindowServer")) { ImGui::End(); return; }
-
     if (beginProperties("windowserver")) {
         propertyReadout("Candidates", "%u", s.candidate_count);
         propertyReadout("Distance²", "%.0f", s.snap_distance_sq);
@@ -262,12 +245,9 @@ static void drawWindowServer(const WallifyDebugSnapshot& s) {
     ImGui::SeparatorText("Current Window");
     ImGui::Text("Frame: %.0f, %.0f  %.0f × %.0f",
                 s.window_x, s.window_y, s.window_width, s.window_height);
-    ImGui::End();
 }
 
 static void drawSnap(const WallifyDebugSnapshot& s) {
-    if (!ImGui::Begin("Snap")) { ImGui::End(); return; }
-
     if (beginProperties("snap")) {
         propertyInt("Target X", (int)lround(s.outline_x), 1005);
         propertyInt("Target Y", (int)lround(s.outline_y), 1006);
@@ -277,48 +257,33 @@ static void drawSnap(const WallifyDebugSnapshot& s) {
         propertyReadout("Distance²", "%.0f", s.snap_distance_sq);
         ImGui::EndTable();
     }
+}
 
-    ImGui::End();
+static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
+    if (ImGui::BeginTabItem(label)) {
+        draw(snapshot);
+        ImGui::EndTabItem();
+    }
 }
 
 static void drawInspector() {
     WallifyDebugSnapshot s{};
     wallify_debug_get_snapshot(&s);
 
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImGuiID dock_id = ImGui::GetID("WallifyInspectorDockspace");
-    ImGui::DockSpaceOverViewport(dock_id, viewport, ImGuiDockNodeFlags_PassthruCentralNode);
+    if (!ImGui::Begin("Wallify Inspector"))
+        return;
 
-    if (!gDockLayoutBuilt) {
-        gDockLayoutBuilt = true;
-        ImGui::DockBuilderRemoveNode(dock_id);
-        ImGui::DockBuilderAddNode(dock_id, ImGuiDockNodeFlags_DockSpace);
-        ImGui::DockBuilderSetNodeSize(dock_id, viewport->WorkSize);
-
-        ImGuiID right = 0, main = 0, bottom = 0;
-        ImGuiID right_bottom = 0, right_top = 0;
-        ImGuiID main_bottom = 0, main_top = 0;
-
-        ImGui::DockBuilderSplitNode(dock_id, ImGuiDir_Right, 0.34f, &right, &main);
-        ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, 0.48f, &bottom, &main);
-        ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.50f, &right_bottom, &right_top);
-        ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, 0.50f, &main_bottom, &main_top);
-
-        ImGui::DockBuilderDockWindow("Runtime", main_top);
-        ImGui::DockBuilderDockWindow("Appearance", main_bottom);
-        ImGui::DockBuilderDockWindow("Media", bottom);
-        ImGui::DockBuilderDockWindow("Snap", bottom);
-        ImGui::DockBuilderDockWindow("Window", right_top);
-        ImGui::DockBuilderDockWindow("WindowServer", right_bottom);
-        ImGui::DockBuilderFinish(dock_id);
+    if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
+        drawTab("Runtime", drawRuntime, s);
+        drawTab("Appearance", drawAppearance, s);
+        drawTab("Media", drawMedia, s);
+        drawTab("Window", drawWindow, s);
+        drawTab("WindowServer", drawWindowServer, s);
+        drawTab("Snap", drawSnap, s);
+        ImGui::EndTabBar();
     }
 
-    drawRuntime(s);
-    drawAppearance(s);
-    drawMedia(s);
-    drawWindow(s);
-    drawWindowServer(s);
-    drawSnap(s);
+    ImGui::End();
 }
 
 @interface WallifyImGuiView : MTKView <MTKViewDelegate>
