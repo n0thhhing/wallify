@@ -77,25 +77,21 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
                               constant DrawCommand *commands [[buffer(0)]],
                               array<texture2d<float>, WALLIFY_MAX_TEXTURES> textures [[texture(0)]]) {
     constant DrawCommand &c = commands[in.instance_id];
-    // Most commands are plain rectangles. Avoid the vector length in the
-    // rounded-box SDF for those quads; the rounded path is only needed for
-    // artwork/cards and other genuinely rounded geometry.
-    float distance;
-    if (c.radius <= 0.001f) {
-        float2 local = in.point - float2(c.dx, c.dy);
-        distance = max(max(-local.x, local.x - c.dw), max(-local.y, local.y - c.dh));
-    } else {
-        distance = roundedDistance(in.point, float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
-    }
-
-    float coverage;
+    // Most commands are plain rectangles. Native Liquid Glass already clips
+    // the Metal subview, so plain quads need neither SDF distance nor derivative
+    // coverage work. Only genuinely rounded, stroked, or explicitly clipped
+    // geometry enters the analytical coverage path.
+    float distance = 0.0f;
+    float coverage = 1.0f;
     float aa = 0.0f;
-    // In native glass mode, the Metal view is itself clipped to the rounded
-    // AppKit glass container. Plain quads can therefore skip all SDF/derivative
-    // coverage work; only genuinely rounded or stroked geometry needs it.
-    if (c.clip_w <= 0.0f && c.radius <= 0.001f && c.stroke <= 0.0f) {
-        coverage = 1.0f;
-    } else {
+    if (c.clip_w > 0.0f || c.radius > 0.001f || c.stroke > 0.0f) {
+        if (c.radius <= 0.001f) {
+            float2 local = in.point - float2(c.dx, c.dy);
+            distance = max(max(-local.x, local.x - c.dw), max(-local.y, local.y - c.dh));
+        } else {
+            distance = roundedDistance(in.point, float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
+        }
+
         // Analytical anti-aliasing via screen-space partial derivative (fwidth)
         aa = max(fwidth(distance), 0.25f);
         coverage = 1.0f - smoothstep(-aa * 0.5f, aa * 0.5f, distance);
