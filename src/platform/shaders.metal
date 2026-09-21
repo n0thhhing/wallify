@@ -88,9 +88,17 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         distance = roundedDistance(in.point, float2(c.dx, c.dy), float2(c.dw, c.dh), c.radius);
     }
 
-    // Analytical anti-aliasing via screen-space partial derivative (fwidth)
-    float aa = max(fwidth(distance), 0.25f);
-    float coverage = 1.0f - smoothstep(-aa * 0.5f, aa * 0.5f, distance);
+    float coverage;
+    // In native glass mode, the Metal view is itself clipped to the rounded
+    // AppKit glass container. Plain quads can therefore skip all SDF/derivative
+    // coverage work; only genuinely rounded or stroked geometry needs it.
+    if (c.clip_w <= 0.0f && c.radius <= 0.001f && c.stroke <= 0.0f) {
+        coverage = 1.0f;
+    } else {
+        // Analytical anti-aliasing via screen-space partial derivative (fwidth)
+        float aa = max(fwidth(distance), 0.25f);
+        coverage = 1.0f - smoothstep(-aa * 0.5f, aa * 0.5f, distance);
+    }
 
     // Hollow stroke rendering: subtracts the inner perimeter
     if (c.stroke > 0.0f) {
