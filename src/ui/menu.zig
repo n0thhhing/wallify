@@ -95,7 +95,7 @@ pub export fn widget_context_menu_action() callconv(.c) ContextMenuAction {
     return @enumFromInt(menu_action.swap(0, .monotonic));
 }
 
-fn contextMenuUsesEventTracking(context_event: ?macos.Ref, context_view: ?macos.Ref) bool {
+fn contextMenuUsesEventTracking(context_event: macos.Ref, context_view: macos.Ref) bool {
     return context_event != null and context_view != null;
 }
 
@@ -103,6 +103,7 @@ test "context menu uses event-backed tracking when AppKit supplies both objects"
     try std.testing.expect(contextMenuUsesEventTracking(@as(macos.Ref, @ptrFromInt(1)), @as(macos.Ref, @ptrFromInt(2))));
     try std.testing.expect(!contextMenuUsesEventTracking(@as(macos.Ref, null), @as(macos.Ref, @ptrFromInt(2))));
     try std.testing.expect(!contextMenuUsesEventTracking(@as(macos.Ref, @ptrFromInt(1)), @as(macos.Ref, null)));
+    try std.testing.expect(!contextMenuUsesEventTracking(null, null));
 }
 
 test "context menu presentation stays synchronous on the AppKit main thread" {
@@ -328,7 +329,7 @@ pub const ContextMenuCtx = struct {
         macos.send(void, menu, "addItem:", .{quit_item});
 
         const context_view = native.wallify_context_menu_view();
-        if (context_event != null and context_view != null) {
+        if (contextMenuUsesEventTracking(context_event, context_view)) {
             // Use the completed right-click event and its originating view so
             // AppKit owns mouse tracking/highlighting immediately.
             _ = macos.send(void, menu_cls, "popUpContextMenu:withEvent:forView:", .{

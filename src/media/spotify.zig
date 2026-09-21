@@ -174,23 +174,23 @@ pub export fn widget_spotify_seek(position: f64) callconv(.c) void {
 
 fn spotifyQueryScript() []const u8 {
     return
-        \\if application "Spotify" is running then
-        \\  tell application "Spotify"
-        \\      try
-        \\          set {tName, tArtist, tState, tPos, tDur} to {name of current track, artist of current track, player state as string, player position as string, duration of current track}
-        \\          set tDur to (tDur / 1000.0) as string
-        \\          set tArt to ""
-        \\          try
-        \\              set tArt to artwork url of current track
-        \\          end try
-        \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
-        \\      on error
-        \\          return "NO_TRACK"
-        \\      end try
-        \\  end tell
-        \\else
-        \\  return "CLOSED"
-        \\end if
+    \\if application "Spotify" is running then
+    \\  tell application "Spotify"
+    \\      try
+    \\          set {tName, tArtist, tState, tPos, tDur} to {name of current track, artist of current track, player state as string, player position as string, duration of current track}
+    \\          set tDur to (tDur / 1000.0) as string
+    \\          set tArt to ""
+    \\          try
+    \\              set tArt to artwork url of current track
+    \\          end try
+    \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
+    \\      on error
+    \\          return "NO_TRACK"
+    \\      end try
+    \\  end tell
+    \\else
+    \\  return "CLOSED"
+    \\end if
     ;
 }
 
@@ -237,7 +237,21 @@ test "Spotify launcher targets the official application bundle" {
 test "Spotify query isolates artwork failures from track detection" {
     const script = spotifyQueryScript();
     try std.testing.expect(std.mem.indexOf(u8, script, "set tArt to \"\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, script, "try\n            set tArt") != null);
+    // Check the guarded artwork lookup without coupling it to indentation.
+    var lines = std.mem.splitScalar(u8, script, '\n');
+    var previous: []const u8 = "";
+    var guarded_artwork = false;
+    while (lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " \t\r");
+        if (std.mem.eql(u8, line, "set tArt to artwork url of current track")) {
+            guarded_artwork = std.mem.eql(u8, previous, "try");
+            const next = lines.next() orelse return error.MissingArtworkGuard;
+            try std.testing.expectEqualStrings("end try", std.mem.trim(u8, next, " \t\r"));
+            break;
+        }
+        previous = line;
+    }
+    try std.testing.expect(guarded_artwork);
     try std.testing.expect(std.mem.indexOf(u8, script, "set {tName, tArtist, tState, tPos, tDur}") != null);
     try std.testing.expect(std.mem.indexOf(u8, script, "return \"NO_TRACK\"") != null);
 }
