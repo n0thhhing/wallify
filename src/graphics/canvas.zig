@@ -18,6 +18,7 @@ pub const Texture = enum(c_int) {
     next,
     raccoon,
     text_start,
+    cached_scene = native.gpu.WALLIFY_CACHED_SCENE_TEXTURE,
 };
 
 pub const Canvas = struct {
@@ -140,6 +141,21 @@ pub const Canvas = struct {
 
     pub fn submit(self: *Canvas, width: f64, height: f64) void {
         native.wallify_present(@floatCast(width), @floatCast(height), &self.commands, self.count);
+    }
+
+    pub fn compositeCachedScene(self: *Canvas, width: f64, height: f64) void {
+        self.image(.cached_scene, .{ .x = 0, .y = 0, .w = width, .h = height }, 1.0);
+    }
+
+    pub fn submitSplit(static_canvas: *Canvas, dynamic_canvas: *Canvas, width: f64, height: f64) void {
+        native.wallify_present_split(
+            @floatCast(width),
+            @floatCast(height),
+            &static_canvas.commands,
+            static_canvas.count,
+            &dynamic_canvas.commands,
+            dynamic_canvas.count,
+        );
     }
 };
 
