@@ -152,17 +152,15 @@ void wallify_profile_scene(double seconds) {
 }
 
 - (void)rightMouseDown:(NSEvent*)e {
-    // Keep the press event only so the matching mouse-up can reuse the
-    // original contextual-click location if AppKit needs it.
+    // AppKit's contextual menu tracking is anchored to the original
+    // right-button-down event. Present synchronously while that event is
+    // still being handled so hover/highlighting starts immediately.
     pendingContextMenuEvent = e;
+    [self pointer:e kind:3];
 }
 
 - (void)rightMouseUp:(NSEvent*)e {
-    // Present from mouse-up. AppKit's contextual-menu tracking starts from
-    // the completed right-click; opening from mouse-down leaves the menu in
-    // an odd state where hover does not begin until another click.
-    pendingContextMenuEvent = e;
-    [self pointer:e kind:3];
+    (void)e;
 }
 
 
