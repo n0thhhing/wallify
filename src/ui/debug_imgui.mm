@@ -532,6 +532,7 @@ static const char* mediaSourceName(int source) {
 static void drawStatusMetric(const char* label, const char* value, bool accent = false) {
     ImGui::TableNextColumn();
     ImGui::TextDisabled("%s", label);
+    ImGui::SameLine(7.0f);
 
     if (accent) {
         ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
@@ -560,25 +561,22 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
     snprintf(frameText, sizeof(frameText), "%.0f FPS  ·  %.2f ms",
              io.Framerate, io.DeltaTime * 1000.0f);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(12.0f, 5.0f));
+    // Keep the summary in the root window, not a child window. A child becomes
+    // its own scroll container when its contents are even slightly too tall.
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(12.0f, 4.0f));
 
-    if (ImGui::BeginChild("InspectorStatus", ImVec2(0, 48.0f), ImGuiChildFlags_Borders)) {
-        if (ImGui::BeginTable("InspectorStatusTable", 4,
-                              ImGuiTableFlags_SizingStretchProp |
-                              ImGuiTableFlags_BordersInnerV |
-                              ImGuiTableFlags_NoPadOuterX)) {
-            drawStatusMetric("STATUS", status, true);
-            drawStatusMetric("MODE", modeText);
-            drawStatusMetric("MEDIA", mediaText);
-            drawStatusMetric("FRAME", frameText);
-            ImGui::EndTable();
-        }
+    if (ImGui::BeginTable("InspectorStatusTable", 4,
+                          ImGuiTableFlags_SizingStretchProp |
+                          ImGuiTableFlags_BordersInnerV |
+                          ImGuiTableFlags_NoPadOuterX)) {
+        drawStatusMetric("STATUS", status, true);
+        drawStatusMetric("MODE", modeText);
+        drawStatusMetric("MEDIA", mediaText);
+        drawStatusMetric("FRAME", frameText);
+        ImGui::EndTable();
     }
-    ImGui::EndChild();
 
-    ImGui::PopStyleVar(3);
+    ImGui::PopStyleVar();
     ImGui::Spacing();
 }
 
