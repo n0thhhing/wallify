@@ -102,7 +102,7 @@ bool wallify_idle_animation(const DrawCommand* sprites, size_t spriteCount, doub
             return false;
         // The Zig samples live on its stack; retain copies across the main-queue hop.
         // The queued main-thread block captures these immutable byte copies; the caller's Zig stack can return immediately.
-        NSData* spriteData = [NSData dataWithBytes:sprites length:spriteCount * sizeof(DrawCommand);]
+        NSData* spriteData = [NSData dataWithBytes:sprites length:spriteCount * sizeof(DrawCommand)];
         NSData* effectData = [NSData dataWithBytes:effects length:effectFrames * effectCount * sizeof(DrawCommand)];
         // Block capture retains spriteData/effectData until the layer tree has been built.
         dispatch_async(dispatch_get_main_queue(), ^{
