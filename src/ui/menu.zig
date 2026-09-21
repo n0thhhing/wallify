@@ -80,16 +80,23 @@ fn autorelease(obj: macos.Ref) macos.Ref {
     return obj;
 }
 
+fn shouldPresentContextMenuSynchronously(is_main_thread: bool) bool {
+    return is_main_thread;
+}
+
 fn presentContextMenuSynchronously() bool {
-    return macos.send(bool, macos.objc_getClass("NSThread"), "isMainThread", .{});
+    return shouldPresentContextMenuSynchronously(
+        macos.send(bool, macos.objc_getClass("NSThread"), "isMainThread", .{}),
+    );
 }
 
 pub export fn widget_context_menu_action() callconv(.c) ContextMenuAction {
     return @enumFromInt(menu_action.swap(0, .monotonic));
 }
 
-test "context menu is presented synchronously on the AppKit main thread" {
-    try std.testing.expect(presentContextMenuSynchronously() or !presentContextMenuSynchronously());
+test "context menu presentation stays synchronous on the AppKit main thread" {
+    try std.testing.expect(shouldPresentContextMenuSynchronously(true));
+    try std.testing.expect(!shouldPresentContextMenuSynchronously(false));
 }
 
 pub const ContextMenuCtx = struct {
