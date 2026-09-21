@@ -13,10 +13,21 @@ extern fn wallify_debug_console_install() void;
 pub const settings_window = @import("ui/settings_window.zig");
 
 pub fn main() !void {
-    if (builtin.mode == .Debug) wallify_debug_console_install();
+    if (builtin.mode == .Debug) {
+        wallify_debug_console_install();
+        std.log.info("startup: Debug build, inspector enabled, profiling={s}", .{
+            if (std.c.getenv("WALLIFY_PROFILE") != null) "on" else "off",
+        });
+    }
     @import("platform/native.zig").wallify_prepare();
     window.widget_application_init();
     state.loadWidgetSettings();
+    std.log.info("startup: settings loaded, mode={s}, source={s}, position={d},{d}", .{
+        @tagName(state.setting_mode),
+        @tagName(state.setting_source),
+        state.widget_margin_left,
+        state.widget_margin_top,
+    });
     if (state.setting_debug) window.widget_debug_window_show();
     const initial_size = state.setting_mode.dimensions();
     state.mode_from = state.setting_mode;
@@ -28,6 +39,12 @@ pub fn main() !void {
     state.mode_target_height = initial_size.height;
     spotify.widget_spotify_observe();
     if (!@import("platform/native.zig").create(state.setting_mode, state.widget_margin_left, state.widget_margin_top)) return error.MetalUnavailable;
+    std.log.info("startup: widget created at {d},{d}, dimensions={d}x{d}", .{
+        state.widget_margin_left,
+        state.widget_margin_top,
+        @as(i32, @intFromFloat(initial_size.width)),
+        @as(i32, @intFromFloat(initial_size.height)),
+    });
     if (builtin.mode == .Debug) wallify_imgui_inspector_show();
 
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
