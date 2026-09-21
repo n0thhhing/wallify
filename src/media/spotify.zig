@@ -172,6 +172,28 @@ pub export fn widget_spotify_seek(position: f64) callconv(.c) void {
     }
 }
 
+fn spotifyQueryScript() []const u8 {
+    return
+        \\if application "Spotify" is running then
+        \\  tell application "Spotify"
+        \\      try
+        \\          set {tName, tArtist, tState, tPos, tDur} to {name of current track, artist of current track, player state as string, player position as string, duration of current track}
+        \\          set tDur to (tDur / 1000.0) as string
+        \\          set tArt to ""
+        \\          try
+        \\              set tArt to artwork url of current track
+        \\          end try
+        \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
+        \\      on error
+        \\          return "NO_TRACK"
+        \\      end try
+        \\  end tell
+        \\else
+        \\  return "CLOSED"
+        \\end if
+    ;
+}
+
 var cached_query_script: ?macos.Ref = null;
 
 pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usize {
@@ -179,22 +201,7 @@ pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usiz
     defer macos.send(void, pool, "release", .{});
 
     if (cached_query_script == null) {
-        const script_text =
-            \\if application "Spotify" is running then
-            \\  tell application "Spotify"
-            \\      try
-            \\          set {tName, tArtist, tState, tPos, tDur, tArt} to {name of current track, artist of current track, player state as string, player position as string, duration of current track, artwork url of current track}
-            \\          set tDur to (tDur / 1000.0) as string
-            \\          return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
-            \\      on error
-            \\          return "NO_TRACK"
-            \\      end try
-            \\  end tell
-            \\else
-            \\  return "CLOSED"
-            \\end if
-        ;
-
+        const script_text = spotifyQueryScript();
         const str = macos.string(script_text);
         if (str != null) {
             const script_cls = macos.objc_getClass("NSAppleScript");
@@ -225,6 +232,14 @@ pub export fn widget_query_spotify(buf: [*]u8, max_len: usize) callconv(.c) usiz
 
 test "Spotify launcher targets the official application bundle" {
     try std.testing.expectEqualStrings("com.spotify.client", spotifyBundleIdentifier());
+}
+
+test "Spotify query isolates artwork failures from track detection" {
+    const script = spotifyQueryScript();
+    try std.testing.expect(std.mem.indexOf(u8, script, "set tArt to \"\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "try\\n            set tArt") != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, 'set {tName, tArtist, tState, tPos, tDur}') != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "return \"NO_TRACK\"") != null);
 }
 
 test "scriptForControl generates valid AppleScript commands" {
