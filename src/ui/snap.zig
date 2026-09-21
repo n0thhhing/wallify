@@ -197,6 +197,8 @@ fn updateSnapDebug() void {
             if (state.global_has_artwork) "yes" else "no",
             snap_last_margin.x,
             snap_last_margin.y,
+            snap_last_visual.x,
+            snap_last_visual.y,
             player.number,
             player.layer,
             screen_frame.size.width,
