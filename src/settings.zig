@@ -269,6 +269,7 @@ pub fn loadWidgetSettings() void {
     if (n == 0) return;
 
     parseConfigContent(buffer[0..n]);
+    std.log.info("settings: loaded {d} bytes from {s}", .{ n, path });
 }
 
 /// Formats the active configuration into an expressive, self-documenting configuration file.
@@ -412,6 +413,7 @@ pub fn saveWidgetSettings() void {
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
     defer _ = std.posix.system.close(fd);
     _ = std.posix.system.write(fd, text.ptr, text.len);
+    std.log.info("settings: saved {d} bytes to {s}", .{ text.len, path });
     native.wallify_refresh_settings_ui();
 }
 
