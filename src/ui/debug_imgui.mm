@@ -714,7 +714,16 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
     char modeText[32];
     snprintf(modeText, sizeof(modeText), "%s  ·  %d × %d", modeName(s.mode), s.width, s.height);
 
+    NSWindow* widgetWindow =
+        s.window_number != 0
+            ? [NSApp windowWithWindowNumber:(NSInteger)s.window_number]
+            : nil;
+    const bool widgetVisible =
+        widgetWindow &&
+        ((widgetWindow.occlusionState & NSWindowOcclusionStateVisible) != 0);
+
     const char* status =
+        !widgetVisible ? "Sleeping (occluded)" :
         s.transition_active ? "Transitioning" :
         (s.frame_requested ? "Live" : "Idle");
 
