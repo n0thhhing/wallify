@@ -1272,7 +1272,6 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         [NSFont systemFontOfSize:11.5
                           weight:NSFontWeightMedium];
     restore.contentTintColor = [NSColor secondaryLabelColor];
-    restore.contentInsets = NSEdgeInsetsMake(0, 4, 0, 4);
     [self.sidebarView addSubview:restore];
     self.restoreDefaultsButton = restore;
 }
