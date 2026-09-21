@@ -3,6 +3,15 @@
 
 extern const char *wallify_settings_path(void);
 
+@interface WFFlippedView : NSView
+@end
+
+@implementation WFFlippedView
+- (BOOL)isFlipped {
+    return YES;
+}
+@end
+
 typedef NS_ENUM(NSInteger, WFSettingType) {
     WFSettingTypeToggle,
     WFSettingTypeSegments,
@@ -138,26 +147,15 @@ static NSView *wfMakeGlassView(NSRect frame) {
             [[NSGlassEffectView alloc] initWithFrame:frame];
 
         /*
-         * Private variant 2 is the HUD/dock-style Liquid Glass material
-         * on current macOS 26+ runtimes. The public API only exposes the
-         * Regular and Clear styles; keep the runtime check so older/newer
-         * runtimes can safely fall back to the public style.
+         * Keep the public Regular material. It reads as frosted glass rather
+         * than the highly refractive widget/HUD treatment used by Wallify.
          */
         glass.style = NSGlassEffectViewStyleRegular;
-
-        SEL setVariant = NSSelectorFromString(@"set_variant:");
-        if ([glass respondsToSelector:setVariant]) {
-            ((void (*)(id, SEL, NSInteger))objc_msgSend)(
-                glass,
-                setVariant,
-                2
-            );
-        }
 
         glass.cornerRadius = 0.0;
         glass.tintColor =
             [[NSColor controlBackgroundColor]
-                colorWithAlphaComponent:0.24];
+                colorWithAlphaComponent:0.42];
         glass.effectIsInteractive = NO;
         return glass;
     }
@@ -235,7 +233,7 @@ static NSImageView *wfSymbol(
 
 #pragma mark - Setting row
 
-@interface WFSettingRowView : NSView
+@interface WFSettingRowView : WFFlippedView
 @property(nonatomic, strong) NSTextField *titleLabel;
 @property(nonatomic, strong) NSTextField *subtitleLabel;
 @property(nonatomic, strong) NSControl *control;
@@ -337,7 +335,7 @@ static NSImageView *wfSymbol(
 
 #pragma mark - Section view
 
-@interface WFSectionView : NSView
+@interface WFSectionView : WFFlippedView
 @property(nonatomic, strong) NSTextField *headerLabel;
 @property(nonatomic, strong) NSArray<WFSettingRowView *> *rows;
 @property(nonatomic, copy) NSString *sectionTitle;
@@ -432,7 +430,7 @@ static NSImageView *wfSymbol(
             [self addSubview:row];
 
     } else if (definition.type == WFSectionTypePosition) {
-        NSView *content = [[NSView alloc] initWithFrame:NSZeroRect];
+        WFFlippedView *content = [[WFFlippedView alloc] initWithFrame:NSZeroRect];
 
         NSTextField *status =
             wfLabel(
@@ -632,7 +630,7 @@ static NSImageView *wfSymbol(
 
 #pragma mark - Page view
 
-@interface WFPageView : NSView
+@interface WFPageView : WFFlippedView
 @property(nonatomic, strong) NSArray<WFSectionView *> *sections;
 - (CGFloat)preferredHeight;
 @end
@@ -653,31 +651,31 @@ static NSImageView *wfSymbol(
 }
 
 - (CGFloat)preferredHeight {
-    CGFloat height = 22.0;
+    CGFloat height = 18.0;
 
     for (WFSectionView *section in self.sections)
         height += [section preferredHeight] + 20.0;
 
-    return height + 22.0;
+    return height + 18.0;
 }
 
 - (void)layout {
     [super layout];
 
-    CGFloat y = 22.0;
+    CGFloat y = 18.0;
 
     for (WFSectionView *section in self.sections) {
         CGFloat h = [section preferredHeight];
 
         section.frame =
             NSMakeRect(
-                30.0,
+                26.0,
                 y,
-                MAX(100.0, self.bounds.size.width - 60.0),
+                MAX(100.0, self.bounds.size.width - 52.0),
                 h
             );
 
-        y += h + 20.0;
+        y += h + 18.0;
     }
 }
 
@@ -687,7 +685,7 @@ static NSImageView *wfSymbol(
 
 @class WallifySettingsWindowController;
 
-@interface WFSettingsContentView : NSView
+@interface WFSettingsContentView : WFFlippedView
 @property(nonatomic, weak) WallifySettingsWindowController *controller;
 @end
 
@@ -1036,7 +1034,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         self.glassView;
 
     self.glassContentView =
-        [[NSView alloc]
+        [[WFFlippedView alloc]
             initWithFrame:self.glassView.bounds];
 
     self.glassContentView.autoresizingMask =
@@ -1045,7 +1043,8 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
 
     self.glassContentView.wantsLayer = YES;
     self.glassContentView.layer.backgroundColor =
-        NSColor.clearColor.CGColor;
+        [[NSColor windowBackgroundColor]
+            colorWithAlphaComponent:0.34].CGColor;
 
     if ([self.glassView respondsToSelector:@selector(setContentView:)]) {
         [(NSGlassEffectView *)self.glassView
@@ -1074,7 +1073,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
 
 - (void)buildSidebar {
     self.sidebarView =
-        [[NSView alloc]
+        [[WFFlippedView alloc]
             initWithFrame:NSZeroRect];
 
     self.sidebarView.wantsLayer = YES;
@@ -1185,7 +1184,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
 
 - (void)buildMainView {
     self.mainView =
-        [[NSView alloc]
+        [[WFFlippedView alloc]
             initWithFrame:NSZeroRect];
 
     self.mainView.autoresizingMask =
@@ -1193,6 +1192,11 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         NSViewHeightSizable;
 
     [self.contentRoot addSubview:self.mainView];
+
+    NSBox *mainDivider =
+        [[NSBox alloc] initWithFrame:NSZeroRect];
+    mainDivider.boxType = NSBoxSeparator;
+    [self.contentRoot addSubview:mainDivider];
 
     self.pageIconView =
         wfSymbol(@"slider.horizontal.3", 20.0, NSFontWeightMedium);
@@ -1230,7 +1234,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     NSRect bounds = self.contentRoot.bounds;
 
     const CGFloat sidebarWidth = 178.0;
-    const CGFloat headerHeight = 78.0;
+    const CGFloat headerHeight = 72.0;
 
     self.sidebarView.frame =
         NSMakeRect(
@@ -1240,7 +1244,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
             bounds.size.height
         );
 
-    CGFloat dividerY = 92.0;
+    CGFloat dividerY = 84.0;
 
     for (NSView *view in self.sidebarView.subviews) {
         if ([view isKindOfClass:[NSBox class]]) {
@@ -1273,13 +1277,13 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     }
 
     if (appIcon)
-        appIcon.frame = NSMakeRect(20, 24, 24, 24);
+        appIcon.frame = NSMakeRect(20, 20, 24, 24);
 
     if (appName)
-        appName.frame = NSMakeRect(52, 22, 110, 24);
+        appName.frame = NSMakeRect(52, 18, 110, 24);
 
     if (caption)
-        caption.frame = NSMakeRect(53, 45, 110, 18);
+        caption.frame = NSMakeRect(53, 41, 110, 18);
 
     for (NSButton *button in self.sidebarButtons) {
         NSInteger index = button.tag;
@@ -1287,7 +1291,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         button.frame =
             NSMakeRect(
                 12,
-                108 + index * 40,
+                100 + index * 38,
                 sidebarWidth - 24,
                 34
             );
@@ -1296,26 +1300,44 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     self.restoreDefaultsButton.frame =
         NSMakeRect(
             12,
-            bounds.size.height - 46,
+            bounds.size.height - 40,
             sidebarWidth - 24,
             28
         );
 
+    NSBox *mainDivider = nil;
+    for (NSView *view in self.contentRoot.subviews) {
+        if ([view isKindOfClass:[NSBox class]]) {
+            mainDivider = (NSBox *)view;
+            break;
+        }
+    }
+
+    if (mainDivider) {
+        mainDivider.frame =
+            NSMakeRect(
+                sidebarWidth,
+                0,
+                1,
+                bounds.size.height
+            );
+    }
+
     self.mainView.frame =
         NSMakeRect(
-            sidebarWidth,
+            sidebarWidth + 1,
             0,
             MAX(0.0, bounds.size.width - sidebarWidth),
             bounds.size.height
         );
 
     self.pageIconView.frame =
-        NSMakeRect(32, 28, 22, 22);
+        NSMakeRect(28, 24, 22, 22);
 
     self.pageTitleLabel.frame =
         NSMakeRect(
-            62,
-            22,
+            60,
+            18,
             MAX(120.0, self.mainView.bounds.size.width - 88),
             32
         );
