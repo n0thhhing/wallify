@@ -68,6 +68,9 @@ pub fn animationLoop() void {
         const now = window.widget_monotonic_time();
         if (state.animation_time < state.art_transition_until) needs_draw = true;
         const menu_action = menu.widget_context_menu_action();
+        if (menu_action != .none) {
+            std.log.info("menu: action={s}", .{@tagName(menu_action)});
+        }
         switch (menu_action) {
             .play_pause => media.togglePlayback(),
             .previous_track => media.triggerCommand(.previous_track),
