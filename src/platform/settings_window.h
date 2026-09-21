@@ -34,6 +34,7 @@ typedef struct {
     int progress_thickness;
     int font_scale;      // 0: small, 1: normal, 2: large
     int media_key_target; // 0: off, 1: active, 2: spotify, 3: spotifast
+    bool playing;
 } WallifySettingsSnapshot;
 
 // Exported from Zig
