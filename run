@@ -181,7 +181,13 @@ if [[ "$DO_WATCH" == true ]]; then
         echo ""
         echo -e "${CYAN}==>${RESET} ${BOLD}Change detected. Rebuilding ${APP_NAME}...${RESET}"
 
-        if "$0" "${WATCH_REBUILD_ARGS[@]}"; then
+        if [[ ${#WATCH_REBUILD_ARGS[@]} -gt 0 ]]; then
+            if "$0" "${WATCH_REBUILD_ARGS[@]}"; then
+                echo -e "${GREEN}✓${RESET} ${APP_NAME} restarted."
+            else
+                echo -e "${YELLOW}Build failed; existing instance was preserved. Watching for the next change...${RESET}"
+            fi
+        elif "$0"; then
             echo -e "${GREEN}✓${RESET} ${APP_NAME} restarted."
         else
             echo -e "${YELLOW}Build failed; existing instance was preserved. Watching for the next change...${RESET}"
