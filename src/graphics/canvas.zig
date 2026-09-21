@@ -30,7 +30,10 @@ pub const Canvas = struct {
         std.debug.assert(self.count < self.commands.len);
         const c = &self.commands[self.count];
         self.count += 1;
-        c.* = std.mem.zeroes(native.DrawCommand);
+
+        // Every DrawCommand field is assigned below, so a full memset is
+        // unnecessary on the hot rendering path.
+        c.* = undefined;
         c.kind = kind;
         c.texture_id = texture;
         c.dx = @floatCast(rect.x);
@@ -38,6 +41,8 @@ pub const Canvas = struct {
         c.dw = @floatCast(rect.w);
         c.dh = @floatCast(rect.h);
         c.radius = @floatCast(rect.radius);
+        c.sx = 0;
+        c.sy = 0;
         c.sw = 1;
         c.sh = 1;
         c.r = color[0];
@@ -49,6 +54,8 @@ pub const Canvas = struct {
         c.clip_w = @floatCast(self.clip.w);
         c.clip_h = @floatCast(self.clip.h);
         c.clip_radius = @floatCast(self.clip.radius);
+        c.stroke = 0;
+        c.parameter = 0;
         return c;
     }
 
