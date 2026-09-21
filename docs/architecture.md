@@ -7,7 +7,16 @@
 `graphics/render.zig` composes an ordered scene using `graphics/canvas.zig`. A scene contains at most 128 small commands, each with geometry, color, texture coordinates, and shared rounded card clipping. `platform/gpu.h` defines the shared C-ABI struct consumed by Zig, Objective-C, and `platform/shaders.metal`.
 
 - **Metal Pipeline**: `platform/native.m` snapshots the command list and immutable texture references under a lock. Only the latest pending scene is retained, drawing directly into a framebuffer-only `CAMetalLayer` drawable with at most two command buffers in flight.
+- **Static scene cache**: Active playback is submitted as two layers. The static layer contains artwork, glow, controls, background treatment, and the frame; it is rendered once into a private Metal texture and reused. The dynamic layer composites that texture and only redraws content that actually changes, such as progress, timestamps, hover states, and Aurora.
+- **Occlusion-aware scheduler**: AppKit's `NSWindow.occlusionState` is bridged into `state.window_visible`. When the widget is fully covered, frame requests only mark the scene dirty and the animation thread sleeps. A visibility transition wakes it once, allowing accumulated metadata/settings changes to appear without burning CPU or GPU time while hidden.
+- **Frame-budget tiers**: The animation loop assigns 60 FPS to input-critical motion, 30 FPS to short decorative transitions, and 20 FPS to steady playback/ambient effects. This keeps expensive effects bounded instead of tying all animation to the display refresh rate.
 - **Native Frosted Glass**: When `native_glass` is enabled, an `NSVisualEffectView` (`NSVisualEffectMaterialPopover`) is inserted behind the Metal view in `native.m`. The Metal card background alpha drops to 0.0, and shader output enforces premultiplied alpha (`color.rgb *= color.a;`) to blend seamlessly with macOS vibrancy without additive artifacts.
+
+## Debugging & Performance
+
+Set `WALLIFY_PROFILE=1` when measuring renderer behavior. The profile stream reports scene-preparation CPU time, completed GPU time, average draw-call count, and uploaded texture bytes. Native logs identify expensive lifecycle events without logging every frame: Metal setup failures, surface resize requests, texture uploads/swaps, static-cache rebuilds, and occlusion changes.
+
+The intended steady-state path is a small dynamic pass over a cached scene. A cache rebuild is expected after metadata/artwork changes that alter static commands, widget resizing, or a backing-scale change. Repeated cache rebuilds during otherwise idle playback are a signal to investigate rather than a normal steady-state condition.
 
 ## Media Subsystem & Auto Source
 
