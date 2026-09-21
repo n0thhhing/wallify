@@ -164,9 +164,72 @@ fn updateSnapDebug() void {
     const player = playerWindowInfo();
     const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
     const screen_frame = macos.send(Rect, screen, "frame", .{});
-    var message: [512]u8 = undefined;
-    const text = std.fmt.bufPrint(&message, "WALLIFY DEBUG CONSOLE  •  live runtime\nPlayback: title={s}  artist={s}  elapsed={d:.1}s / {d:.1}s\nWidget: mode={d}  mix={d:.2}  size={d:.0}×{d:.0}  dragging={s}\nMaterial: glass={s}  glow={s}  aurora={s}  animations={s}  speed={d}\nMedia: source={d}  track_transition={d}  artwork={s}\nPosition: margin={d:.0},{d:.0}  visual={d:.0},{d:.0}\nWindow: Wallify #{d} layer={d}  screen={d:.0}×{d:.0}\n--- SNAP / WINDOW SERVER ---\nCandidates={d}  distance²={d:.0}  outline={s}\nOutline: x={d:.0} y={d:.0}  {d:.0}×{d:.0}  #{d} level={d}\nTarget CG: x={d:.0} y={d:.0}  {d:.0}×{d:.0}", .{ state.global_title[0..state.global_title_len], state.global_artist[0..state.global_artist_len], state.global_elapsed, state.global_duration, @intFromEnum(state.setting_mode), snap_debug_mode_mix, snap_debug_card_width, snap_debug_card_height, if (snap_debug_dragging) "yes" else "no", if (state.setting_native_glass) "on" else "off", if (state.setting_glow) "on" else "off", if (state.setting_aurora) "on" else "off", if (state.setting_animations) "on" else "off", @intFromEnum(state.setting_speed), @intFromEnum(state.setting_source), @intFromEnum(state.setting_transition), if (state.global_has_artwork) "yes" else "no", snap_last_margin.x, snap_last_margin.y, player.frame.origin.x, player.frame.origin.y, player.number, player.layer, screen_frame.size.width, screen_frame.size.height, snap_candidate_count, snap_last_distance_sq, if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no", snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height, outline_number, outline_level, snap_outline_rect.origin.x, snap_outline_rect.origin.y, snap_outline_rect.size.width, snap_outline_rect.size.height }) catch return;
-    setLabelText(snap_debug_text, text);
+
+    var message: [1024]u8 = undefined;
+    var offset: usize = 0;
+
+    const first = std.fmt.bufPrint(
+        message[offset..],
+        "WALLIFY DEBUG CONSOLE  •  live runtime\n" ++
+            "Playback: title={s}  artist={s}  elapsed={d:.1}s / {d:.1}s\n" ++
+            "Widget: mode={d}  mix={d:.2}  size={d:.0}×{d:.0}  dragging={s}\n" ++
+            "Material: glass={s}  glow={s}  aurora={s}  animations={s}  speed={d}\n" ++
+            "Media: source={d}  track_transition={d}  artwork={s}\n" ++
+            "Position: margin={d:.0},{d:.0}  visual={d:.0},{d:.0}\n" ++
+            "Window: Wallify #{d} layer={d}  screen={d:.0}×{d:.0}\n",
+        .{
+            state.global_title[0..state.global_title_len],
+            state.global_artist[0..state.global_artist_len],
+            state.global_elapsed,
+            state.global_duration,
+            @intFromEnum(state.setting_mode),
+            snap_debug_mode_mix,
+            snap_debug_card_width,
+            snap_debug_card_height,
+            if (snap_debug_dragging) "yes" else "no",
+            if (state.setting_native_glass) "on" else "off",
+            if (state.setting_glow) "on" else "off",
+            if (state.setting_aurora) "on" else "off",
+            if (state.setting_animations) "on" else "off",
+            @intFromEnum(state.setting_speed),
+            @intFromEnum(state.setting_source),
+            @intFromEnum(state.setting_transition),
+            if (state.global_has_artwork) "yes" else "no",
+            snap_last_margin.x,
+            snap_last_margin.y,
+            player.number,
+            player.layer,
+            screen_frame.size.width,
+            screen_frame.size.height,
+        }
+    ) catch return;
+    offset += first.len;
+
+    const second = std.fmt.bufPrint(
+        message[offset..],
+        "--- SNAP / WINDOW SERVER ---\n" ++
+            "Candidates={d}  distance²={d:.0}  outline={s}\n" ++
+            "Actual outline: x={d:.0} y={d:.0}  {d:.0}×{d:.0}  #{d} level={d}\n" ++
+            "Target CG: x={d:.0} y={d:.0}  {d:.0}×{d:.0}",
+        .{
+            snap_candidate_count,
+            snap_last_distance_sq,
+            if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no",
+            actual.origin.x,
+            actual.origin.y,
+            actual.size.width,
+            actual.size.height,
+            outline_number,
+            outline_level,
+            snap_outline_rect.origin.x,
+            snap_outline_rect.origin.y,
+            snap_outline_rect.size.width,
+            snap_outline_rect.size.height,
+        }
+    ) catch return;
+    offset += second.len;
+
+    setLabelText(snap_debug_text, message[0..offset]);
     if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
         macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
         macos.send(void, snap_debug_panel, "orderFrontRegardless", .{});
