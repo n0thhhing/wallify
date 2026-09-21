@@ -1025,13 +1025,11 @@ static void showInspectorOnMain(void) {
 }
 
 extern "C" void wallify_imgui_inspector_show(void) {
-    if ([NSThread isMainThread]) {
+    // main() calls this before NSApplication::run() starts the event loop.
+    // Always defer window creation/order-front until the main run loop is alive.
+    dispatch_async(dispatch_get_main_queue(), ^{
         showInspectorOnMain();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            showInspectorOnMain();
-        });
-    }
+    });
 }
 
 extern "C" void wallify_imgui_inspector_hide(void) {
