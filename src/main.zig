@@ -6,6 +6,8 @@ const media = @import("media/controller.zig");
 const render = @import("graphics/render.zig");
 const window = @import("ui/window.zig");
 const spotify = @import("media/spotify.zig");
+
+extern fn wallify_imgui_inspector_show() void;
 pub const settings_window = @import("ui/settings_window.zig");
 
 pub fn main() !void {
@@ -13,6 +15,7 @@ pub fn main() !void {
     window.widget_application_init();
     state.loadWidgetSettings();
     if (state.setting_debug) window.widget_debug_window_show();
+    if (build_options.debug_inspector) wallify_imgui_inspector_show();
     const initial_size = state.setting_mode.dimensions();
     state.mode_from = state.setting_mode;
     state.mode_mix = 1.0;
