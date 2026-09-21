@@ -14,10 +14,10 @@ extern "c" fn dispatch_semaphore_create(value: isize) ?*anyopaque;
 extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
 extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 
-const SPOTIFY_POLL_INTERVAL_MS: u64 = 250;
+const SPOTIFY_POLL_INTERVAL_MS: u64 = 1000;
 const SPOTIFAST_POLL_INTERVAL_MS: u64 = 500;
 const QUERY_FAILURE_RETRY_MS: u64 = 500;
-const METADATA_HELPER_FALLBACK_INTERVAL_US: []const u8 = "250000";
+const METADATA_HELPER_FALLBACK_INTERVAL_US: []const u8 = "2000000";
 const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
 const METADATA_LINE_BUFFER_SIZE: usize = 2048;
