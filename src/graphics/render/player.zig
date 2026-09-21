@@ -7,6 +7,8 @@ const window = @import("../../ui/window.zig");
 const icon_transition = @import("../icon_transition.zig");
 const labels = @import("labels.zig");
 
+var cached_glow_extent: f64 = -1.0;
+
 pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
         state.global_elapsed
@@ -57,7 +59,10 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
     if (!state.setting_glow or !state.global_has_artwork or !assets.has_art) return;
 
     const glow_base_size: f64 = 132.0;
-    const glow_extent: f64 = @floatCast(native.wallify_glow_extent(@floatCast(glow_base_size)));
+    if (cached_glow_extent < 0.0) {
+        cached_glow_extent = @floatCast(native.wallify_glow_extent(@floatCast(glow_base_size)));
+    }
+    const glow_extent = cached_glow_extent;
     const size = glow_extent * state.layout.art_size / glow_base_size;
     const rect = gpu.Rect{
         .x = state.layout.art_x + (state.layout.art_size - size) / 2.0,
