@@ -617,8 +617,6 @@ static NSImageView *wfSymbol(
 
         self.specialContent = content;
         [self addSubview:content];
-    }
-
     } else if (definition.type == WFSectionTypePerformance) {
         NSView *content = [[NSView alloc] initWithFrame:NSZeroRect];
         NSTextField *status = wfLabel(@"Renderer status", 12.0, NSFontWeightMedium, [NSColor labelColor]);
@@ -729,12 +727,15 @@ static NSImageView *wfSymbol(
     } else if (self.specialContent) {
         CGFloat top = headerHeight + 3.0;
 
+        CGFloat specialHeight = self.type == WFSectionTypePerformance
+            ? 130.0
+            : (self.type == WFSectionTypeSystem ? 92.0 : 109.0);
         self.specialContent.frame =
             NSMakeRect(
                 0,
                 top,
                 self.bounds.size.width,
-                109.0
+                specialHeight
             );
 
         NSArray<NSView *> *views = self.specialContent.subviews;
