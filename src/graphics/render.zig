@@ -51,7 +51,10 @@ pub fn drawUIFrame() void {
 
     const card = state.layout.card(state.mode_mix);
     @import("idle_compositor.zig").update(card);
-    var canvas = gpu.Canvas{ .clip = card };
+    // Native Liquid Glass already clips the Metal subview to the card bounds.
+    // Avoid repeating the rounded-card SDF for every fragment in that mode.
+    const clip = if (state.setting_native_glass) gpu.Rect{} else card;
+    var canvas = gpu.Canvas{ .clip = clip };
 
     // Frosted acrylic glass shell with GPU specular bevel and subtle artwork ambient diffusion
     const ambient_intensity: f32 = if (state.global_has_artwork and assets.has_art and state.setting_glow) 0.12 else 0.0;
