@@ -32,6 +32,8 @@ const ARTWORK_WAKE_GRACE: f64 = 0.1;
 const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 20.0;
 const AMBIENT_FPS: f64 = 20.0;
 const AMBIENT_FRAME_INTERVAL: f64 = 1.0 / AMBIENT_FPS;
+// Frame budgets are intentional: only pointer/resize/seeking work earns 60 FPS;
+// visual transitions use 30 FPS and steady playback/Aurora use 20 FPS.
 const VISUAL_FRAME_INTERVAL: f64 = 1.0 / VISUAL_FPS;
 
 
@@ -79,6 +81,8 @@ fn movePanelToWidgetGrid() void {
     @import("../ui/settings_window.zig").notify_position_changed();
 }
 
+// This loop is event-driven between animation deadlines. `frame_requested` coalesces
+// metadata/input changes, while the tiered intervals keep continuously changing visuals bounded.
 pub fn animationLoop() void {
     var previous_columns = @import("../platform/native.zig").wallify_width();
     var previous_time = window.widget_monotonic_time();
@@ -341,6 +345,8 @@ pub fn animationLoop() void {
             state.seek_expansion += state.seek_velocity * step;
             needs_draw = true;
         }
+        // Progress is only a moving visual when it is actually exposed. Hidden progress/timestamps
+        // therefore allow playback to become fully event-driven instead of waking every frame.
         const playback_interval = playbackFrameInterval(
             state.global_rate > 0,
             state.global_is_dragging,
