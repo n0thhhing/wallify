@@ -8,9 +8,13 @@ const subtitle_color: gpu.Color = .{ 0.62, 0.60, 0.57, 1.0 };
 const idle_card_bg: gpu.Color = .{ 30.0 / 255.0, 29.0 / 255.0, 32.0 / 255.0, 1.0 };
 
 pub fn drawIdle(canvas: *gpu.Canvas, card: gpu.Rect) void {
-    // Opaque idle background provides the group crossfade without a CPU underlay.
-    canvas.opacity = @floatCast(state.idle_mix);
-    canvas.fill(card, idle_card_bg);
+    // Native macOS Liquid Glass lives behind the Metal content view. Keep
+    // the idle shell transparent in that mode so the native material remains
+    // visible instead of being covered by an opaque GPU fill.
+    if (!state.setting_native_glass) {
+        canvas.opacity = @floatCast(state.idle_mix);
+        canvas.fill(card, idle_card_bg);
+    }
 
     switch (state.setting_idle_style) {
         .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.cat_time, state.animation_time < state.cat_pet_until),
