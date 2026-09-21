@@ -168,7 +168,7 @@ fn debugApplyInt(key: isize, value: isize) void {
         17 => state.setting_font_scale = @enumFromInt(std.math.clamp(value, 0, 2)),
         18 => {
             state.setting_media_key_target = @enumFromInt(std.math.clamp(value, 0, 3));
-            native.wallify_update_media_key_tap(value);
+            native.wallify_update_media_key_tap(@intCast(value));
         },
         21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(value, 0, 2)),
         22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(value, 0, 2)),
