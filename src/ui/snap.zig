@@ -491,7 +491,7 @@ fn updateSnapDebug() void {
             defer macos.CFRelease(label_value);
             macos.send(void, item, "setLabel:", .{label_value});
 
-            const page = makeInspectorPage(tab_title);
+            const page = makeInspectorPage(i, tab_title);
             if (page == null) continue;
             macos.send(void, item, "setView:", .{page});
             macos.send(void, tabs, "addTabViewItem:", .{item});
@@ -535,130 +535,72 @@ fn updateSnapDebug() void {
 
     snap_debug_tick += 1;
 
-    var runtime: [1024]u8 = undefined;
-    const runtime_text = std.fmt.bufPrint(
-        &runtime,
-        "Playback       {s} — {s}\n" ++
-            "Time           {d:.1}s / {d:.1}s\n" ++
-            "Artwork        {s}\n" ++
-            "Mode           {d}\n" ++
-            "Mode mix       {d:.3}\n" ++
-            "Render size    {d:.0} × {d:.0}\n" ++
-            "Dragging       {s}\n\n" ++
-            "State          {s}",
-        .{
-            state.global_title[0..state.global_title_len],
-            state.global_artist[0..state.global_artist_len],
-            state.global_elapsed,
-            state.global_duration,
-            if (state.global_has_artwork) "yes" else "no",
-            @intFromEnum(state.setting_mode),
-            snap_debug_mode_mix,
-            snap_debug_card_width,
-            snap_debug_card_height,
-            if (snap_debug_dragging) "true" else "false",
-            if (snap_debug_dragging) "moving" else "idle",
-        },
-    ) catch return;
-    updateInspectorPage(snap_debug_panes[0], runtime_text);
+    if (snap_debug_controls[0] != null)
+        macos.send(void, snap_debug_controls[0], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_mode)))});
+    if (snap_debug_controls[1] != null)
+        macos.send(void, snap_debug_controls[1], "setDoubleValue:", .{snap_debug_mode_mix * 100.0});
+    if (snap_debug_controls[4] != null)
+        macos.send(void, snap_debug_controls[4], "setState:", .{if (state.setting_native_glass) @as(isize, 1) else @as(isize, 0)});
+    if (snap_debug_controls[5] != null)
+        macos.send(void, snap_debug_controls[5], "setState:", .{if (state.setting_glow) @as(isize, 1) else @as(isize, 0)});
+    if (snap_debug_controls[6] != null)
+        macos.send(void, snap_debug_controls[6], "setState:", .{if (state.setting_aurora) @as(isize, 1) else @as(isize, 0)});
+    if (snap_debug_controls[7] != null)
+        macos.send(void, snap_debug_controls[7], "setState:", .{if (state.setting_animations) @as(isize, 1) else @as(isize, 0)});
+    if (snap_debug_controls[8] != null)
+        macos.send(void, snap_debug_controls[8], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_speed)))});
+    if (snap_debug_controls[9] != null)
+        macos.send(void, snap_debug_controls[9], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_source)))});
+    if (snap_debug_controls[10] != null)
+        macos.send(void, snap_debug_controls[10], "selectItemAtIndex:", .{@as(isize, @intCast(@intFromEnum(state.setting_transition)))});
+    if (snap_debug_controls[11] != null)
+        macos.send(void, snap_debug_controls[11], "selectItemAtIndex:", .{@as(isize, @intCast(state.setting_media_key_target))});
 
-    var appearance: [512]u8 = undefined;
-    const appearance_text = std.fmt.bufPrint(
-        &appearance,
-        "Native glass   {s}\nGlow           {s}\nAurora         {s}\nAnimations     {s}\nAnimation speed {d}",
-        .{
-            if (state.setting_native_glass) "on" else "off",
-            if (state.setting_glow) "on" else "off",
-            if (state.setting_aurora) "on" else "off",
-            if (state.setting_animations) "on" else "off",
-            @intFromEnum(state.setting_speed),
-        },
-    ) catch return;
-    updateInspectorPage(snap_debug_panes[1], appearance_text);
+    if (snap_debug_readouts[0] != null)
+        setInspectorText(snap_debug_readouts[0], if (snap_debug_dragging) "true" else "false");
+    if (snap_debug_readouts[1] != null)
+        setInspectorText(snap_debug_readouts[1], if (state.global_title_len > 0) state.global_title[0..state.global_title_len] else "—");
+    if (snap_debug_readouts[2] != null)
+        setInspectorText(snap_debug_readouts[2], if (state.global_artist_len > 0) state.global_artist[0..state.global_artist_len] else "—");
 
-    var media: [1024]u8 = undefined;
-    const media_text = std.fmt.bufPrint(
-        &media,
-        "Source         {d}\nTransition     {d}\nArtwork        {s}\nTitle          {s}\nArtist         {s}",
-        .{
-            @intFromEnum(state.setting_source),
-            @intFromEnum(state.setting_transition),
-            if (state.global_has_artwork) "available" else "none",
-            state.global_title[0..state.global_title_len],
-            state.global_artist[0..state.global_artist_len],
-        },
-    ) catch return;
-    updateInspectorPage(snap_debug_panes[2], media_text);
+    updateInspectorField(snap_debug_controls[2], snap_debug_card_width);
+    updateInspectorField(snap_debug_controls[3], snap_debug_card_height);
+    updateInspectorField(snap_debug_controls[12], @floatFromInt(state.widget_margin_left));
+    updateInspectorField(snap_debug_controls[13], @floatFromInt(state.widget_margin_top));
+    updateInspectorField(snap_debug_controls[14], snap_outline_rect.origin.x);
+    updateInspectorField(snap_debug_controls[15], snap_outline_rect.origin.y);
+    updateInspectorField(snap_debug_controls[16], snap_outline_rect.size.width);
+    updateInspectorField(snap_debug_controls[17], snap_outline_rect.size.height);
 
-    var window: [1024]u8 = undefined;
-    const window_text = std.fmt.bufPrint(
-        &window,
-        "Wallify id     #{d}\nLayer          {d}\nScreen         {d:.0} × {d:.0}\nMargin         {d:.0}, {d:.0}\nVisual         {d:.0}, {d:.0}\nPanel frame    {d:.0}, {d:.0}  {d:.0} × {d:.0}",
-        .{
-            player.number,
-            player.layer,
-            screen_frame.size.width,
-            screen_frame.size.height,
-            snap_last_margin.x,
-            snap_last_margin.y,
-            snap_last_visual.x,
-            snap_last_visual.y,
-            actual.origin.x,
-            actual.origin.y,
-            actual.size.width,
-            actual.size.height,
-        },
-    ) catch return;
-    updateInspectorPage(snap_debug_panes[3], window_text);
-
-    var window_server: [1024]u8 = undefined;
-    const ws_text = std.fmt.bufPrint(
-        &window_server,
-        "Candidates     {d}\nOutline        {s}\nDistance²      {d:.0}\nOutline id     #{d}\nOutline level  {d}\nCache offset   {d:.0}, {d:.0}\nCache valid    {s}",
-        .{
-            snap_candidate_count,
-            if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
-            snap_last_distance_sq,
-            outline_number,
-            outline_level,
-            cached_offset_x,
-            cached_offset_y,
-            if (has_cached_offsets) "true" else "false",
-        },
-    ) catch return;
-    updateInspectorPage(snap_debug_panes[4], ws_text);
-
-    var snap: [1024]u8 = undefined;
-    const snap_text = std.fmt.bufPrint(
-        &snap,
-        "Target         {d:.0}, {d:.0}\nTarget size    {d:.0} × {d:.0}\nThreshold²     {d:.0}\nSnap state     {s}\nOutline rect   {d:.0}, {d:.0}  {d:.0} × {d:.0}",
-        .{
-            snap_outline_rect.origin.x,
-            snap_outline_rect.origin.y,
-            snap_outline_rect.size.width,
-            snap_outline_rect.size.height,
-            SNAP_THRESHOLD,
-            if (snap_candidate_count > 0) "candidates detected" else "no candidates",
-            snap_outline_rect.origin.x,
-            snap_outline_rect.origin.y,
-            snap_outline_rect.size.width,
-            snap_outline_rect.size.height,
-        },
-    ) catch return;
-    updateInspectorPage(snap_debug_panes[5], snap_text);
+    var buffer: [128]u8 = undefined;
+    if (snap_debug_readouts[3] != null) {
+        const value = std.fmt.bufPrint(&buffer, "#{d}", .{player.number}) catch "—";
+        setInspectorText(snap_debug_readouts[3], value);
+    }
+    if (snap_debug_readouts[4] != null) {
+        const value = std.fmt.bufPrint(&buffer, "{d}", .{player.layer}) catch "—";
+        setInspectorText(snap_debug_readouts[4], value);
+    }
+    if (snap_debug_readouts[5] != null) {
+        const value = std.fmt.bufPrint(&buffer, "{d:.0}, {d:.0}  {d:.0} × {d:.0}", .{actual.origin.x, actual.origin.y, actual.size.width, actual.size.height}) catch "—";
+        setInspectorText(snap_debug_readouts[5], value);
+    }
+    if (snap_debug_readouts[6] != null) {
+        const value = std.fmt.bufPrint(&buffer, "{d}", .{snap_candidate_count}) catch "0";
+        setInspectorText(snap_debug_readouts[6], value);
+    }
+    if (snap_debug_readouts[7] != null) {
+        const value = std.fmt.bufPrint(&buffer, "{d:.0}", .{snap_last_distance_sq}) catch "0";
+        setInspectorText(snap_debug_readouts[7], value);
+    }
 
     if (snap_debug_footer) |footer| {
         var status: [192]u8 = undefined;
-        const status_text = std.fmt.bufPrint(
-            &status,
-            "LIVE   tick {d}   •   candidates {d}   •   outline {s}   •   cache {s}",
-            .{
-                snap_debug_tick,
-                snap_candidate_count,
-                if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
-                if (has_cached_offsets) "valid" else "uncached",
-            },
-        ) catch return;
+        const status_text = std.fmt.bufPrint(&status, "LIVE   tick {d}   •   candidates {d}   •   outline {s}", .{
+            snap_debug_tick,
+            snap_candidate_count,
+            if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
+        }) catch return;
         const footer_value = macos.string(status_text);
         defer macos.CFRelease(footer_value);
         macos.send(void, footer, "setStringValue:", .{footer_value});
