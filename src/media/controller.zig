@@ -17,7 +17,7 @@ extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
 const SPOTIFY_POLL_INTERVAL_MS: u64 = 250;
 const SPOTIFAST_POLL_INTERVAL_MS: u64 = 500;
 const QUERY_FAILURE_RETRY_MS: u64 = 500;
-const METADATA_HELPER_FALLBACK_INTERVAL_S: []const u8 = "0.25";
+const METADATA_HELPER_FALLBACK_INTERVAL_US: []const u8 = "250000";
 const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
 const METADATA_LINE_BUFFER_SIZE: usize = 2048;
@@ -371,7 +371,8 @@ pub fn metadataLoop(io: std.Io) void {
         "print \"$$\\n\"; " ++
         "my $wake = 1; " ++
         "$SIG{USR1} = sub { $wake = 1; }; " ++
-        "while (1) { if ($wake) { $wake = 0; fetch(); } sleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_S ++ "); }";
+        "use Time::HiRes qw(usleep); " ++
+        "while (1) { if ($wake) { $wake = 0; fetch(); } usleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_US ++ "); }";
 
     // macOS `mediaremoted` is queried through the helper because the framework is private.
     // Keep the helper mostly asleep and use Spotify's distributed notification to wake it immediately on playback changes.
