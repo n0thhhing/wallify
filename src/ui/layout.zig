@@ -121,6 +121,14 @@ pub const Layout = struct {
     // 1.0 means compact/1×1 presentation, 0.0 means any non-compact form factor.
     compact_mix: f64 = 0.0,
 
+    // Stable-frame geometry cache.
+    cache_valid: bool = false,
+    cache_width: f64 = 0.0,
+    cache_height: f64 = 0.0,
+    cache_from_mode: WidgetMode = .expanded,
+    cache_to_mode: WidgetMode = .expanded,
+    cache_mix: f64 = 0.0,
+
     buttons: [3]ButtonDef = .{
         .{ .id = .Prev, .name = "Action: Previous", .x = 298.0, .y = 132.0, .size = 12.0 },
         .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = 344.0, .y = 132.0, .size = 14.0 },
