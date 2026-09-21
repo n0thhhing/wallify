@@ -64,3 +64,5 @@ pub extern "c" fn wallify_update_glass_rect(
 /// Install or remove the CGEventTap for hardware media key interception.
 /// target: 0=off, 1=active source, 2=spotify, 3=spotifast
 pub extern "c" fn wallify_update_media_key_tap(target: c_int) void;
+pub extern fn wallify_context_menu_event() macos.Ref;
+pub extern fn wallify_clear_context_menu_event() void;
