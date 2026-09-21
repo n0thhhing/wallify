@@ -305,9 +305,9 @@ pub const ContextMenuCtx = struct {
         macos.send(void, menu, "addItem:", .{quit_item});
 
         if (context_event) |event| {
-            // Use the original right-click event so AppKit starts menu tracking
-            // with a live mouse location and hover state immediately.
-            _ = macos.send(bool, menu, "popUpContextMenu:withEvent:forView:", .{ @as(macos.Ref, null), event, @as(macos.Ref, null) });
+            // This is an NSMenu class method. Pass the actual right-click event
+            // so AppKit starts tracking/highlighting immediately.
+            _ = macos.send(void, menu_cls, "popUpContextMenu:withEvent:forView:", .{ menu, event, @as(macos.Ref, null) });
         } else {
             const location = macos.send(macos.Point, macos.objc_getClass("NSEvent"), "mouseLocation", .{});
             _ = macos.send(bool, menu, "popUpMenuPositioningItem:atLocation:inView:", .{ @as(macos.Ref, null), location, @as(macos.Ref, null) });
