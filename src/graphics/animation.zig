@@ -89,9 +89,11 @@ pub fn animationLoop() void {
     while (true) {
         const now = window.widget_monotonic_time();
         if (!state.window_visible.load(.acquire)) {
-            // A fully occluded desktop widget cannot contribute visible pixels.
-            // Keep animation time anchored to the current clock and sleep until
-            // AppKit reports that some part of the window is visible again.
+            // AppKit's occlusion flag is the cheap "we are not on screen"
+            // escape hatch: unlike minimizing, a desktop widget can remain
+            // alive yet be completely covered by another window. There is
+            // nothing useful for Metal to draw in that state, so the animation
+            // thread sleeps on the same coalescing semaphore used by wakeups.
             previous_time = now;
             last_draw_time = now;
             _ = state.frame_requested.swap(false, .acq_rel);
@@ -388,6 +390,10 @@ pub fn animationLoop() void {
             last_draw_time = window.widget_monotonic_time();
         }
 
+        // The scheduler is intentionally tiered: input-critical motion gets
+        // the display-rate budget, short decorative motion gets 30 FPS, and
+        // steady playback effects get 20 FPS. The goal is not maximum FPS;
+        // it is spending GPU/CPU time exactly where the user can perceive it.
         const frame_interval = if (high_rate_animation)
             1.0 / TARGET_FPS
         else if (visual_animation)
