@@ -48,6 +48,7 @@ static NSPoint gInspectorDragStartOrigin = NSZeroPoint;
 
 static const CGFloat kInspectorWidth = 1040.0;
 static const CGFloat kInspectorExpandedHeight = 720.0;
+static const CGFloat kInspectorCollapsedWidth = 240.0;
 
 static CGFloat gInspectorExpandedWidth = kInspectorWidth;
 static CGFloat gInspectorExpandedHeight = kInspectorExpandedHeight;
@@ -319,7 +320,8 @@ static void drawInspector() {
     wallify_debug_get_snapshot(&s);
 
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(gInspectorExpandedWidth, gInspectorExpandedHeight),
+    ImGui::SetNextWindowSize(ImVec2(gInspectorCollapsed ? kInspectorCollapsedWidth : gInspectorExpandedWidth,
+                                  gInspectorExpandedHeight),
                              ImGuiCond_Always);
 
     constexpr ImGuiWindowFlags rootFlags =
@@ -334,7 +336,7 @@ static void drawInspector() {
     const bool collapsed = ImGui::IsWindowCollapsed();
     if (collapsed != gInspectorCollapsed) {
         gInspectorCollapsed = collapsed;
-        resizeInspector(gInspectorExpandedWidth,
+        resizeInspector(collapsed ? kInspectorCollapsedWidth : gInspectorExpandedWidth,
                         collapsed ? ImGui::GetWindowHeight() : gInspectorExpandedHeight,
                         false);
     }
