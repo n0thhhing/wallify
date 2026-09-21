@@ -310,6 +310,12 @@ else
         echo '    <key>RunAtLoad</key><true/>'
         echo '    <key>KeepAlive</key><false/>'
         echo '    <key>ProcessType</key><string>Interactive</string>'
+        if [[ -n "${WALLIFY_PROFILE:-}" ]]; then
+            echo '    <key>EnvironmentVariables</key>'
+            echo '    <dict>'
+            printf '        <key>WALLIFY_PROFILE</key><string>%s</string>\n' "$WALLIFY_PROFILE"
+            echo '    </dict>'
+        fi
         echo '    <key>StandardOutPath</key>'
         printf '    <string>%s</string>\n' "$LAUNCH_LOG"
         echo '    <key>StandardErrorPath</key>'
