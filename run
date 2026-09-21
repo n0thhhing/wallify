@@ -270,9 +270,11 @@ else
         echo '    <key>ProgramArguments</key>'
         echo '    <array>'
         printf '        <string>%s</string>\n' "$EXEC_PATH"
-        for arg in "${APP_ARGS[@]}"; do
-            printf '        <string>%s</string>\n' "$arg"
-        done
+        if [[ ${#APP_ARGS[@]} -gt 0 ]]; then
+            for arg in "${APP_ARGS[@]}"; do
+                printf '        <string>%s</string>\n' "$arg"
+            done
+        fi
         echo '    </array>'
         echo '    <key>WorkingDirectory</key>'
         printf '    <string>%s</string>\n' "$PWD"
