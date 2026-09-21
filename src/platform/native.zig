@@ -8,6 +8,7 @@ pub const DrawCommand = gpu.DrawCommand;
 pub extern fn wallify_idle_animation(sprites: [*]const DrawCommand, sprite_count: usize, sprite_period: f64, effects: [*]const DrawCommand, effect_frames: usize, effect_count: usize, effect_period: f64, time: f64, speed: f64) bool;
 pub extern fn wallify_idle_animation_stop() void;
 pub extern fn wallify_present(width: f32, height: f32, cmds: [*]const DrawCommand, count: usize) void;
+pub extern fn wallify_present_split(width: f32, height: f32, static_cmds: [*]const DrawCommand, static_count: usize, dynamic_cmds: [*]const DrawCommand, dynamic_count: usize) void;
 extern fn wallify_create(width: c_int, height: c_int, margin_left: c_int, margin_top: c_int) bool;
 extern fn wallify_resize(width: c_int, height: c_int) void;
 
