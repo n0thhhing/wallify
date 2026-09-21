@@ -42,6 +42,7 @@ var snap_outline: Ref = null;
 var snap_outline_rect = Rect{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
 var snap_debug_panel: Ref = null;
 var snap_debug_text: Ref = null;
+var snap_debug_tick: u64 = 0;
 var snap_outline_was_visible = false;
 var snap_candidate_count: usize = 0;
 var snap_last_distance_sq: f64 = 0;
@@ -119,10 +120,11 @@ fn playerWindowInfo() PanelWindowInfo {
     return .{};
 }
 
-fn setLabelText(label: Ref, value: []const u8) void {
+fn setDebugText(view: Ref, value: []const u8) void {
     const ns_value = macos.string(value);
     defer macos.CFRelease(ns_value);
-    macos.send(void, label, "setStringValue:", .{ns_value});
+    macos.send(void, view, "setString:", .{ns_value});
+    macos.send(void, view, "scrollToEndOfDocument:", .{});
 }
 
 fn updateSnapDebug() void {
@@ -139,23 +141,58 @@ fn updateSnapDebug() void {
         defer macos.CFRelease(title);
         macos.send(void, panel, "setTitle:", .{title});
         macos.send(void, panel, "setFloatingPanel:", .{true});
+        macos.send(void, panel, "setOpaque:", .{true});
+        const bg = macos.send(Ref, macos.objc_getClass("NSColor"), "colorWithWhite:alpha:", .{@as(f64, 0.055), @as(f64, 0.96)});
+        macos.send(void, panel, "setBackgroundColor:", .{bg});
         macos.send(void, panel, "setLevel:", .{@as(isize, DEBUG_PANEL_LEVEL)});
         macos.send(void, panel, "setHidesOnDeactivate:", .{false});
         macos.send(void, panel, "setReleasedWhenClosed:", .{false});
 
-        const label_cls = macos.objc_getClass("NSTextField");
-        const label = macos.send(Ref, macos.send(Ref, label_cls, "alloc", .{}), "initWithFrame:", .{rect(14, 14, DEBUG_PANEL_WIDTH - 28.0, DEBUG_PANEL_HEIGHT - 28.0)});
-        if (label == null) return;
-        snap_debug_text = label;
-        macos.send(void, label, "setEditable:", .{false});
-        macos.send(void, label, "setSelectable:", .{true});
-        macos.send(void, label, "setBezeled:", .{false});
-        macos.send(void, label, "setDrawsBackground:", .{false});
-        const font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{ @as(f64, 11.0), @as(f64, 0.0) });
-        if (font != null) macos.send(void, label, "setFont:", .{font});
+        const scroll_cls = macos.objc_getClass("NSScrollView");
+        const scroll = macos.send(
+            Ref,
+            macos.send(Ref, scroll_cls, "alloc", .{}),
+            "initWithFrame:",
+            .{rect(10, 10, DEBUG_PANEL_WIDTH - 20.0, DEBUG_PANEL_HEIGHT - 20.0)},
+        );
+        if (scroll == null) return;
+        macos.send(void, scroll, "setBorderType:", .{@as(usize, 0)});
+        macos.send(void, scroll, "setHasVerticalScroller:", .{true});
+        macos.send(void, scroll, "setHasHorizontalScroller:", .{false});
+        macos.send(void, scroll, "setAutohidesScrollers:", .{true});
+        macos.send(void, scroll, "setDrawsBackground:", .{true});
+        macos.send(void, scroll, "setBackgroundColor:", .{bg});
+        macos.send(void, scroll, "setAutoresizingMask:", .{@as(usize, 18)});
+
+        const text_cls = macos.objc_getClass("NSTextView");
+        const text = macos.send(
+            Ref,
+            macos.send(Ref, text_cls, "alloc", .{}),
+            "initWithFrame:",
+            .{rect(0, 0, DEBUG_PANEL_WIDTH - 20.0, DEBUG_PANEL_HEIGHT - 20.0)},
+        );
+        if (text == null) return;
+        snap_debug_text = text;
+        macos.send(void, text, "setEditable:", .{false});
+        macos.send(void, text, "setSelectable:", .{true});
+        macos.send(void, text, "setRichText:", .{false});
+        macos.send(void, text, "setDrawsBackground:", .{true});
+        macos.send(void, text, "setBackgroundColor:", .{bg});
+        macos.send(void, text, "setTextContainerInset:", .{@as(Point, .{ .x = 8, .y = 8 })});
+        macos.send(void, text, "setAutoresizingMask:", .{@as(usize, 18)});
+        const font = macos.send(Ref, macos.objc_getClass("NSFont"), "monospacedSystemFontOfSize:weight:", .{@as(f64, 11.0), @as(f64, 0.0)});
+        if (font != null) macos.send(void, text, "setFont:", .{font});
+        const green = macos.send(
+            Ref,
+            macos.objc_getClass("NSColor"),
+            "colorWithCalibratedRed:green:blue:alpha:",
+            .{@as(f64, 0.55), @as(f64, 0.95), @as(f64, 0.65), @as(f64, 0.95)},
+        );
+        macos.send(void, text, "setTextColor:", .{green});
+        macos.send(void, scroll, "setDocumentView:", .{text});
 
         const content = macos.send(Ref, panel, "contentView", .{});
-        macos.send(void, content, "addSubview:", .{label});
+        macos.send(void, content, "addSubview:", .{scroll});
     }
 
     const actual = if (snap_outline) |panel| macos.send(Rect, panel, "frame", .{}) else rect(0, 0, 0, 0);
@@ -165,28 +202,47 @@ fn updateSnapDebug() void {
     const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
     const screen_frame = macos.send(Rect, screen, "frame", .{});
 
-    var message: [1024]u8 = undefined;
+    snap_debug_tick += 1;
+
+    var message: [2048]u8 = undefined;
     var offset: usize = 0;
 
     const first = std.fmt.bufPrint(
         message[offset..],
-        "WALLIFY DEBUG CONSOLE  •  live runtime\n" ++
-            "Playback: title={s}  artist={s}  elapsed={d:.1}s / {d:.1}s\n" ++
-            "Widget: mode={d}  mix={d:.2}  size={d:.0}×{d:.0}  dragging={s}\n" ++
-            "Material: glass={s}  glow={s}  aurora={s}  animations={s}  speed={d}\n" ++
-            "Media: source={d}  track_transition={d}  artwork={s}\n" ++
-            "Position: margin={d:.0},{d:.0}  visual={d:.0},{d:.0}\n" ++
-            "Window: Wallify #{d} layer={d}  screen={d:.0}×{d:.0}\n",
+        "wallify(debug) :: live session\\n" ++
+            "---------------------------------------------\\n" ++
+            "[RUNTIME]\\n" ++
+            "  tick        = {d}\\n" ++
+            "  playback    = {s} — {s}\\n" ++
+            "  time        = {d:.1}s / {d:.1}s\\n" ++
+            "  artwork     = {s}\\n" ++
+            "  mode        = {d}\\n" ++
+            "  mode_mix    = {d:.3}\\n" ++
+            "  render_size = {d:.0} × {d:.0}\\n" ++
+            "  dragging    = {s}\\n" ++
+            "\\n" ++
+            "[MATERIAL]\\n" ++
+            "  glass       = {s}\\n" ++
+            "  glow        = {s}\\n" ++
+            "  aurora      = {s}\\n" ++
+            "  animations  = {s}\\n" ++
+            "  anim_speed  = {d}\\n" ++
+            "\\n" ++
+            "[MEDIA]\\n" ++
+            "  source      = {d}\\n" ++
+            "  transition  = {d}\\n",
         .{
+            snap_debug_tick,
             state.global_title[0..state.global_title_len],
             state.global_artist[0..state.global_artist_len],
             state.global_elapsed,
             state.global_duration,
+            if (state.global_has_artwork) "yes" else "no",
             @intFromEnum(state.setting_mode),
             snap_debug_mode_mix,
             snap_debug_card_width,
             snap_debug_card_height,
-            if (snap_debug_dragging) "yes" else "no",
+            if (snap_debug_dragging) "true" else "false",
             if (state.setting_native_glass) "on" else "off",
             if (state.setting_glow) "on" else "off",
             if (state.setting_aurora) "on" else "off",
@@ -194,44 +250,76 @@ fn updateSnapDebug() void {
             @intFromEnum(state.setting_speed),
             @intFromEnum(state.setting_source),
             @intFromEnum(state.setting_transition),
-            if (state.global_has_artwork) "yes" else "no",
-            snap_last_margin.x,
-            snap_last_margin.y,
-            snap_last_visual.x,
-            snap_last_visual.y,
-            player.number,
-            player.layer,
-            screen_frame.size.width,
-            screen_frame.size.height,
         }
     ) catch return;
     offset += first.len;
 
     const second = std.fmt.bufPrint(
         message[offset..],
-        "--- SNAP / WINDOW SERVER ---\n" ++
-            "Candidates={d}  distance²={d:.0}  outline={s}\n" ++
-            "Actual outline: x={d:.0} y={d:.0}  {d:.0}×{d:.0}  #{d} level={d}\n" ++
-            "Target CG: x={d:.0} y={d:.0}  {d:.0}×{d:.0}",
+        "[WINDOW]\\n" ++
+            "  wallify.id   = #{d}\\n" ++
+            "  wallify.layer= {d}\\n" ++
+            "  screen       = {d:.0} × {d:.0}\\n" ++
+            "  margin       = {d:.0}, {d:.0}\\n" ++
+            "  visual       = {d:.0}, {d:.0}\\n" ++
+            "  panel_frame  = {d:.0}, {d:.0}  {d:.0} × {d:.0}\\n" ++
+            "\\n" ++
+            "[WINDOWSERVER]\\n" ++
+            "  candidates   = {d}\\n" ++
+            "  outline      = {s}\\n" ++
+            "  distance²    = {d:.0}\\n" ++
+            "  outline.id   = #{d}\\n" ++
+            "  outline.lvl  = {d}\\n",
         .{
-            snap_candidate_count,
-            snap_last_distance_sq,
-            if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "yes" else "no",
+            player.number,
+            player.layer,
+            screen_frame.size.width,
+            screen_frame.size.height,
+            snap_last_margin.x,
+            snap_last_margin.y,
+            snap_last_visual.x,
+            snap_last_visual.y,
             actual.origin.x,
             actual.origin.y,
             actual.size.width,
             actual.size.height,
+            snap_candidate_count,
+            if (snap_outline != null and macos.send(bool, snap_outline, "isVisible", .{})) "visible" else "hidden",
+            snap_last_distance_sq,
             outline_number,
             outline_level,
-            snap_outline_rect.origin.x,
-            snap_outline_rect.origin.y,
-            snap_outline_rect.size.width,
-            snap_outline_rect.size.height,
         }
     ) catch return;
     offset += second.len;
 
-    setLabelText(snap_debug_text, message[0..offset]);
+    const third = std.fmt.bufPrint(
+        message[offset..],
+        "[SNAP]\\n" ++
+            "  target       = {d:.0}, {d:.0}\\n" ++
+            "  target_size  = {d:.0} × {d:.0}\\n" ++
+            "  threshold²   = {d:.0}\\n" ++
+            "  snap_status  = {s}\\n" ++
+            "\\n" ++
+            "[CACHE]\\n" ++
+            "  offset       = {d:.0}, {d:.0}\\n" ++
+            "  valid        = {s}\\n" ++
+            "---------------------------------------------\\n" ++
+            "$ live debug stream (read-only)\\n",
+        .{
+            snap_outline_rect.origin.x,
+            snap_outline_rect.origin.y,
+            snap_outline_rect.size.width,
+            snap_outline_rect.size.height,
+            SNAP_THRESHOLD,
+            if (snap_candidate_count > 0) "candidates detected" else "no candidates detected",
+            cached_offset_x,
+            cached_offset_y,
+            if (has_cached_offsets) "true" else "false",
+        }
+    ) catch return;
+    offset += third.len;
+
+    setDebugText(snap_debug_text, message[0..offset]);
     if (!macos.send(bool, snap_debug_panel, "isVisible", .{})) {
         macos.send(void, snap_debug_panel, "setAlphaValue:", .{@as(f64, 0)});
         macos.send(void, snap_debug_panel, "orderFrontRegardless", .{});
