@@ -132,6 +132,186 @@ fn setInspectorText(label: Ref, value: []const u8) void {
     macos.send(void, label, "setStringValue:", .{ns_value});
 }
 
+fn debugApplyBool(key: isize, value: bool) void {
+    switch (key) {
+        0 => state.setting_glow = value,
+        1 => state.setting_aurora = value,
+        2 => state.setting_animations = value,
+        3 => state.setting_dim = value,
+        5 => state.setting_native_glass = value,
+        6 => state.setting_hide_text = value,
+        7 => state.setting_hide_progress = value,
+        8 => state.setting_show_controls = value,
+        9 => state.setting_show_timestamps = value,
+        19 => state.setting_artwork_border = value,
+        20 => state.setting_compact_gradient = value,
+        else => {},
+    }
+    state.saveWidgetSettings();
+    state.requestFrame();
+}
+
+fn debugApplyInt(key: isize, value: isize) void {
+    switch (key) {
+        10 => state.setting_frame = @enumFromInt(std.math.clamp(value, 0, 2)),
+        11 => state.setting_intensity = @enumFromInt(std.math.clamp(value, 0, 2)),
+        12 => state.setting_speed = @enumFromInt(std.math.clamp(value, 0, 2)),
+        13 => state.setting_source = @enumFromInt(std.math.clamp(value, 0, 3)),
+        14 => {
+            const mode: state.WidgetMode = @enumFromInt(std.math.clamp(value, 0, 4));
+            const width: f64 = @floatFromInt(native.wallify_width());
+            const height: f64 = @floatFromInt(native.wallify_height());
+            state.beginModeTransition(mode, width, height, state.setting_animations);
+            if (!state.mode_transition_active) native.resizeForMode(mode);
+        },
+        16 => state.setting_transition = @enumFromInt(std.math.clamp(value, 0, 5)),
+        17 => state.setting_font_scale = @enumFromInt(std.math.clamp(value, 0, 2)),
+        18 => {
+            state.setting_media_key_target = @enumFromInt(std.math.clamp(value, 0, 3));
+            native.wallify_update_media_key_tap(value);
+        },
+        21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(value, 0, 2)),
+        22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(value, 0, 2)),
+        1000 => snap_debug_mode_mix = std.math.clamp(@as(f64, @floatFromInt(value)) / 100.0, 0.0, 1.0),
+        1001 => {
+            snap_debug_card_width = @max(1.0, @as(f64, @floatFromInt(value)));
+            native.resizeTo(snap_debug_card_width, @floatFromInt(native.wallify_height()));
+        },
+        1002 => {
+            snap_debug_card_height = @max(1.0, @as(f64, @floatFromInt(value)));
+            native.resizeTo(@floatFromInt(native.wallify_width()), snap_debug_card_height);
+        },
+        1003 => {
+            state.widget_margin_left = @intCast(value);
+            state.panel_position_dirty = true;
+            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
+        },
+        1004 => {
+            state.widget_margin_top = @intCast(value);
+            state.panel_position_dirty = true;
+            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
+        },
+        1005 => snap_outline_rect.origin.x = @floatFromInt(value),
+        1006 => snap_outline_rect.origin.y = @floatFromInt(value),
+        1007 => snap_outline_rect.size.width = @max(1.0, @as(f64, @floatFromInt(value))),
+        1008 => snap_outline_rect.size.height = @max(1.0, @as(f64, @floatFromInt(value))),
+        else => {},
+    }
+    state.saveWidgetSettings();
+    state.requestFrame();
+}
+
+fn debugBoolCallback(_: Ref, _: Ref, sender: Ref) callconv(.c) void {
+    const key = macos.send(isize, sender, "tag", .{});
+    const value = macos.send(isize, sender, "state", .{}) != 0;
+    debugApplyBool(key, value);
+    updateSnapDebug();
+}
+
+fn debugIntCallback(_: Ref, _: Ref, sender: Ref) callconv(.c) void {
+    const key = macos.send(isize, sender, "tag", .{});
+    const is_text = macos.send(bool, sender, "isKindOfClass:", .{macos.objc_getClass("NSTextField")});
+    const value: isize = if (is_text)
+        macos.send(isize, sender, "integerValue", .{})
+    else if (key == 1000)
+        @as(isize, @intFromFloat(macos.send(f64, sender, "doubleValue", .{}) * 100.0))
+    else
+        macos.send(isize, sender, "indexOfSelectedItem", .{});
+    debugApplyInt(key, value);
+    updateSnapDebug();
+}
+
+fn getDebugTarget() Ref {
+    if (snap_debug_target != null) return snap_debug_target;
+    const superclass = macos.objc_getClass("NSObject");
+    const cls = macos.objc_allocateClassPair(superclass, "WallifyDebugInspectorTarget", 0);
+    if (cls != null) {
+        _ = macos.class_addMethod(cls, macos.sel_registerName("debugBool:"), @ptrCast(&debugBoolCallback), "v@:@");
+        _ = macos.class_addMethod(cls, macos.sel_registerName("debugInt:"), @ptrCast(&debugIntCallback), "v@:@");
+        macos.objc_registerClassPair(cls);
+        snap_debug_target = macos.send(Ref, macos.send(Ref, cls, "alloc", .{}), "init", .{});
+    }
+    return snap_debug_target;
+}
+
+fn inspectorLabel(text: []const u8, frame: Rect) Ref {
+    const field = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSTextField"), "alloc", .{}), "initWithFrame:", .{frame});
+    if (field == null) return null;
+    const value = macos.string(text);
+    defer macos.CFRelease(value);
+    macos.send(void, field, "setStringValue:", .{value});
+    macos.send(void, field, "setEditable:", .{false});
+    macos.send(void, field, "setSelectable:", .{false});
+    macos.send(void, field, "setBezeled:", .{false});
+    macos.send(void, field, "setDrawsBackground:", .{false});
+    return field;
+}
+
+fn inspectorRow(page: Ref, y: f64, title: []const u8, control: Ref, width: f64) void {
+    const label = inspectorLabel(title, rect(18, y + 2.0, 190, 22));
+    if (label != null) macos.send(void, page, "addSubview:", .{label});
+    if (control != null) {
+        macos.send(void, control, "setFrame:", .{rect(width - 190.0, y, 172.0, 26.0)});
+        macos.send(void, page, "addSubview:", .{control});
+    }
+}
+
+fn inspectorSwitch(tag: isize, enabled: bool) Ref {
+    const button = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSButton"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, 60, 24)});
+    if (button == null) return null;
+    macos.send(void, button, "setButtonType:", .{@as(isize, 6)});
+    macos.send(void, button, "setTitle:", .{macos.string("")});
+    macos.send(void, button, "setTag:", .{tag});
+    macos.send(void, button, "setTarget:", .{getDebugTarget()});
+    macos.send(void, button, "setAction:", .{macos.sel_registerName("debugBool:")});
+    macos.send(void, button, "setState:", .{if (enabled) @as(isize, 1) else @as(isize, 0)});
+    return button;
+}
+
+fn inspectorPopup(tag: isize, options: []const []const u8, selected: usize) Ref {
+    const popup = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSPopUpButton"), "alloc", .{}), "initWithFrame:pullsDown:", .{rect(0, 0, 172, 26), false});
+    if (popup == null) return null;
+    for (options) |option| {
+        const value = macos.string(option);
+        defer macos.CFRelease(value);
+        macos.send(void, popup, "addItemWithTitle:", .{value});
+    }
+    macos.send(void, popup, "selectItemAtIndex:", .{@as(isize, @intCast(selected))});
+    macos.send(void, popup, "setTag:", .{tag});
+    macos.send(void, popup, "setTarget:", .{getDebugTarget()});
+    macos.send(void, popup, "setAction:", .{macos.sel_registerName("debugInt:")});
+    return popup;
+}
+
+fn inspectorSlider(tag: isize, value: f64, min: f64, max: f64) Ref {
+    const slider = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSSlider"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, 172, 26)});
+    if (slider == null) return null;
+    macos.send(void, slider, "setMinValue:", .{min});
+    macos.send(void, slider, "setMaxValue:", .{max});
+    macos.send(void, slider, "setDoubleValue:", .{value});
+    macos.send(void, slider, "setContinuous:", .{true});
+    macos.send(void, slider, "setTag:", .{tag});
+    macos.send(void, slider, "setTarget:", .{getDebugTarget()});
+    macos.send(void, slider, "setAction:", .{macos.sel_registerName("debugInt:")});
+    return slider;
+}
+
+fn inspectorField(tag: isize, value: f64) Ref {
+    const field = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSTextField"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, 172, 26)});
+    if (field == null) return null;
+    var buffer: [64]u8 = undefined;
+    const formatted = std.fmt.bufPrint(&buffer, "{d}", .{@as(i64, @intFromFloat(value))}) catch "";
+    const initial = macos.string(formatted);
+    defer macos.CFRelease(initial);
+    macos.send(void, field, "setStringValue:", .{initial});
+    macos.send(void, field, "setEditable:", .{true});
+    macos.send(void, field, "setSelectable:", .{true});
+    macos.send(void, field, "setTag:", .{tag});
+    macos.send(void, field, "setTarget:", .{getDebugTarget()});
+    macos.send(void, field, "setAction:", .{macos.sel_registerName("debugInt:")});
+    macos.send(void, field, "setSendsActionOnEndEditing:", .{true});
+    return field;
+}
 fn makeInspectorPage(title_text: []const u8) Ref {
     const view = macos.send(
         Ref,
