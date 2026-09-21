@@ -60,6 +60,7 @@ fn staticSceneKey(card: gpu.Rect) u64 {
 
     hashBool(&hash, state.global_has_artwork);
     hashBool(&hash, assets.has_art);
+    hashF64(&hash, @as(f64, @floatFromInt(assets.artwork_generation)));
     hashF64(&hash, state.idle_mix);
     hashF64(&hash, state.global_anim_art_t);
     hashF64(&hash, state.play_pause_mix);
