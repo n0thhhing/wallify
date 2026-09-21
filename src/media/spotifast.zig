@@ -112,8 +112,7 @@ fn sendPersistentQuery(verb: []const u8, buf: []u8) !usize {
         };
 
         var req_buf: [128]u8 = undefined;
-        const req = try std.fmt.bufPrint(&req_buf, "fastpotify:{s}
-", .{verb});
+        const req = try std.fmt.bufPrint(&req_buf, "fastpotify:{s}\n", .{verb});
         const written = c.write(query_socket, req.ptr, req.len);
         if (written != @as(isize, @intCast(req.len))) {
             closeQuerySocket();
@@ -125,8 +124,7 @@ fn sendPersistentQuery(verb: []const u8, buf: []u8) !usize {
             const n = c.read(query_socket, buf.ptr + total_read, buf.len - total_read);
             if (n <= 0) break;
             total_read += @intCast(n);
-            if (std.mem.indexOfScalar(u8, buf[0..total_read], '
-')) |_| break;
+            if (std.mem.indexOfScalar(u8, buf[0..total_read], '\n')) |_| break;
         }
 
         if (total_read > 0) return total_read;
