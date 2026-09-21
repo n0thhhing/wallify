@@ -161,10 +161,14 @@ static void drawRuntime(const WallifyDebugSnapshot& s) {
     }
 
     ImGui::SeparatorText("Live State");
-    propertyReadout("Window", "#%lld", (long long)s.window_number);
-    propertyReadout("Layer", "%lld", (long long)s.window_layer);
-    propertyReadout("Frame", "%.0f, %.0f  %.0f × %.0f",
-                    s.window_x, s.window_y, s.window_width, s.window_height);
+    if (beginProperties("runtime_live_state")) {
+        propertyReadout("Window", "#%lld", (long long)s.window_number);
+        propertyReadout("Layer", "%lld", (long long)s.window_layer);
+        propertyReadout("Frame", "%.0f, %.0f  %.0f × %.0f",
+                        s.window_x, s.window_y, s.window_width, s.window_height);
+        ImGui::EndTable();
+    }
+
     ImGui::End();
 }
 
