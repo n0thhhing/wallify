@@ -304,6 +304,9 @@ pub const SpotifyPayload = struct {
     artwork_url: []const u8,
 };
 
+// Generation invalidates stale artwork downloads when a newer track arrives.
+var spotify_download_gen = std.atomic.Value(u32).init(0);
+
 // A monotonically increasing generation prevents an older async download from publishing stale artwork.
 
 fn spotifyDownloadWorker(url: []const u8, gen: u32, _: std.Io) void {
