@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const state = @import("state.zig");
 const input = @import("ui/input.zig");
 const animation = @import("graphics/animation.zig");
