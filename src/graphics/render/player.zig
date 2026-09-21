@@ -10,11 +10,15 @@ const labels = @import("labels.zig");
 var cached_glow_extent: f64 = -1.0;
 
 pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
+    drawPlayerStatic(canvas, card);
     const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
         state.global_elapsed
     else
         state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
+    drawPlayerDynamic(canvas, elapsed);
+}
 
+pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
     const inverse_art_mix = 1.0 - state.global_anim_art_t;
     const ease = 1.0 - inverse_art_mix * inverse_art_mix * inverse_art_mix;
     const inset = 10.0 * (1.0 - ease);
@@ -32,7 +36,11 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
         .radius = @max(0.0, state.layout.art_radius + radius_delta - inset * state.layout.compact_mix),
     };
 
-    const transition = std.math.clamp(1.0 - (state.art_transition_until - state.animation_time) / assets.transition_duration, 0.0, 1.0);
+    const transition = std.math.clamp(
+        1.0 - (state.art_transition_until - state.animation_time) / assets.transition_duration,
+        0.0,
+        1.0,
+    );
     const mix = transition * transition * transition * (10.0 + transition * (-15.0 + 6.0 * transition));
 
     drawArtworkGlow(canvas, ease, mix);
@@ -47,13 +55,55 @@ pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
                 .h = @max(0.0, card.h - 84.0),
             }, .{ 0.0, 0.0, 0.0, 162.0 / 255.0 });
         }
-    } else {
-        if (state.layout.progressVisible(state.setting_hide_progress)) drawProgressBar(canvas, elapsed);
-        if (state.layout.controlsVisible(state.setting_show_controls)) drawButtons(canvas);
+    }
+
+    if (state.layout.compact_mix <= 0.5 and state.layout.controlsVisible(state.setting_show_controls)) {
+        drawButtonsStatic(canvas);
+    }
+}
+
+pub fn drawPlayerDynamic(canvas: *gpu.Canvas, elapsed: f64) void {
+    if (state.layout.compact_mix <= 0.5) {
+        if (state.layout.progressVisible(state.setting_hide_progress)) {
+            drawProgressBar(canvas, elapsed);
+        }
+        drawButtonHoverStates(canvas);
     }
 
     labels.drawLabels(canvas, elapsed);
 }
+
+fn drawButtonsStatic(canvas: *gpu.Canvas) void {
+    for (state.layout.buttons) |button| {
+        const texture: gpu.Texture = switch (button.id) {
+            .Prev => .previous,
+            .Next => .next,
+            .PlayPause => if (state.play_pause_mix < 0.5) .play else .pause,
+        };
+
+        const scale = if (button.id == .PlayPause)
+            icon_transition.scale(state.play_pause_mix, state.global_rate > 0.0)
+        else
+            1.0;
+
+        const size = 48.0 * scale;
+        canvas.image(texture, .{
+            .x = button.x - size / 2.0,
+            .y = button.y - size / 2.0,
+            .w = size,
+            .h = size,
+        }, 1.0);
+    }
+}
+
+fn drawButtonHoverStates(canvas: *gpu.Canvas) void {
+    for (state.layout.buttons, 0..) |button, i| {
+        if (state.hover_amount[i] > 0.001) {
+            canvas.fill(button.bounds(), .{ 1.0, 1.0, 1.0, @floatCast(state.hover_amount[i] * 31.0 / 255.0) });
+        }
+    }
+}
+
 
 fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
     if (!state.setting_glow or !state.global_has_artwork or !assets.has_art) return;
@@ -135,32 +185,5 @@ fn drawProgressBar(canvas: *gpu.Canvas, elapsed: f64) void {
         var progress = bar;
         progress.w *= std.math.clamp(elapsed / state.global_duration, 0.0, 1.0);
         if (progress.w > 0.0) canvas.fill(progress, .{ 1.0, 1.0, 1.0, 1.0 });
-    }
-}
-
-fn drawButtons(canvas: *gpu.Canvas) void {
-    for (state.layout.buttons, 0..) |button, i| {
-        if (state.hover_amount[i] > 0.001) {
-            canvas.fill(button.bounds(), .{ 1.0, 1.0, 1.0, @floatCast(state.hover_amount[i] * 31.0 / 255.0) });
-        }
-
-        const texture: gpu.Texture = switch (button.id) {
-            .Prev => .previous,
-            .Next => .next,
-            .PlayPause => if (state.play_pause_mix < 0.5) .play else .pause,
-        };
-
-        const scale = if (button.id == .PlayPause)
-            icon_transition.scale(state.play_pause_mix, state.global_rate > 0.0)
-        else
-            1.0;
-
-        const size = 48.0 * scale;
-        canvas.image(texture, .{
-            .x = button.x - size / 2.0,
-            .y = button.y - size / 2.0,
-            .w = size,
-            .h = size,
-        }, 1.0);
     }
 }
