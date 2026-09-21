@@ -1,7 +1,7 @@
 # Raccoon sprite
 
-`raccoon.png` is the runtime source atlas: five horizontal 36×24 RGBA frames,
-rendered at 3× with nearest-neighbor sampling and animated at 3 fps, matching
+`raccoon.png` is the runtime source atlas: five horizontal 48×32 RGBA frames,
+rendered at 2× with nearest-neighbor sampling and animated at 3 fps, matching
 the Pixel Cat's sleep cycle. Sleep Zs and petting hearts use the shared effect.
 
 `raccoon-source.png` preserves the artwork generated using the built-in imagegen
@@ -10,7 +10,7 @@ with nearest-neighbor sampling. Transparency is binary in the runtime atlas.
 
 Final imagegen prompt:
 
-> Edit this five-frame sleeping raccoon sprite sheet. Make the raccoon MUCH CUTER and MUCH MORE PIXELATED: genuine tiny 32x20-pixel game sprite aesthetic enlarged with nearest-neighbor hard square pixel blocks. Chubby rounded bean body, oversized cute head, tiny closed happy eyes, tiny nose, small ears, short plump striped tail wrapped at front, cozy adorable sleeping pose. Maximum 8 flat colors: warm gray, charcoal outlines and eye mask, creamy muzzle, tiny blush peach cheek pixels. Remove all detailed fur shading, texture, gradients, blur, antialiasing, realism. Every edge should be a chunky stair-step pixel edge. Keep exactly FIVE consistent raccoons arranged in five equal cells in ONE HORIZONTAL ROW, all facing left, same size and baseline, only tiny breathing changes across frames. Transparent background with generous empty gaps. No letters, no Zs, no hearts, no labels, no grid. This must read as charming very low-resolution pixel game art, not a detailed illustration.
+> Create a beautiful professional indie-game pixel art sprite sheet: five animation frames in one horizontal row, transparent background. A VERY CUTE SLEEPING BABY RACCOON curled into a low soft oval, big ROUND head on left resting on little cream paws, petite button nose, TWO gently closed smiling eyelids clearly readable in medium-charcoal mask, rounded cream-rimmed ears, fluffy silver-gray body, plump ringed tail wrapping around right side and under chin. Kawaii proportions, peaceful expression, soft warm-gray and cream palette with peach blush, confident dark-brown pixel outline. Low-resolution 48x32 sprite art with crisp blocky square pixels, clean pixel clusters and 8 flat colors, NO gradient NO fuzzy texture NO photorealism. Five matching frames with only a subtle breathing rise and fall; same character size, same baseline, identical face, tail and paws anchored. Each sprite takes up its equal-width cell, generous transparent gap between them. No text, letters, Z, hearts, shadow, grid or environment. Visually polished, lovable and readable at 100 pixels wide. Landscape image.
 
 Regenerate the embedded binary with Python and Pillow:
 
