@@ -237,11 +237,22 @@ static NSTextField *wfLabel(
     const CGFloat horizontalInset = 12.0;
     const CGFloat gap = 10.0;
     const CGFloat iconSize = 18.0;
+    const CGFloat textHeight = 20.0;
+    const CGFloat contentWidth =
+        MAX(
+            0.0,
+            self.bounds.size.width -
+            (horizontalInset * 2.0) -
+            iconSize -
+            gap
+        );
+
+    CGFloat centerY = floor(self.bounds.size.height * 0.5);
 
     self.iconView.frame =
         NSMakeRect(
             horizontalInset,
-            floor((self.bounds.size.height - iconSize) * 0.5),
+            floor(centerY - iconSize * 0.5),
             iconSize,
             iconSize
         );
@@ -249,15 +260,9 @@ static NSTextField *wfLabel(
     self.textLabel.frame =
         NSMakeRect(
             horizontalInset + iconSize + gap,
-            0,
-            MAX(
-                0.0,
-                self.bounds.size.width -
-                (horizontalInset * 2.0) -
-                iconSize -
-                gap
-            ),
-            self.bounds.size.height
+            floor(centerY - textHeight * 0.5),
+            contentWidth,
+            textHeight
         );
 }
 
@@ -284,7 +289,7 @@ static NSTextField *wfLabel(
     field.bezeled = NO;
     field.drawsBackground = NO;
     field.selectable = NO;
-    field.lineBreakMode = NSLineBreakByTruncatingTail;
+    field.lineBreakMode = NSLineBreakByWordWrapping;
     field.usesSingleLineMode = YES;
     field.maximumNumberOfLines = 1;
 
@@ -374,7 +379,7 @@ static NSImageView *wfSymbol(
     CGFloat availableControlWidth = 72.0;
 
     if ([self.control isKindOfClass:[NSSegmentedControl class]]) {
-        availableControlWidth = 240.0;
+        availableControlWidth = 320.0;
     } else if ([self.control isKindOfClass:[NSPopUpButton class]]) {
         availableControlWidth = 190.0;
     }
@@ -398,7 +403,7 @@ static NSImageView *wfSymbol(
         );
 
     CGFloat textWidth =
-        MAX(80.0, controlX - controlGap - horizontalPadding);
+        MAX(140.0, controlX - controlGap - horizontalPadding);
 
     if (self.subtitleLabel.superview) {
         self.titleLabel.frame =
@@ -583,7 +588,7 @@ static NSImageView *wfSymbol(
             [NSFont monospacedSystemFontOfSize:10.5
                                         weight:NSFontWeightRegular];
 
-        pathLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+        pathLabel.lineBreakMode = NSLineBreakByClipping;
 
         NSButton *reveal =
             wfButton(
@@ -1267,6 +1272,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         [NSFont systemFontOfSize:11.5
                           weight:NSFontWeightMedium];
     restore.contentTintColor = [NSColor secondaryLabelColor];
+    restore.contentInsets = NSEdgeInsetsMake(0, 4, 0, 4);
     [self.sidebarView addSubview:restore];
     self.restoreDefaultsButton = restore;
 }
@@ -1384,7 +1390,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
                 WFSidebarInset,
                 WFTopInset + 70.0 + index * 38.0,
                 sidebarWidth - (WFSidebarInset * 2.0),
-                34
+                36
             );
     }
 
