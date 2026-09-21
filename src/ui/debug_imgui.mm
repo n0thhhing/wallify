@@ -7,11 +7,10 @@
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 
-#include <algorithm>
-#include <cstdarg>
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
+#include <stdarg.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
 
 extern "C" {
 
@@ -135,7 +134,7 @@ static void propertyReadout(const char* label, const char* fmt, ...) {
     char buffer[256];
     va_list args;
     va_start(args, fmt);
-    std::vsnprintf(buffer, sizeof(buffer), fmt, args);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
     propertyText(label, buffer);
 }
@@ -153,7 +152,7 @@ static void drawRuntime(const WallifyDebugSnapshot& s) {
         float mix = s.mode_mix * 100.0f;
         propertyHeader("Mode Mix");
         if (ImGui::SliderFloat("##mix", &mix, 0.0f, 100.0f, "%.0f%%"))
-            wallify_debug_set_int(1000, (int)std::lround(mix));
+            wallify_debug_set_int(1000, (int)lroundf(mix));
 
         propertyInt("Width", s.width, 1001);
         propertyInt("Height", s.height, 1002);
@@ -266,10 +265,10 @@ static void drawSnap(const WallifyDebugSnapshot& s) {
     if (!ImGui::Begin("Snap")) { ImGui::End(); return; }
 
     if (beginProperties("snap")) {
-        propertyInt("Target X", (int)std::lround(s.outline_x), 1005);
-        propertyInt("Target Y", (int)std::lround(s.outline_y), 1006);
-        propertyInt("Target Width", (int)std::lround(s.outline_width), 1007);
-        propertyInt("Target Height", (int)std::lround(s.outline_height), 1008);
+        propertyInt("Target X", (int)lround(s.outline_x), 1005);
+        propertyInt("Target Y", (int)lround(s.outline_y), 1006);
+        propertyInt("Target Width", (int)lround(s.outline_width), 1007);
+        propertyInt("Target Height", (int)lround(s.outline_height), 1008);
         propertyReadout("Candidates", "%u", s.candidate_count);
         propertyReadout("Distance²", "%.0f", s.snap_distance_sq);
         ImGui::EndTable();
