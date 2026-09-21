@@ -13,6 +13,10 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string>
+#include <mutex>
+#include <thread>
+#include <unistd.h>
 
 extern "C" {
 
@@ -43,6 +47,76 @@ static bool gInspectorDrawableResizing = false;
 static float gFrameTimes[180] = {};
 static int gFrameTimeOffset = 0;
 static int gFrameTimeCount = 0;
+
+static std::mutex gInspectorConsoleMutex;
+static std::string gInspectorConsole;
+static int gInspectorConsoleOriginalStdout = -1;
+static std::thread gInspectorConsoleThread;
+static bool gInspectorConsoleInstalled = false;
+static bool gInspectorConsoleAutoScroll = true;
+
+static void appendInspectorConsole(const char* data, size_t length) {
+    if (!data || !length) return;
+    std::lock_guard<std::mutex> lock(gInspectorConsoleMutex);
+    constexpr size_t kMaxConsoleBytes = 512 * 1024;
+    gInspectorConsole.append(data, length);
+    if (gInspectorConsole.size() > kMaxConsoleBytes)
+        gInspectorConsole.erase(0, gInspectorConsole.size() - kMaxConsoleBytes);
+}
+
+static void startInspectorConsoleCapture() {
+    if (gInspectorConsoleInstalled) return;
+
+    int pipefd[2] = {-1, -1};
+    if (pipe(pipefd) != 0) return;
+
+    gInspectorConsoleOriginalStdout = dup(STDOUT_FILENO);
+    if (gInspectorConsoleOriginalStdout < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return;
+    }
+
+    if (dup2(pipefd[1], STDOUT_FILENO) < 0 || dup2(pipefd[1], STDERR_FILENO) < 0) {
+        dup2(gInspectorConsoleOriginalStdout, STDOUT_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+        close(gInspectorConsoleOriginalStdout);
+        gInspectorConsoleOriginalStdout = -1;
+        return;
+    }
+    close(pipefd[1]);
+
+    gInspectorConsoleInstalled = true;
+    gInspectorConsoleThread = std::thread([read_fd = pipefd[0]] {
+        char buffer[4096];
+        for (;;) {
+            const ssize_t count = read(read_fd, buffer, sizeof(buffer));
+            if (count <= 0) break;
+
+            appendInspectorConsole(buffer, (size_t)count);
+
+            if (gInspectorConsoleOriginalStdout >= 0) {
+                ssize_t written = 0;
+                while (written < count) {
+                    const ssize_t n = write(gInspectorConsoleOriginalStdout,
+                                            buffer + written,
+                                            (size_t)(count - written));
+                    if (n <= 0) break;
+                    written += n;
+                }
+            }
+        }
+        close(read_fd);
+    });
+    gInspectorConsoleThread.detach();
+}
+
+extern "C" void wallify_debug_console_install(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        startInspectorConsoleCapture();
+    });
+}
 
 static void setInspectorFrame(NSPanel* panel) {
     NSScreen* screen = NSScreen.mainScreen;
@@ -574,8 +648,7 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
     if (ImGui::BeginTable("InspectorStatusTable", 4,
                           ImGuiTableFlags_SizingStretchProp |
                           ImGuiTableFlags_BordersInnerV |
-                          ImGuiTableFlags_NoPadOuterX |
-                          ImGuiTableFlags_NoPadInnerX)) {
+                          ImGuiTableFlags_NoPadOuterX)) {
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 160.0f);
         ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthFixed, 190.0f);
         ImGui::TableSetupColumn("Media", ImGuiTableColumnFlags_WidthStretch);
@@ -590,6 +663,45 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
 
     ImGui::PopStyleVar(2);
     ImGui::Spacing();
+}
+
+static void drawConsole(const WallifyDebugSnapshot&) {
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 6.0f));
+
+    if (ImGui::Button("Clear")) {
+        std::lock_guard<std::mutex> lock(gInspectorConsoleMutex);
+        gInspectorConsole.clear();
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto-scroll", &gInspectorConsoleAutoScroll);
+    ImGui::SameLine();
+    size_t bytes = 0;
+    {
+        std::lock_guard<std::mutex> lock(gInspectorConsoleMutex);
+        bytes = gInspectorConsole.size();
+    }
+    ImGui::TextDisabled("%zu KiB captured", bytes / 1024);
+
+    const ImVec2 avail = ImGui::GetContentRegionAvail();
+    if (ImGui::BeginChild("ConsoleOutput", avail, ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 2.0f));
+        std::string output;
+        {
+            std::lock_guard<std::mutex> lock(gInspectorConsoleMutex);
+            output = gInspectorConsole;
+        }
+        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size ? ImGui::GetIO().Fonts->Fonts[0] : nullptr);
+        ImGui::TextUnformatted(output.empty() ? "Console is waiting for output…" : output.c_str());
+        if (gInspectorConsoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 8.0f)
+            ImGui::SetScrollHereY(1.0f);
+        ImGui::PopFont();
+        ImGui::PopStyleVar();
+    }
+    ImGui::EndChild();
+
+    ImGui::PopStyleVar(2);
 }
 
 static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
@@ -684,6 +796,7 @@ static void drawInspector() {
             drawTab("Renderer", drawRenderer, s);
             drawTab("Input", drawMouse, s);
             drawTab("Layout", drawGeometry, s);
+            drawTab("Console", drawConsole, s);
             ImGui::EndTabBar();
         }
     }
