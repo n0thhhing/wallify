@@ -633,6 +633,7 @@ static void presentLatest(void) {
 
         id<CAMetalDrawable> drawable = [surface nextDrawable];
         if (!drawable) {
+            if (profiling) NSLog(@"Wallify: CAMetalLayer returned no drawable; dropping frame");
             dispatch_semaphore_signal(inFlight);
             return;
         }
@@ -664,7 +665,7 @@ static void presentLatest(void) {
         encodeCommands(command, drawable.texture, dynamicCommands, dynamicCount, size, textures);
 
         if (profiling) {
-            atomic_fetch_add(&drawCalls, cacheChanged ? 2 : 1);
+            atomic_fetch_add(&drawCalls, (cacheChanged || !staticCacheValid || textureRecreated) ? 2 : 1);
         }
 
         [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
