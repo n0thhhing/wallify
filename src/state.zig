@@ -39,6 +39,7 @@ pub var seek_velocity: f64 = 0.0;
 pub var aurora_mix: f64 = 0.0;
 pub var hover_amount = [_]f64{ 0, 0, 0 };
 pub var spotify_closed = std.atomic.Value(bool).init(false);
+pub var spotify_has_track = std.atomic.Value(bool).init(false);
 pub var clock = PlaybackClock{};
 
 pub const HitTarget = enum {
@@ -216,11 +217,9 @@ pub fn isPlaceholderTitle(title: []const u8) bool {
 }
 
 pub fn spotifyIdle() bool {
+    if (setting_source != .spotify) return false;
     if (spotify_closed.load(.acquire)) return true;
-    const title_len = global_title_len;
-    if (title_len == 0) return true;
-    const has_track = !isPlaceholderTitle(global_title[0..title_len]);
-    return !has_track and !global_has_artwork and global_rate == 0;
+    return !spotify_has_track.load(.acquire);
 }
 
 pub var setting_mode: WidgetMode = .expanded;
@@ -329,34 +328,33 @@ test "AnimationSpeed multiplier paces framerate transitions" {
     try std.testing.expectEqual(@as(f64, 1.4), AnimationSpeed.fast.multiplier());
 }
 
-test "spotifyIdle correctly triggers for closed app or empty titles" {
+test "spotifyIdle follows explicit Spotify track presence" {
+    const old_source = setting_source;
+    const old_closed = spotify_closed.load(.acquire);
+    const old_has_track = spotify_has_track.load(.acquire);
+    defer {
+        setting_source = old_source;
+        spotify_closed.store(old_closed, .release);
+        spotify_has_track.store(old_has_track, .release);
+    }
+
+    setting_source = .spotify;
+    spotify_closed.store(false, .release);
+    spotify_has_track.store(false, .release);
+    try std.testing.expect(spotifyIdle());
+
+    // A real track stays active even before artwork arrives and while paused.
+    spotify_has_track.store(true, .release);
+    global_rate = 0.0;
+    global_has_artwork = false;
+    try std.testing.expect(!spotifyIdle());
+
     spotify_closed.store(true, .release);
     try std.testing.expect(spotifyIdle());
 
+    // Idle is a Spotify-only presentation state.
     spotify_closed.store(false, .release);
-    global_title_len = 0;
-    global_has_artwork = false;
-    global_rate = 0.0;
-    try std.testing.expect(spotifyIdle());
-
-    const closed_title = "Spotify is Closed";
-    @memcpy(global_title[0..closed_title.len], closed_title);
-    global_title_len = closed_title.len;
-    try std.testing.expect(spotifyIdle());
-
-    const spotifast_closed_title = "Spotifast is Closed";
-    @memcpy(global_title[0..spotifast_closed_title.len], spotifast_closed_title);
-    global_title_len = spotifast_closed_title.len;
-    try std.testing.expect(spotifyIdle());
-
-    const active_title = "Starboy";
-    @memcpy(global_title[0..active_title.len], active_title);
-    global_title_len = active_title.len;
-    global_rate = 1.0;
-    try std.testing.expect(!spotifyIdle());
-
-    // Paused active track remains active in player view
-    global_rate = 0.0;
-    global_has_artwork = true;
+    spotify_has_track.store(false, .release);
+    setting_source = .now_playing;
     try std.testing.expect(!spotifyIdle());
 }
