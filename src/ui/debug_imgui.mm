@@ -39,6 +39,7 @@ static const CGFloat kInspectorCollapsedWidth = 240.0;
 
 static CGFloat gInspectorExpandedWidth = kInspectorWidth;
 static CGFloat gInspectorExpandedHeight = kInspectorExpandedHeight;
+static bool gInspectorDrawableResizing = false;
 static float gFrameTimes[180] = {};
 static int gFrameTimeOffset = 0;
 static int gFrameTimeCount = 0;
@@ -575,7 +576,9 @@ static void resizeInspector(CGFloat width, CGFloat height, bool saveExpandedSize
     // Keep the title bar anchored at the same screen position.
     frame.origin.y += frame.size.height - height;
     frame.size = NSMakeSize(width, height);
+    gInspectorDrawableResizing = true;
     [gInspectorPanel setFrame:frame display:YES animate:NO];
+    [gInspectorView setNeedsLayout:YES];
 }
 
 static void dragInspectorTitleBar() {
@@ -670,6 +673,7 @@ static void drawInspector() {
 - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size {
     (void)view;
     (void)size;
+    gInspectorDrawableResizing = true;
 }
 
 - (void)drawInMTKView:(MTKView*)view {
@@ -678,6 +682,25 @@ static void drawInspector() {
     MTLRenderPassDescriptor* pass = view.currentRenderPassDescriptor;
     id<CAMetalDrawable> drawable = view.currentDrawable;
     if (!pass || !drawable) return;
+
+    const CGFloat scale = MAX(view.window.backingScaleFactor, 1.0);
+    const CGSize expectedDrawableSize = CGSizeMake(
+        view.bounds.size.width * scale,
+        view.bounds.size.height * scale);
+
+    const NSUInteger drawableWidth = drawable.texture.width;
+    const NSUInteger drawableHeight = drawable.texture.height;
+    const bool drawableMatchesView =
+        fabs((CGFloat)drawableWidth - expectedDrawableSize.width) <= 1.0 &&
+        fabs((CGFloat)drawableHeight - expectedDrawableSize.height) <= 1.0;
+
+    if (gInspectorDrawableResizing && !drawableMatchesView) {
+        return;
+    }
+
+    if (drawableMatchesView) {
+        gInspectorDrawableResizing = false;
+    }
 
     @autoreleasepool {
         ImGui_ImplMetal_NewFrame(pass);
