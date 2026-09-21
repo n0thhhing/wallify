@@ -692,11 +692,9 @@ static void drawConsole(const WallifyDebugSnapshot&) {
             std::lock_guard<std::mutex> lock(gInspectorConsoleMutex);
             output = gInspectorConsole;
         }
-        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size ? ImGui::GetIO().Fonts->Fonts[0] : nullptr);
         ImGui::TextUnformatted(output.empty() ? "Console is waiting for output…" : output.c_str());
         if (gInspectorConsoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 8.0f)
             ImGui::SetScrollHereY(1.0f);
-        ImGui::PopFont();
         ImGui::PopStyleVar();
     }
     ImGui::EndChild();
