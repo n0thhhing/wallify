@@ -15,6 +15,9 @@
 
 extern void wallify_pointer(double, double, int);
 extern void wallify_set_window_visible(int visible);
+extern void wallify_menu_play_pause(void);
+extern void wallify_menu_previous(void);
+extern void wallify_menu_next(void);
 
 static NSPanel* panel;
 static NSStatusItem* statusItem;
@@ -287,6 +290,21 @@ static WallifyView* globalMetalView = nil;
     (void)sender;
 
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"spotify:"]];
+}
+
+- (void)statusPlayPause:(id)sender {
+    (void)sender;
+    wallify_menu_play_pause();
+}
+
+- (void)statusPrevious:(id)sender {
+    (void)sender;
+    wallify_menu_previous();
+}
+
+- (void)statusNext:(id)sender {
+    (void)sender;
+    wallify_menu_next();
 }
 
 - (void)statusToggleBool:(NSMenuItem*)sender {
@@ -564,18 +582,15 @@ bool wallify_create(int width, int height, int left, int top) {
     nowPlaying.enabled = NO;
     [menu addItem:nowPlaying];
 
-    statusPlayItem = [[NSMenuItem alloc] initWithTitle:@"Play" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    statusPlayItem = [[NSMenuItem alloc] initWithTitle:@"Play" action:@selector(statusPlayPause:) keyEquivalent:@""];
     statusPlayItem.target = menuTarget;
-    // Replace the generic opener below with the actual playback callback in
-    // controller.zig when available. Keeping this item disabled would make the
-    // quick-control menu misleading, so use a small media bridge helper.
     [menu addItem:statusPlayItem];
 
-    NSMenuItem* previous = [[NSMenuItem alloc] initWithTitle:@"Previous Track" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    NSMenuItem* previous = [[NSMenuItem alloc] initWithTitle:@"Previous Track" action:@selector(statusPrevious:) keyEquivalent:@""];
     previous.target = menuTarget;
     [menu addItem:previous];
 
-    NSMenuItem* next = [[NSMenuItem alloc] initWithTitle:@"Next Track" action:@selector(statusOpenSpotify:) keyEquivalent:@""];
+    NSMenuItem* next = [[NSMenuItem alloc] initWithTitle:@"Next Track" action:@selector(statusNext:) keyEquivalent:@""];
     next.target = menuTarget;
     [menu addItem:next];
 
