@@ -418,6 +418,92 @@ static void drawRenderer(const WallifyDebugSnapshot& s) {
     }
 }
 
+static void drawPerformance(const WallifyDebugSnapshot& s) {
+    WallifyRendererStats renderer{};
+    wallify_debug_renderer_stats(&renderer);
+
+    NSWindow* widgetWindow =
+        s.window_number != 0
+            ? [NSApp windowWithWindowNumber:(NSInteger)s.window_number]
+            : nil;
+    const bool visible =
+        widgetWindow &&
+        ((widgetWindow.occlusionState & NSWindowOcclusionStateVisible) != 0);
+
+    const char* scheduler =
+        !visible ? "Sleeping — fully occluded" :
+        (s.transition_active || s.seeking || s.panel_dragging) ? "Interactive — 60 FPS" :
+        (s.animations && (s.aurora_mix > 0.001 || s.artwork_mix > 0.001 || s.play_pause_mix > 0.001))
+            ? "Visual — 30 FPS" :
+        (s.rate > 0.0 && s.animations) ? "Ambient — 20 FPS" :
+        "Event driven";
+
+    ImGui::TextWrapped(
+        "The scheduler deliberately spends frame time where it is visible: "
+        "interactive motion runs at display rate, short effects run at 30 FPS, "
+        "and steady ambient playback runs at 20 FPS. A fully occluded widget sleeps."
+    );
+    ImGui::Spacing();
+
+    if (beginProperties("performance_status")) {
+        propertyText("Widget", visible ? "Visible" : "Fully occluded");
+        propertyText("Scheduler", scheduler);
+        propertyText("Renderer", renderer.ready ? "Metal ready" : "Unavailable");
+        propertyReadout("Dynamic commands", "%u / %d", renderer.command_count, WALLIFY_MAX_COMMANDS);
+        propertyReadout("Draw calls / completed frame", "%.2f",
+                        renderer.rendered_frames ? (double)renderer.command_count : 0.0);
+        propertyReadout("Scene CPU average", "%.3f ms", renderer.scene_ms);
+        propertyReadout("GPU average", "%.3f ms", renderer.gpu_ms);
+        propertyReadout("Textures", "%u • %.2f MiB", renderer.texture_count, renderer.texture_bytes / 1048576.0);
+        ImGui::EndTable();
+    }
+
+    ImGui::SeparatorText("Static Scene Cache");
+    if (beginProperties("performance_cache")) {
+        propertyText("Status", renderer.static_cache_valid ? "Valid" : "Invalid");
+        propertyReadout("Rebuilds", "%u", renderer.static_cache_rebuilds);
+        propertyReadout("Backing texture", "%.0f × %.0f px",
+                        renderer.static_cache_width, renderer.static_cache_height);
+        propertyText(
+            "Strategy",
+            "Artwork, glow, controls, and frame are baked once and reused; only dynamic content is shaded per frame."
+        );
+        ImGui::EndTable();
+    }
+
+    ImGui::SeparatorText("Frame-rate policy");
+    if (ImGui::BeginTable("performance_budgets", 3,
+                          ImGuiTableFlags_SizingStretchProp |
+                          ImGuiTableFlags_RowBg |
+                          ImGuiTableFlags_BordersInnerH)) {
+        ImGui::TableSetupColumn("Tier");
+        ImGui::TableSetupColumn("Target");
+        ImGui::TableSetupColumn("Used for");
+        ImGui::TableHeadersRow();
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Interactive");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("60 FPS");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Dragging, seeking, resize, snapping");
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Visual");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("30 FPS");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Hover, artwork fade, transitions, marquee");
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Ambient");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("20 FPS");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Playback progress, Aurora");
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Occluded");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("0 FPS");
+        ImGui::TableNextColumn(); ImGui::TextUnformatted("Animation thread sleeps until visibility returns");
+        ImGui::EndTable();
+    }
+}
+
 static const char* hitTargetName(int target) {
     static const char* names[] = {"None", "Grid background", "Card", "Artwork", "Seek bar", "Previous", "Play / pause", "Next"};
     return target >= 0 && target < IM_ARRAYSIZE(names) ? names[target] : "Unknown";
@@ -796,9 +882,10 @@ static void drawInspector() {
                 ImGuiTabBarFlags_FittingPolicyScroll)) {
             drawTab("Widget", drawWidget, s);
             drawTab("Renderer", drawRenderer, s);
+            drawTab("Performance", drawPerformance, s);
             drawTab("Input", drawMouse, s);
             drawTab("Layout", drawGeometry, s);
-            drawTab("Console", drawConsole, s);
+            drawTab("Console / Events", drawConsole, s);
             ImGui::EndTabBar();
         }
     }
