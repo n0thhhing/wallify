@@ -362,6 +362,11 @@ static void drawInspector() {
 
 @implementation WallifyImGuiView
 
+- (BOOL)acceptsFirstMouse:(NSEvent*)event {
+    (void)event;
+    return YES;
+}
+
 - (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device {
     self = [super initWithFrame:frame device:device];
     if (self) {
@@ -391,6 +396,12 @@ static void drawInspector() {
     @autoreleasepool {
         ImGui_ImplMetal_NewFrame(pass);
         ImGui_ImplOSX_NewFrame(view);
+        // AppKit need not emit a mouse-moved event when we resize or move the
+        // panel beneath the pointer. Refresh the local position for hit tests.
+        NSPoint mouse = [view convertPoint:view.window.mouseLocationOutsideOfEventStream
+                                 fromView:nil];
+        ImGui::GetIO().AddMousePosEvent(mouse.x,
+            view.isFlipped ? mouse.y : view.bounds.size.height - mouse.y);
         ImGui::NewFrame();
 
         drawInspector();
@@ -477,6 +488,7 @@ static void showInspectorOnMain(void) {
 
             gInspectorPanel.title = @"";
             gInspectorPanel.movableByWindowBackground = NO;
+            gInspectorPanel.acceptsMouseMovedEvents = YES;
             gInspectorPanel.appearance =
                 [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
             gInspectorPanel.opaque = YES;
