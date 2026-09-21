@@ -3,6 +3,11 @@
 
 extern const char *wallify_settings_path(void);
 
+static const CGFloat WFTopInset = 54.0;
+static const CGFloat WFSidebarInset = 18.0;
+static const CGFloat WFContentInset = 12.0;
+static const CGFloat WFContentMaxWidth = 600.0;
+
 @interface WFFlippedView : NSView
 @end
 
@@ -271,8 +276,8 @@ static NSImageView *wfSymbol(
 - (void)layout {
     [super layout];
 
-    const CGFloat horizontalPadding = 2.0;
-    const CGFloat controlGap = 22.0;
+    const CGFloat horizontalPadding = WFContentInset;
+    const CGFloat controlGap = 24.0;
 
     CGFloat availableControlWidth = 72.0;
 
@@ -534,9 +539,9 @@ static NSImageView *wfSymbol(
 
     self.headerLabel.frame =
         NSMakeRect(
-            2,
+            WFContentInset,
             0,
-            self.bounds.size.width - 4,
+            self.bounds.size.width - (WFContentInset * 2.0),
             headerHeight
         );
 
@@ -576,9 +581,9 @@ static NSImageView *wfSymbol(
 
                 separator.frame =
                     NSMakeRect(
-                        2,
+                        WFContentInset,
                         56,
-                        MAX(0.0, row.bounds.size.width - 2),
+                        MAX(0.0, row.bounds.size.width - (WFContentInset * 2.0)),
                         1
                     );
             }
@@ -605,11 +610,13 @@ static NSImageView *wfSymbol(
             NSButton *reset = (NSButton *)views[2];
 
             status.frame =
-                NSMakeRect(2, 7, self.bounds.size.width - 4, 18);
+                NSMakeRect(WFContentInset, 7,
+                           self.bounds.size.width - (WFContentInset * 2.0), 18);
             hint.frame =
-                NSMakeRect(2, 31, self.bounds.size.width - 4, 18);
+                NSMakeRect(WFContentInset, 31,
+                           self.bounds.size.width - (WFContentInset * 2.0), 18);
             reset.frame =
-                NSMakeRect(2, 60, 120, 30);
+                NSMakeRect(WFContentInset, 60, 120, 30);
 
         } else if (self.type == WFSectionTypeConfiguration &&
                    views.count >= 3) {
@@ -618,10 +625,11 @@ static NSImageView *wfSymbol(
             NSButton *open = (NSButton *)views[2];
 
             path.frame =
-                NSMakeRect(2, 8, self.bounds.size.width - 4, 18);
+                NSMakeRect(WFContentInset, 8,
+                           self.bounds.size.width - (WFContentInset * 2.0), 18);
 
-            reveal.frame = NSMakeRect(2, 44, 132, 30);
-            open.frame = NSMakeRect(142, 44, 104, 30);
+            reveal.frame = NSMakeRect(WFContentInset, 44, 132, 30);
+            open.frame = NSMakeRect(WFContentInset + 142, 44, 104, 30);
         }
     }
 }
@@ -667,11 +675,20 @@ static NSImageView *wfSymbol(
     for (WFSectionView *section in self.sections) {
         CGFloat h = [section preferredHeight];
 
+        CGFloat sectionWidth =
+            MIN(
+                WFContentMaxWidth,
+                MAX(100.0, self.bounds.size.width - 52.0)
+            );
+
+        CGFloat sectionX =
+            floor((self.bounds.size.width - sectionWidth) * 0.5);
+
         section.frame =
             NSMakeRect(
-                26.0,
+                sectionX,
                 y,
-                MAX(100.0, self.bounds.size.width - 52.0),
+                sectionWidth,
                 h
             );
 
@@ -1133,6 +1150,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         button.tag = i;
         button.bordered = NO;
         button.alignment = NSTextAlignmentLeft;
+        button.imageHugsTitle = NO;
         button.font =
             [NSFont systemFontOfSize:13.5
                               weight:NSFontWeightMedium];
@@ -1234,7 +1252,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     NSRect bounds = self.contentRoot.bounds;
 
     const CGFloat sidebarWidth = 178.0;
-    const CGFloat headerHeight = 72.0;
+    const CGFloat headerHeight = 92.0;
 
     self.sidebarView.frame =
         NSMakeRect(
@@ -1244,7 +1262,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
             bounds.size.height
         );
 
-    CGFloat dividerY = 84.0;
+    CGFloat dividerY = WFTopInset + 44.0;
 
     for (NSView *view in self.sidebarView.subviews) {
         if ([view isKindOfClass:[NSBox class]]) {
@@ -1277,31 +1295,31 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
     }
 
     if (appIcon)
-        appIcon.frame = NSMakeRect(20, 20, 24, 24);
+        appIcon.frame = NSMakeRect(22, WFTopInset + 2.0, 24, 24);
 
     if (appName)
-        appName.frame = NSMakeRect(52, 18, 110, 24);
+        appName.frame = NSMakeRect(56, WFTopInset, 108, 24);
 
     if (caption)
-        caption.frame = NSMakeRect(53, 41, 110, 18);
+        caption.frame = NSMakeRect(57, WFTopInset + 23.0, 108, 18);
 
     for (NSButton *button in self.sidebarButtons) {
         NSInteger index = button.tag;
 
         button.frame =
             NSMakeRect(
-                12,
-                100 + index * 38,
-                sidebarWidth - 24,
+                WFSidebarInset,
+                WFTopInset + 70.0 + index * 38.0,
+                sidebarWidth - (WFSidebarInset * 2.0),
                 34
             );
     }
 
     self.restoreDefaultsButton.frame =
         NSMakeRect(
-            12,
+            WFSidebarInset,
             bounds.size.height - 40,
-            sidebarWidth - 24,
+            sidebarWidth - (WFSidebarInset * 2.0),
             28
         );
 
@@ -1332,12 +1350,12 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
         );
 
     self.pageIconView.frame =
-        NSMakeRect(28, 24, 22, 22);
+        NSMakeRect(30, WFTopInset - 2.0, 22, 22);
 
     self.pageTitleLabel.frame =
         NSMakeRect(
-            60,
-            18,
+            62,
+            WFTopInset - 8.0,
             MAX(120.0, self.mainView.bounds.size.width - 88),
             32
         );
