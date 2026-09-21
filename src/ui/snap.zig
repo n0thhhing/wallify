@@ -185,6 +185,7 @@ fn makeDebugPane(content: Ref, index: usize, title_text: []const u8, frame: Rect
         .{@as(f64, 0.90), @as(f64, 1.0)},
     );
     macos.send(void, title, "setTextColor:", .{title_color});
+    macos.send(void, title, "setAutoresizingMask:", .{@as(usize, 2 | 8)});
     const title_value = macos.string(title_text);
     defer macos.CFRelease(title_value);
     macos.send(void, title, "setStringValue:", .{title_value});
@@ -216,7 +217,7 @@ fn makeDebugPane(content: Ref, index: usize, title_text: []const u8, frame: Rect
         .{@as(f64, 0.72), @as(f64, 1.0)},
     );
     macos.send(void, body, "setTextColor:", .{body_color});
-    macos.send(void, body, "setAutoresizingMask:", .{@as(usize, 18)});
+    macos.send(void, body, "setAutoresizingMask:", .{@as(usize, 2 | 16)});
     macos.send(void, pane, "addSubview:", .{body});
 
     snap_debug_panes[index] = body;
@@ -280,14 +281,28 @@ fn updateSnapDebug() void {
         macos.send(void, root, "setAutoresizingMask:", .{@as(usize, 18)});
         macos.send(void, content, "addSubview:", .{root});
 
-        const pad: f64 = 12.0;
-        const gap: f64 = 8.0;
+        const pad: f64 = 10.0;
+        const gap: f64 = 7.0;
         const header_height: f64 = 28.0;
         const footer_height: f64 = 18.0;
-        const body_top = footer_height + 8.0;
-        const body_bottom = DEBUG_PANEL_HEIGHT - header_height - 10.0;
-        const pane_height = (body_bottom - body_top - gap * 2.0) / 3.0;
-        const pane_width = (DEBUG_PANEL_WIDTH - pad * 2.0 - gap) / 2.0;
+        const grid_frame = rect(
+            pad,
+            footer_height + 10.0,
+            DEBUG_PANEL_WIDTH - pad * 2.0,
+            DEBUG_PANEL_HEIGHT - header_height - footer_height - 28.0,
+        );
+
+        const grid = macos.send(
+            Ref,
+            macos.send(Ref, macos.objc_getClass("NSStackView"), "alloc", .{}),
+            "initWithFrame:",
+            .{grid_frame},
+        );
+        if (grid == null) return;
+        macos.send(void, grid, "setOrientation:", .{@as(usize, 1)});
+        macos.send(void, grid, "setDistribution:", .{@as(isize, 1)});
+        macos.send(void, grid, "setSpacing:", .{gap});
+        macos.send(void, grid, "setAutoresizingMask:", .{@as(usize, 18)});
 
         const titles = [_][]const u8{
             "Runtime",
@@ -298,19 +313,32 @@ fn updateSnapDebug() void {
             "Snap",
         };
 
-        const pane_frames = [_]Rect{
-            rect(pad, body_top + (pane_height + gap) * 2.0, pane_width, pane_height),
-            rect(pad + pane_width + gap, body_top + (pane_height + gap) * 2.0, pane_width, pane_height),
-            rect(pad, body_top + (pane_height + gap), pane_width, pane_height),
-            rect(pad + pane_width + gap, body_top + (pane_height + gap), pane_width, pane_height),
-            rect(pad, body_top, pane_width, pane_height),
-            rect(pad + pane_width + gap, body_top, pane_width, pane_height),
-        };
+        for (0..3) |row_index| {
+            const row = macos.send(
+                Ref,
+                macos.send(Ref, macos.objc_getClass("NSStackView"), "alloc", .{}),
+                "initWithFrame:",
+                .{rect(0, 0, grid_frame.size.width, (grid_frame.size.height - gap * 2.0) / 3.0)},
+            );
+            if (row == null) return;
+            macos.send(void, row, "setOrientation:", .{@as(usize, 0)});
+            macos.send(void, row, "setDistribution:", .{@as(isize, 1)});
+            macos.send(void, row, "setSpacing:", .{gap});
+            macos.send(void, row, "setAutoresizingMask:", .{@as(usize, 18)});
 
-        for (titles, 0..) |pane_title, i| {
-            const pane = makeDebugPane(root, i, pane_title, pane_frames[i]);
-            if (pane != null) macos.send(void, root, "addSubview:", .{pane});
+            for (0..2) |column_index| {
+                const pane_index = row_index * 2 + column_index;
+                const pane = makeDebugPane(
+                    row,
+                    pane_index,
+                    titles[pane_index],
+                    rect(0, 0, (grid_frame.size.width - gap) / 2.0, (grid_frame.size.height - gap * 2.0) / 3.0),
+                );
+                if (pane != null) macos.send(void, row, "addArrangedSubview:", .{pane});
+            }
+            macos.send(void, grid, "addArrangedSubview:", .{row});
         }
+        macos.send(void, root, "addSubview:", .{grid});
 
         const footer_cls = macos.objc_getClass("NSTextField");
         const footer = macos.send(
