@@ -67,6 +67,7 @@ pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) call
                 .pixel_cat => 0,
                 .banana_cat => 1,
                 .spotify => 2,
+                .raccoon => 3,
             },
             .track_transition = @intFromEnum(state.setting_transition),
             .margin_left = state.widget_margin_left,
@@ -137,6 +138,7 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
         15 => state.setting_idle_style = switch (val) {
             0 => .pixel_cat,
             1 => .banana_cat,
+            3 => .raccoon,
             else => .spotify,
         },
         16 => state.setting_transition = @enumFromInt(std.math.clamp(val, 0, 5)),
@@ -230,4 +232,9 @@ test "settings snapshot matches active state" {
     try std.testing.expectEqual(state.IdleStyle.spotify, state.setting_idle_style);
     wallify_settings_get_snapshot(&snapshot);
     try std.testing.expectEqual(@as(c_int, 2), snapshot.idle_style);
+
+    wallify_settings_apply_int(15, 3);
+    try std.testing.expectEqual(state.IdleStyle.raccoon, state.setting_idle_style);
+    wallify_settings_get_snapshot(&snapshot);
+    try std.testing.expectEqual(@as(c_int, 3), snapshot.idle_style);
 }

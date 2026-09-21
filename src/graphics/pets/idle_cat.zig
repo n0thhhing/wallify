@@ -18,6 +18,10 @@ pub fn draw(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: bool) void {
     c.sw = @as(f32, @floatFromInt(sprite.w)) / sprites.cat_width;
     c.sh = @as(f32, @floatFromInt(sprite.h)) / sprites.cat_height;
 
+    drawSleepEffects(canvas, card, time, petted);
+}
+
+pub fn drawSleepEffects(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: bool) void {
     // Floating sleep Z's (or floating pink hearts when petted!)
     const z_color = [4]f32{ 235.0 / 255.0, 219.0 / 255.0, 178.0 / 255.0, 210.0 / 255.0 };
     const heart_color = [4]f32{ 211.0 / 255.0, 134.0 / 255.0, 155.0 / 255.0, 235.0 / 255.0 };

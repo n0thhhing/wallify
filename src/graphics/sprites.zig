@@ -4,6 +4,11 @@ pub const cat_height = 52;
 pub const banana_width = 98;
 pub const banana_frame_height = 114;
 pub const banana_frames = 45;
+pub const raccoon_frame_width = 36;
+pub const raccoon_height = 24;
+pub const raccoon_frames = 5;
+pub const raccoon_width = raccoon_frame_width * raccoon_frames;
+pub const raccoon_data = @embedFile("../assets/bin/raccoon_pixels.bin");
 pub const cat_data = @embedFile("../assets/bin/cat_pixels.bin");
 pub const banana_data = @embedFile("../assets/bin/banana_pixels.bin");
 pub const Region = struct { x: usize, y: usize = 0, w: usize, h: usize };
@@ -57,6 +62,9 @@ test "embedded sprite atlases decode to their declared dimensions" {
     const banana = try std.testing.allocator.alloc(u32, banana_width * banana_frame_height * banana_frames);
     defer std.testing.allocator.free(banana);
     try decode(banana_data, banana);
+    const raccoon = try std.testing.allocator.alloc(u32, raccoon_width * raccoon_height);
+    defer std.testing.allocator.free(raccoon);
+    try decode(raccoon_data, raccoon);
     for (cat_regions) |region| {
         try std.testing.expect(region.x + region.w <= cat_width);
         try std.testing.expect(region.h <= cat_height);

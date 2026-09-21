@@ -119,6 +119,7 @@ pub fn parseIdleStyle(raw: []const u8) state.IdleStyle {
     if (std.ascii.eqlIgnoreCase(s, "spotify") or std.mem.eql(u8, s, "0")) return .spotify;
     if (std.ascii.eqlIgnoreCase(s, "cat") or std.ascii.eqlIgnoreCase(s, "pixel_cat") or std.mem.eql(u8, s, "1")) return .pixel_cat;
     if (std.ascii.eqlIgnoreCase(s, "banana_cat") or std.ascii.eqlIgnoreCase(s, "banana") or std.mem.eql(u8, s, "2")) return .banana_cat;
+    if (std.ascii.eqlIgnoreCase(s, "raccoon") or std.mem.eql(u8, s, "3")) return .raccoon;
     return .pixel_cat;
 }
 
@@ -127,7 +128,14 @@ pub fn idleStyleName(v: state.IdleStyle) []const u8 {
         .spotify => "spotify",
         .pixel_cat => "cat",
         .banana_cat => "banana_cat",
+        .raccoon => "raccoon",
     };
+}
+
+test "raccoon idle style parses and round trips" {
+    try std.testing.expectEqual(state.IdleStyle.raccoon, parseIdleStyle("Raccoon"));
+    try std.testing.expectEqual(state.IdleStyle.raccoon, parseIdleStyle("3"));
+    try std.testing.expectEqual(state.IdleStyle.raccoon, parseIdleStyle(idleStyleName(.raccoon)));
 }
 
 pub fn parseTransitionStyle(raw: []const u8) state.TransitionStyle {
@@ -313,7 +321,7 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\# Metadata telemetry source [now_playing, spotify, spotifast]
         \\media_source = {s}
         \\
-        \\# Mascot shown when player is inactive [cat, banana_cat, spotify]
+        \\# Mascot shown when player is inactive [cat, banana_cat, raccoon, spotify]
         \\idle_style = {s}
         \\
         \\# Artwork transition on track changes [cinematic, ripple, flip, vinyl, glitch, default]

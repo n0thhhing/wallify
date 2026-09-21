@@ -18,7 +18,7 @@ typedef struct {
     int animation_speed;  // 0: slow, 1: normal, 2: fast
     int media_source;     // 0: now_playing, 1: spotify, 2: spotifast, 3: auto
     int widget_mode;      // 0: 1×1, 1: 2×1, 2: 3×1, 3: 1×2, 4: 2×2
-    int idle_style;       // 0: pixel_cat, 1: banana_cat, 2: spotify
+    int idle_style;       // 0: pixel_cat, 1: banana_cat, 2: spotify, 3: raccoon
     int track_transition; // 0: default, 1: cinematic, 2: ripple, 3: flip, 4: vinyl, 5: glitch
     int margin_left;
     int margin_top;

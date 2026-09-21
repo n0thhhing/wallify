@@ -83,6 +83,7 @@ pub fn animationLoop() void {
             .idle_spotify => state.setting_idle_style = .spotify,
             .idle_pixel => state.setting_idle_style = .pixel_cat,
             .idle_banana => state.setting_idle_style = .banana_cat,
+            .idle_raccoon => state.setting_idle_style = .raccoon,
             .transition_default => state.setting_transition = .default,
             .transition_cinematic => state.setting_transition = .cinematic,
             .transition_ripple => state.setting_transition = .ripple,

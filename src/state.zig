@@ -129,6 +129,7 @@ pub const IdleStyle = enum(u8) {
     spotify = 0,
     pixel_cat = 1,
     banana_cat = 2,
+    raccoon = 3,
 };
 
 pub const TransitionStyle = enum(u8) {

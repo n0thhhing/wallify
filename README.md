@@ -10,7 +10,7 @@ A native macOS music widget written in Zig with an AppKit window and Metal GPU r
 - **Media sources** — System Now Playing, Spotify (AppleScript), Spotifast (fast local IPC), or **Auto** (pings Spotifast, falls back to Now Playing automatically)
 - **Media key redirect** — intercepts F7/F8/F9 via `CGEventTap` and routes them to your chosen source instead of waking Apple Music (requires Accessibility permission)
 - **Artwork transitions** — Smooth Crossfade, Cinematic, Liquid Ripple, 3D Card Flip, Vinyl Spin, Cyber Glitch (Metal shader animations)
-- **Idle companions** — Pixel Cat, Banana Cat, or Spotify button when nothing is playing
+- **Idle companions** — Pixel Cat, Banana Cat, Raccoon, or Spotify button when nothing is playing
 - **Five widget form factors** — 1×1, 2×1, 3×1, 1×2, and 2×2 with animated resizing
 - **Aurora background** — multi-stop gradient shifting to album art dominant colors
 - **Configurable** — hide text, hide progress bar, font scale, glow intensity, animation speed, glass border strength
@@ -57,7 +57,7 @@ animation_speed     = normal        # slow | normal | fast
 [Behavior]
 widget_mode         = expanded      # compact | expanded
 media_source        = auto          # now_playing | spotify | spotifast | auto
-idle_style          = pixel_cat     # cat | banana_cat | spotify
+idle_style          = pixel_cat     # cat | banana_cat | raccoon | spotify
 track_transition    = cinematic     # default | cinematic | ripple | flip | vinyl | glitch
 hide_text           = false         # Hide track title and artist labels
 hide_progress       = false         # Hide the progress/seek bar

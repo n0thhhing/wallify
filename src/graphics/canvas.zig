@@ -16,6 +16,7 @@ pub const Texture = enum(c_int) {
     pause,
     previous,
     next,
+    raccoon,
     text_start,
 };
 

@@ -27,6 +27,10 @@ pub fn init() !void {
     defer std.heap.page_allocator.free(banana);
     try sprites.decode(sprites.banana_data, banana);
     upload(.banana, banana, sprites.banana_width, banana_h);
+    const raccoon = try std.heap.page_allocator.alloc(u32, sprites.raccoon_width * sprites.raccoon_height);
+    defer std.heap.page_allocator.free(raccoon);
+    try sprites.decode(sprites.raccoon_data, raccoon);
+    upload(.raccoon, raccoon, sprites.raccoon_width, sprites.raccoon_height);
     var icon: [96 * 96]u32 = undefined;
     for ([_]Texture{ .play, .pause, .previous, .next }, 0..) |texture, i| {
         @memset(&icon, 0);

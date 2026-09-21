@@ -15,6 +15,7 @@ pub fn drawIdle(canvas: *gpu.Canvas, card: gpu.Rect) void {
     switch (state.setting_idle_style) {
         .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.cat_time, state.animation_time < state.cat_pet_until),
         .banana_cat => @import("../pets/banana_cat.zig").draw(canvas, card, state.cat_time),
+        .raccoon => @import("../pets/idle_raccoon.zig").draw(canvas, card, state.cat_time, state.animation_time < state.cat_pet_until),
         .spotify => drawSpotifyLauncher(canvas, card),
     }
 }
@@ -39,7 +40,7 @@ fn drawSpotifyLauncher(canvas: *gpu.Canvas, card: gpu.Rect) void {
     }
 }
 
-test "both pets emit clipped GPU commands within the scene budget" {
+test "pets emit clipped GPU commands within the scene budget" {
     const card = gpu.Rect{ .x = 0, .y = 0, .w = 531, .h = 164, .radius = 26 };
     var cat = gpu.Canvas{ .clip = card };
     @import("../pets/idle_cat.zig").draw(&cat, card, 0.7, false);
@@ -52,4 +53,19 @@ test "both pets emit clipped GPU commands within the scene budget" {
     try std.testing.expectEqual(@as(usize, 1), banana.count);
     try std.testing.expectApproxEqAbs(@as(f32, 24.0 / 45.0), banana.commands[0].sy, 0.0001);
     try std.testing.expectApproxEqAbs(@as(f32, 1.0 / 45.0), banana.commands[0].sh, 0.0001);
+
+    for ([_]bool{ false, true }) |petted| {
+        for (0..5) |frame| {
+            var raccoon = gpu.Canvas{ .clip = card };
+            @import("../pets/idle_raccoon.zig").draw(&raccoon, card, @as(f64, @floatFromInt(frame)) / 3.0, petted);
+            try std.testing.expectEqual(@as(usize, if (petted) 49 else 40), raccoon.count);
+            try std.testing.expectEqual(@as(c_int, @intFromEnum(gpu.Texture.raccoon)), raccoon.commands[0].texture_id);
+            try std.testing.expectApproxEqAbs(@as(f32, @floatFromInt(frame)) / 5, raccoon.commands[0].sx, 0.0001);
+            try std.testing.expectApproxEqAbs(@as(f32, 0.2), raccoon.commands[0].sw, 0.0001);
+            for (raccoon.commands[0..raccoon.count]) |c| {
+                try std.testing.expectEqual(@as(f32, 26), c.clip_radius);
+                try std.testing.expect(c.dy + c.dh <= card.h);
+            }
+        }
+    }
 }

@@ -890,7 +890,7 @@ static WallifySettingsWindowController *sharedSettingsController = nil;
             15,
             @"Idle Companion",
             @"Shown when nothing is playing.",
-            @[@"Pixel Cat", @"Banana Cat", @"Spotify"]
+            @[@"Pixel Cat", @"Banana Cat", @"Spotify", @"Raccoon"]
         );
 
     WFSettingDefinition *transition =

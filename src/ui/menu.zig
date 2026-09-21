@@ -39,6 +39,7 @@ pub const ContextMenuAction = enum(c_int) {
     idle_spotify = 80,
     idle_pixel = 81,
     idle_banana = 82,
+    idle_raccoon = 83,
     open_settings = 90,
     _,
 };
@@ -186,6 +187,7 @@ pub const ContextMenuCtx = struct {
         const idles = [_]struct { name: []const u8, tag: c_int, style: state.IdleStyle }{
             .{ .name = "Pixel Cat", .tag = 81, .style = .pixel_cat },
             .{ .name = "Banana Cat", .tag = 82, .style = .banana_cat },
+            .{ .name = "Raccoon", .tag = 83, .style = .raccoon },
             .{ .name = "Spotify Launcher", .tag = 80, .style = .spotify },
         };
         for (idles) |idle_opt| {
