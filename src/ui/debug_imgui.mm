@@ -58,36 +58,57 @@ static void setInspectorFrame(NSPanel* panel) {
 static void setupStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
     ImGui::StyleColorsDark();
-    style.WindowRounding = 8.0f;
-    style.ChildRounding = 7.0f;
-    style.FrameRounding = 5.0f;
-    style.PopupRounding = 6.0f;
-    style.ScrollbarRounding = 6.0f;
-    style.GrabRounding = 5.0f;
-    style.TabRounding = 5.0f;
+
+    style.WindowRounding = 10.0f;
+    style.ChildRounding = 8.0f;
+    style.FrameRounding = 6.0f;
+    style.PopupRounding = 7.0f;
+    style.ScrollbarRounding = 8.0f;
+    style.GrabRounding = 6.0f;
+    style.TabRounding = 6.0f;
+
     style.WindowBorderSize = 1.0f;
     style.ChildBorderSize = 1.0f;
-    style.FramePadding = ImVec2(8.0f, 5.0f);
-    style.WindowPadding = ImVec2(12.0f, 12.0f);
-    style.ItemSpacing = ImVec2(8.0f, 7.0f);
+    style.FrameBorderSize = 1.0f;
+
+    style.WindowPadding = ImVec2(16.0f, 14.0f);
+    style.FramePadding = ImVec2(9.0f, 6.0f);
+    style.ItemSpacing = ImVec2(9.0f, 8.0f);
+    style.ItemInnerSpacing = ImVec2(7.0f, 5.0f);
+    style.CellPadding = ImVec2(9.0f, 7.0f);
+    style.IndentSpacing = 20.0f;
 
     ImVec4* c = style.Colors;
-    c[ImGuiCol_WindowBg] = ImVec4(0.075f, 0.078f, 0.09f, 0.98f);
-    c[ImGuiCol_ChildBg] = ImVec4(0.06f, 0.063f, 0.074f, 0.96f);
-    c[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.082f, 0.095f, 0.99f);
-    c[ImGuiCol_FrameBg] = ImVec4(0.13f, 0.135f, 0.155f, 1.0f);
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.185f, 0.21f, 1.0f);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.22f, 0.225f, 0.25f, 1.0f);
-    c[ImGuiCol_Header] = ImVec4(0.15f, 0.155f, 0.18f, 1.0f);
-    c[ImGuiCol_HeaderHovered] = ImVec4(0.21f, 0.215f, 0.25f, 1.0f);
-    c[ImGuiCol_HeaderActive] = ImVec4(0.24f, 0.25f, 0.29f, 1.0f);
-    c[ImGuiCol_Button] = ImVec4(0.145f, 0.15f, 0.175f, 1.0f);
-    c[ImGuiCol_ButtonHovered] = ImVec4(0.21f, 0.22f, 0.255f, 1.0f);
-    c[ImGuiCol_ButtonActive] = ImVec4(0.24f, 0.25f, 0.29f, 1.0f);
-    c[ImGuiCol_Border] = ImVec4(0.24f, 0.25f, 0.29f, 0.55f);
-    c[ImGuiCol_Separator] = ImVec4(0.22f, 0.23f, 0.27f, 0.5f);
-    c[ImGuiCol_Text] = ImVec4(0.92f, 0.93f, 0.96f, 1.0f);
-    c[ImGuiCol_TextDisabled] = ImVec4(0.5f, 0.52f, 0.58f, 1.0f);
+    c[ImGuiCol_WindowBg] = ImVec4(0.055f, 0.058f, 0.068f, 1.0f);
+    c[ImGuiCol_ChildBg] = ImVec4(0.072f, 0.075f, 0.088f, 1.0f);
+    c[ImGuiCol_PopupBg] = ImVec4(0.085f, 0.089f, 0.103f, 1.0f);
+
+    c[ImGuiCol_FrameBg] = ImVec4(0.115f, 0.121f, 0.142f, 1.0f);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.155f, 0.163f, 0.19f, 1.0f);
+    c[ImGuiCol_FrameBgActive] = ImVec4(0.19f, 0.20f, 0.235f, 1.0f);
+
+    c[ImGuiCol_Header] = ImVec4(0.12f, 0.126f, 0.148f, 1.0f);
+    c[ImGuiCol_HeaderHovered] = ImVec4(0.17f, 0.18f, 0.21f, 1.0f);
+    c[ImGuiCol_HeaderActive] = ImVec4(0.21f, 0.22f, 0.26f, 1.0f);
+
+    c[ImGuiCol_Button] = ImVec4(0.12f, 0.126f, 0.148f, 1.0f);
+    c[ImGuiCol_ButtonHovered] = ImVec4(0.17f, 0.18f, 0.21f, 1.0f);
+    c[ImGuiCol_ButtonActive] = ImVec4(0.21f, 0.22f, 0.26f, 1.0f);
+
+    c[ImGuiCol_Tab] = ImVec4(0.10f, 0.105f, 0.122f, 1.0f);
+    c[ImGuiCol_TabHovered] = ImVec4(0.17f, 0.18f, 0.21f, 1.0f);
+    c[ImGuiCol_TabSelected] = ImVec4(0.18f, 0.19f, 0.225f, 1.0f);
+    c[ImGuiCol_TabSelectedOverline] = ImVec4(0.28f, 0.55f, 0.95f, 1.0f);
+
+    c[ImGuiCol_Border] = ImVec4(0.22f, 0.235f, 0.27f, 0.48f);
+    c[ImGuiCol_Separator] = ImVec4(0.19f, 0.20f, 0.235f, 0.7f);
+
+    c[ImGuiCol_Text] = ImVec4(0.93f, 0.94f, 0.97f, 1.0f);
+    c[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.53f, 0.60f, 1.0f);
+
+    c[ImGuiCol_CheckMark] = ImVec4(0.42f, 0.68f, 1.0f, 1.0f);
+    c[ImGuiCol_SliderGrab] = ImVec4(0.40f, 0.64f, 0.96f, 1.0f);
+    c[ImGuiCol_SliderGrabActive] = ImVec4(0.52f, 0.74f, 1.0f, 1.0f);
 }
 
 static void propertyHeader(const char* label) {
@@ -98,22 +119,31 @@ static void propertyHeader(const char* label) {
 }
 
 static bool beginProperties(const char* id) {
-    return ImGui::BeginTable(
+    const bool open = ImGui::BeginTable(
         id, 2,
         ImGuiTableFlags_SizingStretchProp |
         ImGuiTableFlags_RowBg |
         ImGuiTableFlags_BordersInnerH |
-        ImGuiTableFlags_PadOuterX);
+        ImGuiTableFlags_PadOuterX |
+        ImGuiTableFlags_NoBordersInBodyUntilResize);
+
+    if (open) {
+        ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 155.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+    }
+
+    return open;
 }
 
 static void propertyText(const char* label, const char* value) {
     propertyHeader(label);
-    ImGui::TextUnformatted(value ? value : "—");
+    ImGui::TextWrapped("%s", value ? value : "—");
 }
 
 static void propertyBool(const char* label, bool value, int key) {
     propertyHeader(label);
     ImGui::PushID(label);
+    ImGui::SetNextItemWidth(-1.0f);
     bool changed = value;
     if (ImGui::Checkbox("##value", &changed))
         wallify_debug_set_bool(key, changed ? 1 : 0);
@@ -123,6 +153,7 @@ static void propertyBool(const char* label, bool value, int key) {
 static void propertyInt(const char* label, int value, int key) {
     propertyHeader(label);
     ImGui::PushID(label);
+    ImGui::SetNextItemWidth(-1.0f);
     int changed = value;
     if (ImGui::InputInt("##value", &changed, 1, 10))
         wallify_debug_set_int(key, changed);
@@ -452,24 +483,66 @@ static void drawAnimation(const WallifyDebugSnapshot& s) {
 
 static void drawSection(const char* label, void (*draw)(const WallifyDebugSnapshot&),
                         const WallifyDebugSnapshot& snapshot, bool defaultOpen = false) {
-    if (ImGui::CollapsingHeader(label, defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None)) {
+    const ImGuiTreeNodeFlags flags =
+        ImGuiTreeNodeFlags_Framed |
+        ImGuiTreeNodeFlags_SpanAvailWidth |
+        ImGuiTreeNodeFlags_AllowOverlap |
+        (defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None);
+
+    if (ImGui::CollapsingHeader(label, flags)) {
         ImGui::PushID(label);
+        ImGui::Spacing();
         draw(snapshot);
         ImGui::PopID();
         ImGui::Spacing();
     }
 }
 
+static void drawWidgetOverview(const WallifyDebugSnapshot& s) {
+    const ImGuiTableFlags flags =
+        ImGuiTableFlags_SizingStretchSame |
+        ImGuiTableFlags_BordersInnerV;
+
+    if (ImGui::BeginTable("widget_overview", 4, flags)) {
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("MODE");
+        ImGui::Text("%d × %d", s.width, s.height);
+
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("MEDIA");
+        ImGui::TextWrapped("%s", s.title_len ? s.title : "Nothing playing");
+
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("SOURCE");
+        ImGui::TextUnformatted(
+            s.source == 0 ? "Now Playing" :
+            s.source == 1 ? "Spotify" :
+            s.source == 2 ? "Spotifast" : "Auto");
+
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("GLASS");
+        ImGui::TextUnformatted(s.native_glass ? "Enabled" : "Disabled");
+
+        ImGui::EndTable();
+    }
+
+    ImGui::Spacing();
+}
+
 static void drawWidget(const WallifyDebugSnapshot& s) {
+    drawWidgetOverview(s);
     drawSection("Runtime", drawRuntime, s, true);
-    drawSection("Appearance", drawAppearance, s);
+    drawSection("Appearance", drawAppearance, s, true);
     drawSection("Media", drawMedia, s);
     drawSection("Animation", drawAnimation, s);
 }
 
 static void drawGeometry(const WallifyDebugSnapshot& s) {
+    ImGui::TextDisabled("Live geometry, display coordinates, and snapping state");
+    ImGui::Spacing();
+
     drawSection("Layout & hitboxes", drawLayout, s, true);
-    drawSection("Window", drawWindow, s);
+    drawSection("Window", drawWindow, s, true);
     drawSection("Viewports & displays", drawViewport, s);
     drawSection("Snapping", drawSnap, s);
     drawSection("WindowServer", drawWindowServer, s);
@@ -478,11 +551,13 @@ static void drawGeometry(const WallifyDebugSnapshot& s) {
 static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
     if (ImGui::BeginTabItem(label)) {
         ImGui::PushID(label);
-        if (ImGui::BeginChild("InspectorContent", ImVec2(0, 0), ImGuiChildFlags_None,
-                              ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+        if (ImGui::BeginChild("InspectorContent", avail, ImGuiChildFlags_Borders)) {
             draw(snapshot);
         }
         ImGui::EndChild();
+
         ImGui::PopID();
         ImGui::EndTabItem();
     }
@@ -553,7 +628,10 @@ static void drawInspector() {
     dragInspectorTitleBar();
 
     if (expanded) {
-        if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
+        if (ImGui::BeginTabBar(
+                "InspectorTabs",
+                ImGuiTabBarFlags_Reorderable |
+                ImGuiTabBarFlags_FittingPolicyScroll)) {
             drawTab("Widget", drawWidget, s);
             drawTab("Renderer", drawRenderer, s);
             drawTab("Input", drawMouse, s);
