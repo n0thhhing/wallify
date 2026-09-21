@@ -28,8 +28,8 @@ const HOVER_EPSILON: f64 = 0.001;
 const HOVER_SPEED: f64 = 10.0;
 const ART_FADE_DURATION: f64 = 0.3;
 const ARTWORK_WAKE_GRACE: f64 = 0.1;
-const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 15.0;
-const AMBIENT_FPS: f64 = 15.0;
+const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 20.0;
+const AMBIENT_FPS: f64 = 20.0;
 const AMBIENT_FRAME_INTERVAL: f64 = 1.0 / AMBIENT_FPS;
 
 
@@ -41,8 +41,8 @@ fn playbackFrameInterval(playing: bool, dragging: bool, player_visible: bool, pr
 
 test "ambient playback uses a lower refresh budget than interaction" {
     try std.testing.expect(AMBIENT_FRAME_INTERVAL > 1.0 / TARGET_FPS);
-    try std.testing.expectEqual(@as(f64, 1.0 / 15.0), AMBIENT_FRAME_INTERVAL);
-    try std.testing.expectEqual(@as(f64, 1.0 / 15.0), PROGRESS_FRAME_INTERVAL);
+    try std.testing.expectEqual(@as(f64, 1.0 / 20.0), AMBIENT_FRAME_INTERVAL);
+    try std.testing.expectEqual(@as(f64, 1.0 / 20.0), PROGRESS_FRAME_INTERVAL);
 }
 
 test "playback refreshes only visible changing content" {
