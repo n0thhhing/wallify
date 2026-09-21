@@ -16,6 +16,7 @@ fn upload(texture: Texture, pixels: []const u32, w: usize, h: usize) void {
 
 pub fn init() !void {
     if (initialized) return;
+    std.log.info("assets: initializing built-in textures", .{});
     upload(.white, &.{0xffffffff}, 1, 1);
     const cat = try std.heap.page_allocator.alloc(u32, sprites.cat_width * sprites.cat_height);
     defer std.heap.page_allocator.free(cat);
@@ -38,9 +39,11 @@ pub fn init() !void {
     _ = symbols.widget_spotify_icon(spotify.ptr, 384, 384, 0, 0, 384);
     upload(.spotify, spotify, 384, 384);
     initialized = true;
+    std.log.info("assets: built-in textures ready", .{});
 }
 
 pub fn clearArtwork() void {
+    if (has_art) std.log.info("assets: clearing artwork", .{});
     has_art = false;
     art_hash = null;
 }
