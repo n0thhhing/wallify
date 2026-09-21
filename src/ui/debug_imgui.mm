@@ -270,6 +270,23 @@ static void drawInspector() {
     WallifyDebugSnapshot s{};
     wallify_debug_get_snapshot(&s);
 
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);
+
+    constexpr ImGuiWindowFlags rootFlags =
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoNavFocus |
+        ImGuiWindowFlags_NoBackground;
+
+    ImGui::Begin("##WallifyInspectorRoot", nullptr, rootFlags);
+
     if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
         drawTab("Runtime", drawRuntime, s);
         drawTab("Appearance", drawAppearance, s);
@@ -279,6 +296,8 @@ static void drawInspector() {
         drawTab("Snap", drawSnap, s);
         ImGui::EndTabBar();
     }
+
+    ImGui::End();
 }
 
 @interface WallifyImGuiView : MTKView <MTKViewDelegate>
@@ -366,8 +385,8 @@ static void showInspectorOnMain(void) {
             ImGui::CreateContext();
 
             ImGuiIO& io = ImGui::GetIO();
-            io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            io.IniFilename = nullptr;
 
             setupStyle();
 
