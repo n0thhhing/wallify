@@ -48,14 +48,20 @@ static NSPoint gInspectorDragStartOrigin = NSZeroPoint;
 
 static const CGFloat kInspectorWidth = 1040.0;
 static const CGFloat kInspectorExpandedHeight = 720.0;
+static const CGFloat kInspectorCollapsedSize = 96.0;
 static const CGFloat kInspectorHeaderHeight = 42.0;
+static const CGFloat kInspectorMinWidth = 520.0;
+static const CGFloat kInspectorMinHeight = 420.0;
+
+static CGFloat gInspectorExpandedWidth = kInspectorWidth;
+static CGFloat gInspectorExpandedHeight = kInspectorExpandedHeight;
 
 static void setInspectorFrame(NSPanel* panel) {
     NSScreen* screen = NSScreen.mainScreen;
     if (!screen) return;
     NSRect visible = screen.visibleFrame;
-    const CGFloat width = kInspectorWidth;
-    const CGFloat height = gInspectorCollapsed ? kInspectorHeaderHeight : kInspectorExpandedHeight;
+    const CGFloat width = gInspectorCollapsed ? kInspectorCollapsedSize : gInspectorExpandedWidth;
+    const CGFloat height = gInspectorCollapsed ? kInspectorCollapsedSize : gInspectorExpandedHeight;
     [panel setFrame:NSMakeRect(
         visible.origin.x + (visible.size.width - width) * 0.5,
         visible.origin.y + (visible.size.height - height) * 0.5,
@@ -267,38 +273,52 @@ static void drawSnap(const WallifyDebugSnapshot& s) {
 
 static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
     if (ImGui::BeginTabItem(label)) {
-        draw(snapshot);
+        ImGui::PushID(label);
+        if (ImGui::BeginChild("InspectorContent", ImVec2(0, 0), ImGuiChildFlags_None,
+                              ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+            draw(snapshot);
+        }
+        ImGui::EndChild();
+        ImGui::PopID();
         ImGui::EndTabItem();
     }
 }
 
-static void resizeInspector(CGFloat height) {
+static void resizeInspector(CGFloat width, CGFloat height, bool saveExpandedSize) {
     if (!gInspectorPanel) return;
 
+    if (saveExpandedSize && !gInspectorCollapsed) {
+        gInspectorExpandedWidth = width;
+        gInspectorExpandedHeight = height;
+    }
+
     NSRect frame = gInspectorPanel.frame;
-    frame.origin.y += frame.size.height - height;
-    frame.size.height = height;
+    frame.origin.x += (frame.size.width - width) * 0.5;
+    frame.origin.y += (frame.size.height - height) * 0.5;
+    frame.size = NSMakeSize(width, height);
     [gInspectorPanel setFrame:frame display:YES animate:NO];
 }
 
 static void drawInspectorHeader() {
     ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiIO& io = ImGui::GetIO();
     const float headerHeight = (float)kInspectorHeaderHeight;
     const float buttonWidth = 36.0f;
-    const float width = ImGui::GetIO().DisplaySize.x;
+    const float width = io.DisplaySize.x;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
     ImVec2 headerPos = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##InspectorDrag", ImVec2(width - buttonWidth, headerHeight));
+    const float dragWidth = ImMax(0.0f, width - buttonWidth);
 
-    const bool dragActive = ImGui::IsItemActive();
+    ImGui::InvisibleButton("##InspectorDrag", ImVec2(dragWidth, headerHeight));
+
     if (ImGui::IsItemActivated()) {
         gInspectorDragStartMouse = [NSEvent mouseLocation];
         gInspectorDragStartOrigin = gInspectorPanel.frame.origin;
     }
 
-    if (dragActive) {
+    if (ImGui::IsItemActive()) {
         NSPoint mouse = [NSEvent mouseLocation];
         NSPoint origin = NSMakePoint(
             gInspectorDragStartOrigin.x + mouse.x - gInspectorDragStartMouse.x,
@@ -309,27 +329,47 @@ static void drawInspectorHeader() {
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     const ImU32 headerBg = ImGui::GetColorU32(ImGuiCol_TitleBg);
     const ImU32 headerFg = ImGui::GetColorU32(ImGuiCol_Text);
+
     drawList->AddRectFilled(
         headerPos,
         ImVec2(headerPos.x + width, headerPos.y + headerHeight),
         headerBg,
         style.WindowRounding,
         ImDrawFlags_RoundCornersTop);
-    drawList->AddText(
-        ImVec2(headerPos.x + 14.0f, headerPos.y + 11.0f),
-        headerFg,
-        "Wallify Inspector");
+
+    if (gInspectorCollapsed) {
+        const char* title = "W";
+        const ImVec2 textSize = ImGui::CalcTextSize(title);
+        drawList->AddText(
+            ImVec2(headerPos.x + (width - buttonWidth - textSize.x) * 0.5f,
+                   headerPos.y + (headerHeight - textSize.y) * 0.5f),
+            headerFg,
+            title);
+    } else {
+        drawList->AddText(
+            ImVec2(headerPos.x + 14.0f, headerPos.y + 11.0f),
+            headerFg,
+            "Wallify Inspector");
+    }
 
     ImGui::SameLine();
+    ImGui::SetCursorPosX(width - buttonWidth);
+
     if (ImGui::Button(gInspectorCollapsed ? "+" : "−", ImVec2(buttonWidth, headerHeight))) {
         gInspectorCollapsed = !gInspectorCollapsed;
-        resizeInspector(gInspectorCollapsed ? kInspectorHeaderHeight : kInspectorExpandedHeight);
+
+        if (gInspectorCollapsed) {
+            resizeInspector(kInspectorCollapsedSize, kInspectorCollapsedSize, false);
+        } else {
+            resizeInspector(gInspectorExpandedWidth, gInspectorExpandedHeight, false);
+        }
     }
 
     ImGui::PopStyleVar();
 
     ImGui::SetCursorPosY(headerHeight + style.ItemSpacing.y);
 }
+
 
 static void drawInspector() {
     WallifyDebugSnapshot s{};
@@ -478,8 +518,9 @@ static void showInspectorOnMain(void) {
 
             gInspectorDelegate = [WallifyInspectorWindowDelegate new];
             gInspectorPanel = [[WallifyInspectorPanel alloc]
-                initWithContentRect:NSMakeRect(0, 0, 1040, 720)
-                           styleMask:NSWindowStyleMaskBorderless
+                initWithContentRect:NSMakeRect(0, 0, kInspectorWidth, kInspectorExpandedHeight)
+                           styleMask:(NSWindowStyleMaskBorderless |
+                                      NSWindowStyleMaskResizable)
                              backing:NSBackingStoreBuffered
                                defer:NO];
 
@@ -497,7 +538,7 @@ static void showInspectorOnMain(void) {
                 NSWindowCollectionBehaviorFullScreenAuxiliary;
             gInspectorPanel.releasedWhenClosed = NO;
             gInspectorPanel.delegate = gInspectorDelegate;
-            gInspectorPanel.contentMinSize = NSMakeSize(720, kInspectorHeaderHeight);
+            gInspectorPanel.contentMinSize = NSMakeSize(kInspectorMinWidth, kInspectorMinHeight);
             setInspectorFrame(gInspectorPanel);
             [gInspectorPanel setContentView:gInspectorView];
 
@@ -526,8 +567,10 @@ static void showInspectorOnMain(void) {
         }
 
         gInspectorCollapsed = false;
+        gInspectorExpandedWidth = kInspectorWidth;
+        gInspectorExpandedHeight = kInspectorExpandedHeight;
         gInspectorVisible = true;
-        resizeInspector(kInspectorExpandedHeight);
+        resizeInspector(gInspectorExpandedWidth, gInspectorExpandedHeight, false);
         gInspectorPanel.hidesOnDeactivate = NO;
         gInspectorPanel.becomesKeyOnlyIfNeeded = NO;
 
