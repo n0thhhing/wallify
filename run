@@ -248,27 +248,36 @@ elif [[ "$DO_RELAUNCH" == true ]]; then
     ./scripts/relaunch.sh
 else
     EXEC_PATH="${TARGET_APP}/Contents/MacOS/${APP_NAME}"
-    echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME} directly...${RESET}"
+    LAUNCH_LABEL="com.wallify.dev.$"
+    LAUNCH_LOG="/tmp/Wallify-$.log"
 
+    echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}Launching ${APP_NAME} via launchd (direct executable)...${RESET}"
+
+    # Launch the actual app executable through the current user's launchd
+    # context. This avoids LaunchServices while still giving AppKit a normal
+    # GUI-user bootstrap environment.
+    LAUNCH_ARGS=(-- "$EXEC_PATH")
     if [[ ${#APP_ARGS[@]} -gt 0 ]]; then
-        "$EXEC_PATH" "${APP_ARGS[@]}" >/dev/null 2>&1 &
-    else
-        "$EXEC_PATH" >/dev/null 2>&1 &
+        LAUNCH_ARGS+=( "${APP_ARGS[@]}" )
     fi
 
-    LAUNCH_PID=$!
-    sleep 0.3
+    if ! launchctl submit -l "$LAUNCH_LABEL" -o /dev/null -e "$LAUNCH_LOG" -- "$EXEC_PATH" "${APP_ARGS[@]}"; then
+        echo -e "  ${RED}✗ Failed to submit ${APP_NAME} to launchd.${RESET}" >&2
+        [[ -f "$LAUNCH_LOG" ]] && cat "$LAUNCH_LOG" >&2
+        exit 1
+    fi
 
-    # Confirm the process started, preferring the PID we just launched.
-    if kill -0 "$LAUNCH_PID" 2>/dev/null; then
-        echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${LAUNCH_PID})${RESET}"
+    sleep 0.5
+
+    NEW_PID=$(pgrep -x "$APP_NAME" 2>/dev/null | head -n 1 || true)
+    if [[ -n "$NEW_PID" ]]; then
+        echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${NEW_PID})${RESET}"
     else
-        NEW_PID=$(pgrep -x "$APP_NAME" 2>/dev/null | head -n 1 || true)
-        if [[ -n "$NEW_PID" ]]; then
-            echo -e "  ${GREEN}✓${RESET} ${APP_NAME} is running ${DIM}(PID: ${NEW_PID})${RESET}"
-        else
-            echo -e "  ${YELLOW}Notice:${RESET} ${APP_NAME} exited during startup."
-            exit 1
+        echo -e "  ${YELLOW}Notice:${RESET} ${APP_NAME} exited during startup."
+        if [[ -s "$LAUNCH_LOG" ]]; then
+            cat "$LAUNCH_LOG" >&2
         fi
+        launchctl remove "$LAUNCH_LABEL" 2>/dev/null || true
+        exit 1
     fi
 fi
