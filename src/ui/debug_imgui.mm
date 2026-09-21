@@ -932,6 +932,8 @@ static WallifyInspectorWindowDelegate* gInspectorDelegate = nil;
 static void showInspectorOnMain(void) {
         NSLog(@"Wallify Inspector: showing");
 
+        const bool wasVisible = gInspectorVisible;
+
         if (!gInspectorPanel) {
             id<MTLDevice> device = MTLCreateSystemDefaultDevice();
             if (!device) {
@@ -1010,12 +1012,18 @@ static void showInspectorOnMain(void) {
             gInspectorInitialized = true;
         }
 
-        ImGui::SetWindowCollapsed("Wallify Inspector", false);
-        gInspectorCollapsed = false;
-        gInspectorExpandedWidth = kInspectorWidth;
-        gInspectorExpandedHeight = kInspectorExpandedHeight;
         gInspectorVisible = true;
-        resizeInspector(gInspectorExpandedWidth, gInspectorExpandedHeight, false);
+
+        // Repeated debug/snap updates are common while dragging the widget.
+        // Do not reset a deliberately collapsed/resized inspector just because
+        // another caller asks for it to be shown again.
+        if (!wasVisible) {
+            ImGui::SetWindowCollapsed("Wallify Inspector", false);
+            gInspectorCollapsed = false;
+            gInspectorExpandedWidth = kInspectorWidth;
+            gInspectorExpandedHeight = kInspectorExpandedHeight;
+            resizeInspector(gInspectorExpandedWidth, gInspectorExpandedHeight, false);
+        }
         gInspectorPanel.hidesOnDeactivate = NO;
         gInspectorPanel.becomesKeyOnlyIfNeeded = NO;
 
