@@ -347,6 +347,8 @@ test "spotifyIdle follows explicit Spotify track presence" {
         setting_source = old_source;
         spotify_closed.store(old_closed, .release);
         spotify_has_track.store(old_has_track, .release);
+        global_title_len = 0;
+        global_rate = 0.0;
     }
 
     setting_source = .spotify;
@@ -358,6 +360,17 @@ test "spotifyIdle follows explicit Spotify track presence" {
     spotify_has_track.store(true, .release);
     global_rate = 0.0;
     global_has_artwork = false;
+    try std.testing.expect(!spotifyIdle());
+
+    // Live playback and real metadata are authoritative even if the async
+    // presence flag has not caught up yet.
+    spotify_has_track.store(false, .release);
+    global_rate = 1.0;
+    try std.testing.expect(!spotifyIdle());
+    global_rate = 0.0;
+    const real_title = "Starboy";
+    @memcpy(global_title[0..real_title.len], real_title);
+    global_title_len = real_title.len;
     try std.testing.expect(!spotifyIdle());
 
     spotify_closed.store(true, .release);
