@@ -310,6 +310,7 @@ pub var window_visible = std.atomic.Value(bool).init(true);
 
 pub fn setWindowVisible(visible: bool) void {
     if (window_visible.swap(visible, .acq_rel) != visible) {
+        std.log.info("power: window visibility -> {s}", .{if (visible) "visible" else "fully occluded"});
         frame_requested.store(true, .release);
         if (visible) frame_wakeup.wake();
     }
