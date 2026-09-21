@@ -372,7 +372,7 @@ pub fn metadataLoop(io: std.Io) void {
         "my $wake = 1; " ++
         "$SIG{USR1} = sub { $wake = 1; }; " ++
         "use Time::HiRes qw(usleep); " ++
-        "while (1) { if ($wake) { $wake = 0; fetch(); } usleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_US ++ "); }";
+        "while (1) { if ($wake) { $wake = 0; fetch(); } else { usleep(" ++ METADATA_HELPER_FALLBACK_INTERVAL_US ++ "); fetch(); } }";
 
     // macOS `mediaremoted` is queried through the helper because the framework is private.
     // Keep the helper mostly asleep and use Spotify's distributed notification to wake it immediately on playback changes.
