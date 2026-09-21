@@ -62,8 +62,9 @@ pub fn drawLabels(canvas: *gpu.Canvas, elapsed: f64) void {
         return;
     }
 
-    const title_size = lerp(15.0, 17.0, expanded_mix) * scale;
-    const artist_size = lerp(11.0, 14.0, expanded_mix) * scale;
+    // Keep raster sizes stable throughout a mode morph; scale cached quads.
+    const title_size = 17.0 * scale;
+    const artist_size = 14.0 * scale;
 
     text.draw(
         canvas,

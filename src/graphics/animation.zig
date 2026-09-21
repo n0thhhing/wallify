@@ -29,12 +29,19 @@ const ART_FADE_DURATION: f64 = 0.3;
 const ARTWORK_WAKE_GRACE: f64 = 0.1;
 const PROGRESS_FRAME_INTERVAL: f64 = 1.0 / 30.0;
 
-fn sleep_us(us: u64) void {
-    const ts = std.posix.timespec{
-        .sec = @intCast(us / 1_000_000),
-        .nsec = @intCast((us % 1_000_000) * 1000),
-    };
-    _ = std.posix.system.nanosleep(&ts, null);
+fn playbackFrameInterval(playing: bool, dragging: bool, player_visible: bool, progress_visible: bool, timestamps_visible: bool) f64 {
+    if (!playing or dragging or !player_visible) return 0;
+    if (progress_visible) return PROGRESS_FRAME_INTERVAL;
+    return if (timestamps_visible) 1.0 else 0.0;
+}
+
+test "playback refreshes only visible changing content" {
+    try std.testing.expectEqual(PROGRESS_FRAME_INTERVAL, playbackFrameInterval(true, false, true, true, true));
+    try std.testing.expectEqual(@as(f64, 1), playbackFrameInterval(true, false, true, false, true));
+    try std.testing.expectEqual(@as(f64, 0), playbackFrameInterval(true, false, true, false, false));
+    try std.testing.expectEqual(@as(f64, 0), playbackFrameInterval(false, false, true, true, true));
+    try std.testing.expectEqual(@as(f64, 0), playbackFrameInterval(true, true, true, true, true));
+    try std.testing.expectEqual(@as(f64, 0), playbackFrameInterval(true, false, false, true, true));
 }
 
 fn beginModeTransition(new_mode: state.WidgetMode) void {
@@ -270,12 +277,13 @@ pub fn animationLoop() void {
             state.marquee_direction = 1;
         }
 
-        const aurora_target: f64 = if (state.setting_aurora and state.idle_mix < 0.5 and state.global_has_artwork) 1 else 0;
-        if (!state.setting_animations) {
+        const aurora_target: f64 = if (!state.setting_native_glass and state.setting_aurora and state.idle_mix < 0.5 and state.global_has_artwork) 1 else 0;
+        if (!state.setting_animations or state.setting_native_glass) {
             state.aurora_mix = aurora_target;
         } else if (@abs(state.aurora_mix - aurora_target) > 0.001) {
             state.aurora_mix += (aurora_target - state.aurora_mix) * @min(1, dt * 3.5);
             needs_draw = true;
+            high_rate_animation = true;
         } else {
             state.aurora_mix = aurora_target;
         }
@@ -295,8 +303,14 @@ pub fn animationLoop() void {
             state.seek_expansion += state.seek_velocity * step;
             needs_draw = true;
         }
-        const progress_active = state.global_rate > 0 and !state.global_is_dragging and state.layout.compact_mix < 0.5;
-        if (progress_active and !high_rate_animation and now - last_draw_time >= PROGRESS_FRAME_INTERVAL) {
+        const playback_interval = playbackFrameInterval(
+            state.global_rate > 0,
+            state.global_is_dragging,
+            state.idle_mix < 1.0,
+            state.layout.progressVisible(state.setting_hide_progress),
+            !state.setting_hide_text and state.setting_show_timestamps and state.layout.compact_mix <= 0.12,
+        );
+        if (playback_interval > 0 and !high_rate_animation and now - last_draw_time >= playback_interval) {
             needs_draw = true;
         }
         const icon_target: f64 = if (state.global_rate > 0) 1 else 0;
@@ -333,8 +347,8 @@ pub fn animationLoop() void {
             1.0 / TARGET_FPS
         else if (idle_frame_interval > 0)
             idle_frame_interval
-        else if (progress_active)
-            PROGRESS_FRAME_INTERVAL
+        else if (playback_interval > 0)
+            playback_interval
         else
             0.0;
 
@@ -348,7 +362,8 @@ pub fn animationLoop() void {
             // Pace loop iterations even when a sprite tick did not need a draw.
             // Basing this on the last draw can spin once that deadline passes.
             const remaining = frame_interval - (after - now);
-            if (remaining > 0) sleep_us(@intFromFloat(remaining * 1_000_000));
+            // Input and metadata can interrupt even the one-second timestamp wait.
+            if (remaining > 0) frame_wakeup.waitFor(@intFromFloat(remaining * 1_000_000_000));
         } else {
             // Nothing is animating and no progress frame is due. Sleep until
             // another subsystem explicitly requests a frame instead of polling.
