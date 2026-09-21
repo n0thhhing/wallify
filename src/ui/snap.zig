@@ -124,7 +124,7 @@ fn setDebugText(view: Ref, value: []const u8) void {
     const ns_value = macos.string(value);
     defer macos.CFRelease(ns_value);
     macos.send(void, view, "setString:", .{ns_value});
-    macos.send(void, view, "scrollToEndOfDocument:", .{});
+    macos.send(void, view, "scrollToEndOfDocument:", .{@as(Ref, null)});
 }
 
 fn updateSnapDebug() void {
