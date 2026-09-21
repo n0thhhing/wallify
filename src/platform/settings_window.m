@@ -616,6 +616,35 @@ static NSImageView *wfSymbol(
         [self addSubview:content];
     }
 
+    } else if (definition.type == WFSectionTypePerformance) {
+        NSView *content = [[NSView alloc] initWithFrame:NSZeroRect];
+        NSTextField *status = wfLabel(@"Renderer status", 12.0, NSFontWeightMedium, [NSColor labelColor]);
+        status.tag = 1101;
+        NSTextField *detail = wfLabel(@"Static caching, tiered animation budgets, and occlusion sleeping are automatic.", 11.0, NSFontWeightRegular, [NSColor secondaryLabelColor]);
+        detail.tag = 1102;
+        NSButton *inspector = wfButton(@"Open Inspector", target, @selector(openInspectorClicked:));
+        inspector.tag = 1103;
+        inspector.enabled = wallify_imgui_inspector_show != NULL;
+        [content addSubview:status];
+        [content addSubview:detail];
+        [content addSubview:inspector];
+        self.specialContent = content;
+        [self addSubview:content];
+
+    } else if (definition.type == WFSectionTypeSystem) {
+        NSView *content = [[NSView alloc] initWithFrame:NSZeroRect];
+        NSButton *login = [NSButton buttonWithTitle:@"Launch at Login" target:target action:@selector(launchAtLoginChanged:)];
+        login.buttonType = NSButtonTypeSwitch;
+        login.controlSize = NSControlSizeRegular;
+        login.tag = 1201;
+        NSButton *loginSettings = wfButton(@"Open Login Items Settings", target, @selector(openLoginItemsSettingsClicked:));
+        loginSettings.tag = 1202;
+        [content addSubview:login];
+        [content addSubview:loginSettings];
+        self.specialContent = content;
+        [self addSubview:content];
+    }
+
     return self;
 }
 
@@ -629,6 +658,8 @@ static NSImageView *wfSymbol(
         self.type == WFSectionTypeConfiguration) {
         return 31.0 + 112.0;
     }
+    if (self.type == WFSectionTypePerformance) return 31.0 + 130.0;
+    if (self.type == WFSectionTypeSystem) return 31.0 + 92.0;
 
     return 31.0;
 }
@@ -719,6 +750,20 @@ static NSImageView *wfSymbol(
             reset.frame =
                 NSMakeRect(WFContentInset, 60, 120, 30);
 
+        } else if (self.type == WFSectionTypePerformance &&
+                   views.count >= 3) {
+            NSTextField *status = (NSTextField *)views[0];
+            NSTextField *detail = (NSTextField *)views[1];
+            NSButton *inspector = (NSButton *)views[2];
+            status.frame = NSMakeRect(WFContentInset, 7, self.bounds.size.width - WFContentInset * 2.0, 20);
+            detail.frame = NSMakeRect(WFContentInset, 32, self.bounds.size.width - WFContentInset * 2.0, 34);
+            inspector.frame = NSMakeRect(WFContentInset, 82, 122, 30);
+        } else if (self.type == WFSectionTypeSystem &&
+                   views.count >= 2) {
+            NSButton *login = (NSButton *)views[0];
+            NSButton *loginSettings = (NSButton *)views[1];
+            login.frame = NSMakeRect(WFContentInset, 10, 180, 26);
+            loginSettings.frame = NSMakeRect(WFContentInset, 48, 200, 30);
         } else if (self.type == WFSectionTypeConfiguration &&
                    views.count >= 3) {
             NSTextField *path = (NSTextField *)views[0];
