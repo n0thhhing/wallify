@@ -58,6 +58,7 @@ static __weak NSMenuItem* statusGlowItem;
 static __weak NSMenuItem* statusAnimationsItem;
 static __weak NSMenuItem* statusGlassItem;
 static __weak NSMenuItem* statusDimItem;
+static __weak NSMenuItem* statusTrackItem;
 static __weak NSMenuItem* statusPlayItem;
 static __weak NSMenuItem* statusSourceItems[4];
 static __weak NSMenuItem* statusModeItems[5];
@@ -371,6 +372,11 @@ static WallifyView* globalMetalView = nil;
     statusAnimationsItem.state = s.animations ? NSControlStateValueOn : NSControlStateValueOff;
     statusGlassItem.state = s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
     statusDimItem.state = s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
+    if (s.playing) {
+        statusTrackItem.title = s.glow ? [NSString stringWithFormat:@"♫ %@", s.playing ? @"Playing" : @""] : @"Playing";
+    } else {
+        statusTrackItem.title = @"Not Playing";
+    }
     statusPlayItem.title = s.playing ? @"Pause" : @"Play";
     if (s.media_source >= 0 && s.media_source < 4)
         statusSourceItems[s.media_source].state = NSControlStateValueOn;
@@ -583,9 +589,9 @@ bool wallify_create(int width, int height, int left, int top) {
     header.enabled = NO;
     [menu addItem:header];
 
-    NSMenuItem* nowPlaying = [[NSMenuItem alloc] initWithTitle:@"Now Playing" action:nil keyEquivalent:@""];
-    nowPlaying.enabled = NO;
-    [menu addItem:nowPlaying];
+    statusTrackItem = [[NSMenuItem alloc] initWithTitle:@"Now Playing" action:nil keyEquivalent:@""];
+    statusTrackItem.enabled = NO;
+    [menu addItem:statusTrackItem];
 
     statusPlayItem = [[NSMenuItem alloc] initWithTitle:@"Play" action:@selector(statusPlayPause:) keyEquivalent:@""];
     statusPlayItem.target = menuTarget;
