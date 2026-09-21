@@ -1,4 +1,5 @@
 #import "gpu.h"
+#import "debug_stats.h"
 #import "settings_window.h"
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
@@ -30,6 +31,35 @@ static id<MTLTexture> latestTextures[WALLIFY_MAX_TEXTURES];
 static dispatch_semaphore_t inFlight;
 static BOOL profiling;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
+
+void wallify_debug_renderer_stats(WallifyRendererStats* out) {
+    *out = (WallifyRendererStats){0};
+    snprintf(out->device_name, sizeof(out->device_name), "%s", device.name.UTF8String ?: "Unavailable");
+    out->ready = device != nil && pipelineState != nil && surface != nil;
+    out->profiling = profiling;
+    out->scene_frames = atomic_load(&sceneFrames);
+    out->rendered_frames = atomic_load(&renderedFrames);
+    out->uploaded_bytes = atomic_load(&uploadedBytes);
+    if (out->scene_frames)
+        out->scene_ms = atomic_load(&sceneNanos) / (double)out->scene_frames / 1e6;
+    if (out->rendered_frames)
+        out->gpu_ms = atomic_load(&gpuNanos) / (double)out->rendered_frames / 1e6;
+    [frameLock lock];
+    out->pending = scheduled;
+    out->command_count = (uint32_t)latestCount;
+    out->logical_width = latestSize.x;
+    out->logical_height = latestSize.y;
+    for (size_t i = 0; i < WALLIFY_MAX_TEXTURES; ++i) {
+        if (loadedTextures[i]) {
+            ++out->texture_count;
+            out->texture_bytes += loadedTextures[i].allocatedSize;
+        }
+    }
+    [frameLock unlock];
+    out->drawable_width = surface.drawableSize.width;
+    out->drawable_height = surface.drawableSize.height;
+    out->scale = surface.contentsScale;
+}
 
 void wallify_profile_scene(double seconds) {
     if (!profiling)

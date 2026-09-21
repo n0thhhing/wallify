@@ -41,6 +41,7 @@ pub fn build(b: *std.Build) void {
     native.addFileArg(b.path("src/platform/native.m"));
     native.addFileInput(b.path("src/platform/settings_window.m"));
     native.addFileInput(b.path("src/platform/settings_window.h"));
+    native.addFileInput(b.path("src/platform/debug_stats.h"));
     native.addArg("-o");
     mod.addObjectFile(native.addOutputFileArg("native.o"));
     mod.linkFramework("Metal", .{});
@@ -93,6 +94,8 @@ pub fn build(b: *std.Build) void {
             "-c",
         });
         bridge.addFileArg(b.path("src/ui/debug_imgui.mm"));
+        bridge.addFileInput(b.path("src/platform/debug_stats.h"));
+        bridge.addFileInput(b.path("src/platform/gpu.h"));
         bridge.addArg("-o");
         mod.addObjectFile(bridge.addOutputFileArg("wallify-debug-imgui.o"));
     }

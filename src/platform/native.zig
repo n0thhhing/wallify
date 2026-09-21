@@ -1,6 +1,7 @@
 const state = @import("../state.zig");
 pub const gpu = @cImport({
     @cInclude("gpu.h");
+    @cInclude("debug_stats.h");
 });
 
 pub const DrawCommand = gpu.DrawCommand;

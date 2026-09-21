@@ -2,6 +2,8 @@
 #include "imgui_internal.h"
 #include "backends/imgui_impl_metal.h"
 #include "backends/imgui_impl_osx.h"
+#include "../platform/debug_stats.h"
+#include "../platform/gpu.h"
 
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
@@ -14,22 +16,7 @@
 
 extern "C" {
 
-struct WallifyDebugSnapshot {
-    int32_t glow, aurora, animations, dim, native_glass;
-    int32_t hide_text, hide_progress, show_controls, timestamps;
-    int32_t artwork_border, compact_gradient;
-    int32_t frame, intensity, speed, source, mode, transition;
-    int32_t font_scale, media_key_target, artwork_radius, progress_thickness;
-    int32_t width, height, margin_left, margin_top, dragging;
-    int64_t window_number, window_layer;
-    double window_x, window_y, window_width, window_height;
-    double outline_x, outline_y, outline_width, outline_height;
-    uint32_t candidate_count;
-    double snap_distance_sq;
-    float mode_mix;
-    uint32_t title_len, artist_len;
-    char title[256], artist[256];
-};
+
 
 void wallify_debug_get_snapshot(WallifyDebugSnapshot* out);
 void wallify_debug_set_bool(int32_t key, int32_t value);
@@ -52,6 +39,9 @@ static const CGFloat kInspectorCollapsedWidth = 240.0;
 
 static CGFloat gInspectorExpandedWidth = kInspectorWidth;
 static CGFloat gInspectorExpandedHeight = kInspectorExpandedHeight;
+static float gFrameTimes[180] = {};
+static int gFrameTimeOffset = 0;
+static int gFrameTimeCount = 0;
 
 static void setInspectorFrame(NSPanel* panel) {
     NSScreen* screen = NSScreen.mainScreen;
@@ -268,6 +258,198 @@ static void drawSnap(const WallifyDebugSnapshot& s) {
     }
 }
 
+static void drawRenderer(const WallifyDebugSnapshot& s) {
+    WallifyRendererStats renderer{};
+    wallify_debug_renderer_stats(&renderer);
+    ImGui::SeparatorText("Widget renderer / Metal");
+    if (beginProperties("widget_renderer")) {
+        propertyText("Device", renderer.device_name);
+        propertyText("Pipeline", renderer.ready ? "Ready" : "Unavailable");
+        propertyText("Pending scene", renderer.pending ? "Yes" : "No");
+        propertyText("Frame requested", s.frame_requested ? "Yes" : "No");
+        propertyReadout("Latest scene commands", "%u / %d", renderer.command_count, WALLIFY_MAX_COMMANDS);
+        propertyReadout("Loaded textures", "%u / %d", renderer.texture_count, WALLIFY_MAX_TEXTURES);
+        propertyReadout("Texture allocation", "%.2f MiB", renderer.texture_bytes / 1048576.0);
+        propertyReadout("Scene size", "%.0f x %.0f pt", renderer.logical_width, renderer.logical_height);
+        propertyReadout("Drawable", "%.0f x %.0f px", renderer.drawable_width, renderer.drawable_height);
+        propertyReadout("Render scale", "%.2fx", renderer.scale);
+        ImGui::EndTable();
+    }
+    if (renderer.profiling) {
+        ImGui::SeparatorText("Widget profiling / averages since launch");
+        if (beginProperties("widget_profile")) {
+            propertyReadout("Scene / completed GPU frames", "%llu / %llu",
+                            (unsigned long long)renderer.scene_frames, (unsigned long long)renderer.rendered_frames);
+            propertyReadout("Scene CPU", "%.3f ms", renderer.scene_ms);
+            propertyReadout("GPU", "%.3f ms", renderer.gpu_ms);
+            propertyReadout("Asset uploads", "%.2f MiB", renderer.uploaded_bytes / 1048576.0);
+            ImGui::EndTable();
+        }
+    } else {
+        ImGui::TextWrapped("Widget CPU/GPU timing is disabled. Launch with WALLIFY_PROFILE=1 ./run -d -f to collect it.");
+    }
+    ImGui::SeparatorText("Inspector rendering / separate from widget");
+    const ImGuiIO& io = ImGui::GetIO();
+    if (beginProperties("inspector_renderer")) {
+        propertyReadout("Frame rate", "%.1f FPS", io.Framerate);
+        propertyReadout("Last frame interval", "%.3f ms", io.DeltaTime * 1000.0f);
+        propertyReadout("Vertices / indices", "%d / %d", io.MetricsRenderVertices, io.MetricsRenderIndices);
+        propertyReadout("Visible / active ImGui windows", "%d / %d", io.MetricsRenderWindows, io.MetricsActiveWindows);
+        propertyText("Platform backend", io.BackendPlatformName);
+        propertyText("Renderer backend", io.BackendRendererName);
+        ImGui::EndTable();
+    }
+    if (gFrameTimeCount) {
+        ImGui::PlotLines("##frame_intervals", gFrameTimes, gFrameTimeCount,
+                         gFrameTimeCount == IM_ARRAYSIZE(gFrameTimes) ? gFrameTimeOffset : 0,
+                         "Inspector frame interval (ms)", 0.0f, FLT_MAX, ImVec2(-1, 90));
+    }
+}
+
+static const char* hitTargetName(int target) {
+    static const char* names[] = {"None", "Grid background", "Card", "Artwork", "Seek bar", "Previous", "Play / pause", "Next"};
+    return target >= 0 && target < IM_ARRAYSIZE(names) ? names[target] : "Unknown";
+}
+
+static void drawMouse(const WallifyDebugSnapshot& s) {
+    const ImGuiIO& io = ImGui::GetIO();
+    NSPoint screen = NSEvent.mouseLocation;
+    ImGui::SeparatorText("Widget input / local points, origin at top left");
+    if (beginProperties("widget_mouse")) {
+        propertyReadout("Last pointer event", "%.1f, %.1f", s.pointer_x, s.pointer_y);
+        propertyText("Hovered target", hitTargetName(s.hover_target));
+        propertyText("Last clicked target", hitTargetName(s.click_target));
+        propertyText("Seeking", s.seeking ? "Yes" : "No");
+        propertyText("Dragging panel", s.panel_dragging ? "Yes" : "No");
+        propertyText("Snap animation", s.snap_active ? "Active" : "Idle");
+        ImGui::EndTable();
+    }
+    ImGui::SeparatorText("Inspector input / local points, origin at top left");
+    if (beginProperties("inspector_mouse")) {
+        if (ImGui::IsMousePosValid()) propertyReadout("Pointer", "%.1f, %.1f", io.MousePos.x, io.MousePos.y);
+        else propertyText("Pointer", "Unavailable");
+        propertyReadout("Delta", "%.1f, %.1f", io.MouseDelta.x, io.MouseDelta.y);
+        propertyReadout("Wheel X / Y", "%.2f / %.2f", io.MouseWheelH, io.MouseWheel);
+        propertyText("Captures mouse", io.WantCaptureMouse ? "Yes" : "No");
+        propertyText("Captures keyboard", io.WantCaptureKeyboard ? "Yes" : "No");
+        propertyText("Wants text input", io.WantTextInput ? "Yes" : "No");
+        propertyReadout("Modifiers", "Shift %d  Ctrl %d  Alt %d  Super %d", io.KeyShift, io.KeyCtrl, io.KeyAlt, io.KeySuper);
+        propertyReadout("Hovered / active ImGui IDs", "%08X / %08X", GImGui->HoveredIdPreviousFrame, ImGui::GetActiveID());
+        propertyReadout("Queued input events", "%d", GImGui->InputEventsQueue.Size);
+        propertyReadout("AppKit screen pointer (bottom left)", "%.1f, %.1f pt", screen.x, screen.y);
+        ImGui::EndTable();
+    }
+    if (ImGui::BeginTable("mouse_buttons", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+        ImGui::TableSetupColumn("Button"); ImGui::TableSetupColumn("Down");
+        ImGui::TableSetupColumn("Held (seconds)"); ImGui::TableSetupColumn("Click count");
+        ImGui::TableHeadersRow();
+        const char* names[] = {"Left", "Right", "Middle"};
+        for (int i = 0; i < 3; ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(names[i]);
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(io.MouseDown[i] ? "Yes" : "No");
+            ImGui::TableNextColumn(); ImGui::Text("%.3f", ImMax(0.0f, io.MouseDownDuration[i]));
+            ImGui::TableNextColumn(); ImGui::Text("%d", io.MouseClickedCount[i]);
+        }
+        ImGui::EndTable();
+    }
+}
+
+static void drawLayout(const WallifyDebugSnapshot& s) {
+    static const char* names[] = {"Card", "Artwork", "Progress", "Seek hitbox", "Previous hitbox", "Play / pause hitbox", "Next hitbox"};
+    static const ImU32 colors[] = {IM_COL32(200,200,215,255), IM_COL32(120,180,255,255), IM_COL32(100,230,170,255), IM_COL32(255,210,100,255), IM_COL32(225,130,230,255), IM_COL32(255,150,130,255), IM_COL32(140,220,240,255)};
+    ImGui::TextWrapped("Live widget geometry in points. Outlines show visible elements and active input hitboxes; the dot is the last widget pointer event. Hidden elements remain listed below.");
+    const float scale = ImMin((ImGui::GetContentRegionAvail().x - 16.0f) / (float)ImMax(1.0, s.layout_width),
+                             260.0f / (float)ImMax(1.0, s.layout_height));
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const ImVec2 size((float)s.layout_width * scale, (float)s.layout_height * scale);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(12,14,18,255));
+    draw->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
+    for (int i = 0; i < 7; ++i) {
+        if (!s.geometry_visible[i]) continue;
+        const double* r = s.geometry[i];
+        ImVec2 a(origin.x + r[0] * scale, origin.y + r[1] * scale);
+        ImVec2 b(a.x + r[2] * scale, a.y + r[3] * scale);
+        draw->AddRect(a, b, colors[i], r[4] * scale, 0, 1.5f);
+    }
+    if (s.pointer_x >= 0 && s.pointer_y >= 0)
+        draw->AddCircleFilled(ImVec2(origin.x + s.pointer_x * scale, origin.y + s.pointer_y * scale), 3.5f, IM_COL32_WHITE);
+    draw->PopClipRect();
+    ImGui::Dummy(size);
+    ImGui::Text("Layout: %.0f x %.0f pt    Compact blend: %.3f", s.layout_width, s.layout_height, s.compact_mix);
+    if (ImGui::BeginTable("geometry", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+        for (const char* name : {"Element", "X", "Y", "Width", "Height", "Radius"}) ImGui::TableSetupColumn(name);
+        ImGui::TableHeadersRow();
+        for (int i = 0; i < 7; ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(colors[i]), "%s%s", names[i], s.geometry_visible[i] ? "" : " (hidden)");
+            for (double v : s.geometry[i]) { ImGui::TableNextColumn(); ImGui::Text("%.1f", v); }
+        }
+        ImGui::EndTable();
+    }
+}
+
+static void viewportProperties(const char* id, NSWindow* window) {
+    if (!window) { ImGui::TextDisabled("Window unavailable"); return; }
+    if (beginProperties(id)) {
+        NSRect frame = window.frame;
+        NSRect bounds = window.contentView.bounds;
+        propertyReadout("AppKit frame (bottom left)", "%.0f, %.0f  %.0f x %.0f pt", frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
+        propertyReadout("Content bounds", "%.0f, %.0f  %.0f x %.0f pt", bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height);
+        propertyReadout("Backing scale", "%.2fx", window.backingScaleFactor);
+        propertyText("Visible", window.visible ? "Yes" : "No");
+        propertyText("Key window", window.keyWindow ? "Yes" : "No");
+        propertyText("Occluded", (window.occlusionState & NSWindowOcclusionStateVisible) ? "No" : "Yes");
+        propertyText("Display", window.screen.localizedName.UTF8String);
+        ImGui::EndTable();
+    }
+}
+
+static void drawViewport(const WallifyDebugSnapshot& s) {
+    ImGui::SeparatorText("Widget window");
+    viewportProperties("widget_viewport", [NSApp windowWithWindowNumber:(NSInteger)s.window_number]);
+    ImGui::SeparatorText("Inspector window");
+    viewportProperties("inspector_viewport", gInspectorPanel);
+    const ImGuiIO& io = ImGui::GetIO();
+    if (beginProperties("imgui_viewport")) {
+        propertyReadout("ImGui display", "%.0f x %.0f pt", io.DisplaySize.x, io.DisplaySize.y);
+        propertyReadout("Framebuffer scale", "%.2f x %.2f", io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+        propertyReadout("Metal drawable", "%.0f x %.0f px", gInspectorView.drawableSize.width, gInspectorView.drawableSize.height);
+        ImGui::EndTable();
+    }
+    ImGui::SeparatorText("Connected displays / AppKit coordinates");
+    int index = 0;
+    for (NSScreen* screen in NSScreen.screens) {
+        ImGui::PushID(index++);
+        ImGui::TextUnformatted(screen.localizedName.UTF8String);
+        if (beginProperties("screen")) {
+            NSRect frame = screen.frame, work = screen.visibleFrame;
+            propertyReadout("Frame", "%.0f, %.0f  %.0f x %.0f pt", frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
+            propertyReadout("Work area", "%.0f, %.0f  %.0f x %.0f pt", work.origin.x, work.origin.y, work.size.width, work.size.height);
+            propertyReadout("Scale / maximum refresh", "%.2fx / %ld Hz", screen.backingScaleFactor, (long)screen.maximumFramesPerSecond);
+            ImGui::EndTable();
+        }
+        ImGui::PopID();
+    }
+}
+
+static void drawAnimation(const WallifyDebugSnapshot& s) {
+    if (beginProperties("animation_state")) {
+        propertyText("Mode transition", s.transition_active ? "Active" : "Idle");
+        propertyReadout("Mode transition blend", "%.4f", s.transition_mix);
+        propertyReadout("Compact blend", "%.4f", s.compact_mix);
+        propertyReadout("Idle blend", "%.4f", s.idle_mix);
+        propertyReadout("Aurora blend", "%.4f", s.aurora_mix);
+        propertyReadout("Artwork crossfade", "%.4f", s.artwork_mix);
+        propertyReadout("Play / pause blend", "%.4f", s.play_pause_mix);
+        propertyText("Artwork available", s.has_artwork ? "Yes" : "No");
+        propertyReadout("Playback position / duration", "%.2f / %.2f seconds", s.position, s.duration);
+        propertyReadout("Playback rate", "%.2f", s.rate);
+        ImGui::EndTable();
+    }
+}
+
 static void drawTab(const char* label, void (*draw)(const WallifyDebugSnapshot&), const WallifyDebugSnapshot& snapshot) {
     if (ImGui::BeginTabItem(label)) {
         ImGui::PushID(label);
@@ -318,6 +500,9 @@ static void dragInspectorTitleBar() {
 static void drawInspector() {
     WallifyDebugSnapshot s{};
     wallify_debug_get_snapshot(&s);
+    gFrameTimes[gFrameTimeOffset] = ImGui::GetIO().DeltaTime * 1000.0f;
+    gFrameTimeOffset = (gFrameTimeOffset + 1) % IM_ARRAYSIZE(gFrameTimes);
+    gFrameTimeCount = ImMin(gFrameTimeCount + 1, IM_ARRAYSIZE(gFrameTimes));
 
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(gInspectorCollapsed ? kInspectorCollapsedWidth : gInspectorExpandedWidth,
@@ -345,6 +530,11 @@ static void drawInspector() {
     if (expanded) {
         if (ImGui::BeginTabBar("InspectorTabs", ImGuiTabBarFlags_Reorderable)) {
             drawTab("Runtime", drawRuntime, s);
+            drawTab("Renderer", drawRenderer, s);
+            drawTab("Mouse", drawMouse, s);
+            drawTab("Layout", drawLayout, s);
+            drawTab("Viewport", drawViewport, s);
+            drawTab("Animation", drawAnimation, s);
             drawTab("Appearance", drawAppearance, s);
             drawTab("Media", drawMedia, s);
             drawTab("Window", drawWindow, s);

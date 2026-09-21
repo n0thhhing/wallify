@@ -119,58 +119,8 @@ fn playerWindowInfo() PanelWindowInfo {
     return .{};
 }
 
-pub const DebugSnapshot = extern struct {
-    glow: c_int,
-    aurora: c_int,
-    animations: c_int,
-    dim: c_int,
-    native_glass: c_int,
-    hide_text: c_int,
-    hide_progress: c_int,
-    show_controls: c_int,
-    timestamps: c_int,
-    artwork_border: c_int,
-    compact_gradient: c_int,
-
-    frame: c_int,
-    intensity: c_int,
-    speed: c_int,
-    source: c_int,
-    mode: c_int,
-    transition: c_int,
-    font_scale: c_int,
-    media_key_target: c_int,
-    artwork_radius: c_int,
-    progress_thickness: c_int,
-
-    width: c_int,
-    height: c_int,
-    margin_left: c_int,
-    margin_top: c_int,
-    dragging: c_int,
-
-    window_number: i64,
-    window_layer: i64,
-    window_x: f64,
-    window_y: f64,
-    window_width: f64,
-    window_height: f64,
-
-    outline_x: f64,
-    outline_y: f64,
-    outline_width: f64,
-    outline_height: f64,
-
-    candidate_count: u32,
-    snap_distance_sq: f64,
-
-    mode_mix: f32,
-
-    title_len: u32,
-    artist_len: u32,
-    title: [256]u8,
-    artist: [256]u8,
-};
+// One C definition keeps the Zig writer and inspector reader ABI in sync.
+pub const DebugSnapshot = native.gpu.WallifyDebugSnapshot;
 
 fn debugApplyBool(key: isize, value: bool) void {
     switch (key) {
@@ -244,6 +194,14 @@ fn debugApplyInt(key: isize, value: isize) void {
 pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void {
     const player = playerWindowInfo();
     const actual = player.frame;
+    // The scene renderer updates layout on its worker thread.
+    const window = @import("window.zig");
+    window.widget_render_lock();
+    defer window.widget_render_unlock();
+    const layout = state.layout;
+    const card = layout.card(state.mode_mix);
+    const controls_visible: u32 = @intFromBool(layout.controlsVisible(state.setting_show_controls) and !state.spotifyIdle());
+    const progress_visible: u32 = @intFromBool(layout.progressVisible(state.setting_hide_progress) and !state.spotifyIdle());
     out.* = .{
         .glow = @intFromBool(state.setting_glow),
         .aurora = @intFromBool(state.setting_aurora),
@@ -288,7 +246,42 @@ pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void 
         .artist_len = @intCast(@min(state.global_artist_len, 255)),
         .title = [_]u8{0} ** 256,
         .artist = [_]u8{0} ** 256,
+        .pointer_x = state.pointer_x,
+        .pointer_y = state.pointer_y,
+        .hover_target = @intFromEnum(state.global_hover_target),
+        .click_target = @intFromEnum(state.global_click_target),
+        .seeking = @intFromBool(state.global_is_dragging),
+        .panel_dragging = @intFromBool(state.global_panel_dragging),
+        .transition_active = @intFromBool(state.mode_transition_active),
+        .frame_requested = @intFromBool(state.frame_requested.load(.acquire)),
+        .has_artwork = @intFromBool(state.global_has_artwork),
+        .snap_active = @intFromBool(state.panel_snap_active),
+        .layout_width = layout.width,
+        .layout_height = layout.height,
+        .compact_mix = layout.compact_mix,
+        .transition_mix = state.mode_mix,
+        .idle_mix = state.idle_mix,
+        .aurora_mix = state.aurora_mix,
+        .artwork_mix = state.global_art_crossfade_alpha,
+        .play_pause_mix = state.play_pause_mix,
+        .position = state.global_position,
+        .duration = state.global_duration,
+        .rate = state.global_rate,
+        .geometry = .{
+            .{ card.x, card.y, card.w, card.h, card.radius },
+            .{ layout.art_x, layout.art_y, layout.art_size, layout.art_size, layout.art_radius },
+            .{ layout.bar_x, layout.bar_y, layout.bar_w, layout.bar_h, 0 },
+            .{ layout.bar_x, layout.bar_y - layout.bar_hit_pad_y, layout.bar_w, layout.bar_h + 2 * layout.bar_hit_pad_y, 3 },
+            .{ 0, 0, 0, 0, 0 },
+            .{ 0, 0, 0, 0, 0 },
+            .{ 0, 0, 0, 0, 0 },
+        },
+        .geometry_visible = .{ 1, @intFromBool(!state.spotifyIdle()), progress_visible, progress_visible, controls_visible, controls_visible, controls_visible },
     };
+    for (layout.buttons, 4..) |button, i| {
+        const bounds = button.bounds();
+        out.geometry[i] = .{ bounds.x, bounds.y, bounds.w, bounds.h, bounds.radius };
+    }
     std.mem.copyForwards(u8, out.title[0..out.title_len], state.global_title[0..out.title_len]);
     std.mem.copyForwards(u8, out.artist[0..out.artist_len], state.global_artist[0..out.artist_len]);
 }
