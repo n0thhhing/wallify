@@ -556,23 +556,10 @@ pub fn metadataLoop(io: std.Io) void {
                 perl_pid = std.fmt.parseInt(std.posix.pid_t, pid_str, 10) catch null;
             }
 
-            var watcher_running = std.atomic.Value(bool).init(true);
-            const Watcher = struct {
-                fn run(pid: std.posix.pid_t, running: *std.atomic.Value(bool)) void {
-                    while (running.load(.acquire)) {
-                        // We tap directly into Spotify's `NSDistributedNotificationCenter` OS broadcasts (`com.spotify.client.PlaybackStateChanged`).
-                        // The moment the user clicks skip or pauses in Spotify, this atomic flag is tripped.
-                        // We immediately fire a SIGUSR1 interrupt at the Perl daemon to fetch the new metadata, dropping latency to literally zero.
-                        if (spotify.widget_spotify_take_state() != -1) {
-                            _ = std.posix.kill(pid, std.posix.SIG.USR1) catch {};
-                        }
-                        sleep_ms(10);
-                    }
-                }
-            };
-            var watcher_thread: ?std.Thread = null;
+            // Spotify now wakes the Perl helper directly from its distributed
+            // notification callback; no polling watcher thread is necessary.
             if (perl_pid) |pid| {
-                watcher_thread = std.Thread.spawn(.{}, Watcher.run, .{ pid, &watcher_running }) catch null;
+                spotify.widget_spotify_set_helper_pid(@intCast(pid));
             }
 
             var empty_polls: usize = 0;
@@ -676,6 +663,7 @@ pub fn metadataLoop(io: std.Io) void {
             }
             watcher_running.store(false, .release);
             if (watcher_thread) |t| t.join();
+            spotify.widget_spotify_set_helper_pid(-1);
             _ = pclose(stream);
             sleep_ms(POLL_INTERVAL_MS); // Restart the helper if its stream closes.
         }
