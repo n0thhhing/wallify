@@ -6,6 +6,10 @@ const sprites = @import("sprites.zig");
 pub const Texture = @import("canvas.zig").Texture;
 pub var artwork_dirty = std.atomic.Value(bool).init(true);
 pub var has_art = false;
+// Monotonic texture identity for render caches. A new upload can keep the same
+// extracted colors/settings, so the cache needs an explicit signal that the GPU
+// artwork texture itself changed.
+pub var artwork_generation: u64 = 0;
 var initialized = false;
 var art_hash: ?u64 = null;
 pub const transition_duration = 0.5;
@@ -152,6 +156,7 @@ pub fn refreshArtwork() void {
     native.wallify_swap_textures(@intFromEnum(Texture.glow), @intFromEnum(Texture.previous_glow));
     upload(.artwork, pixels, w, h);
     native.wallify_blur_texture(@intFromEnum(Texture.artwork), @intFromEnum(Texture.glow), 132.0);
+    artwork_generation +%= 1;
     state.art_transition_until = if (has_art and state.setting_animations) state.animation_time + transition_duration else 0;
     has_art = true;
     art_hash = hash;
