@@ -202,10 +202,10 @@ fn completion_handler(block: *anyopaque, info: ?CFDictionaryRef) callconv(.c) vo
             !std.mem.eql(u8, current_title[0..title_len], last_mrc_title[0..last_mrc_title_len]) or
             !std.mem.eql(u8, current_artist[0..artist_len], last_mrc_artist[0..last_mrc_artist_len]);
 
-        // Album art is expensive to hash/copy and normally does not change on
-        // play/pause/seek events. Only touch the artwork payload when the track
-        // identity changes; reuse the cached result otherwise.
-        if (track_changed) {
+        // Album art can arrive shortly after the title/artist notification.
+        // Retry while it is missing, but skip the expensive payload work once
+        // the current track already has artwork.
+        if (track_changed or !last_mrc_has_artwork) {
             last_mrc_has_artwork = false;
             if (CFDictionaryGetValue(dict, artworkKey)) |artworkRef| {
                 if (CFGetTypeID(artworkRef) == CFDataGetTypeID()) {
@@ -303,10 +303,13 @@ export fn mrc_printNowPlayingInfo() void {
     // is only used when the dictionary omits the rate.
     if (MRGetNowPlayingInfo) |MRGet| {
         if (sema == null) sema = dispatch_semaphore_create(0);
+        // A previous request can leave a completion token behind. Drain it so
+        // this wait always corresponds to the request we issue below.
+        while (dispatch_semaphore_wait(sema.?, dispatch_time(0, 0)) == 0) {}
         MRGet(dispatch_get_global_queue(0, 0), &get_block);
 
-        // Give MediaRemote a generous fallback timeout. Normal track/playback
-        // changes wake the helper through the native notification bridge.
+        // Keep the fallback short so delayed artwork is picked up quickly;
+        // normal metadata changes arrive through MediaRemote notifications.
         const timeout = dispatch_time(0, 100_000_000);
         if (dispatch_semaphore_wait(sema.?, timeout) != 0) {
             writeStdoutAndCheck("\n");
