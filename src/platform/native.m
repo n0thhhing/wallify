@@ -257,6 +257,8 @@ static void movePanel(int left, int top) {
 
 bool wallify_create(int width, int height, int left, int top) {
     profiling = getenv("WALLIFY_PROFILE") != NULL;
+    NSLog(@"Wallify: create %dx%d at %d,%d profiling=%@",
+          width, height, left, top, profiling ? @"on" : @"off");
 
     device = MTLCreateSystemDefaultDevice();
 
@@ -844,6 +846,7 @@ static NSString* settingsPath;
 
 void wallify_prepare(void) {
     @autoreleasepool {
+        NSLog(@"Wallify: preparing native platform");
 
         NSBundle* bundle = NSBundle.mainBundle;
 
@@ -1073,9 +1076,11 @@ static CGEventRef mediaKeyCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 
 void wallify_update_media_key_tap(int target) {
     dispatch_async(dispatch_get_main_queue(), ^{
+      NSLog(@"Wallify: media key target -> %d", target);
       mediaKeyTarget = target;
 
       if (target == 0) {
+          NSLog(@"Wallify: disabling media key interception");
 
           if (mediaKeyTap) {
 
@@ -1100,6 +1105,7 @@ void wallify_update_media_key_tap(int target) {
       }
 
       if (mediaKeyTap) {
+          NSLog(@"Wallify: media key tap already installed");
           return;
       }
 
