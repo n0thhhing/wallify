@@ -310,11 +310,19 @@ pub var window_visible = std.atomic.Value(bool).init(true);
 
 pub fn setWindowVisible(visible: bool) void {
     if (window_visible.swap(visible, .acq_rel) != visible) {
-        requestFrame();
+        frame_requested.store(true, .release);
+        if (visible) frame_wakeup.wake();
     }
 }
 
 pub fn requestFrame() void {
+    if (!window_visible.load(.acquire)) {
+        // Keep the scene dirty while fully occluded, but do not wake the
+        // animation thread just to render pixels nobody can see.
+        frame_requested.store(true, .release);
+        return;
+    }
+
     if (!frame_requested.swap(true, .acq_rel)) {
         frame_wakeup.wake();
     }
