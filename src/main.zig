@@ -8,6 +8,7 @@ const render = @import("graphics/render.zig");
 const window = @import("ui/window.zig");
 const spotify = @import("media/spotify.zig");
 const build_options = @import("build_options");
+const frame_wakeup = @import("frame_wakeup.zig");
 
 extern fn wallify_imgui_inspector_show() void;
 extern fn wallify_debug_console_install() void;
@@ -55,6 +56,7 @@ pub fn main() !void {
 
     const open_settings_on_launch = @import("platform/native.zig").wallify_has_settings_flag();
 
+    frame_wakeup.init();
     state.requestFrame();
 
     render.drawUIFrame();
@@ -88,6 +90,7 @@ test {
     _ = @import("media/playback_state.zig");
     _ = @import("media/playback_clock.zig");
     _ = @import("media/controller.zig");
+    _ = @import("frame_wakeup.zig");
     _ = @import("media/spotify.zig");
     _ = @import("graphics/icon_transition.zig");
     _ = @import("graphics/assets.zig");
