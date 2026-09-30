@@ -48,6 +48,7 @@ extern void wallify_settings_reset_position(void);
 
 // Exported to Zig & native AppKit menu handlers
 void wallify_show_settings_window(void);
+void wallify_install_status_menu(void);
 void wallify_close_settings_window(void);
 bool wallify_has_settings_flag(void);
 void wallify_settings_notify_position_changed(void);

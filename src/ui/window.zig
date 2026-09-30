@@ -35,13 +35,5 @@ pub export fn widget_mouse_location() callconv(.c) macos.Point {
     return macos.send(macos.Point, macos.objc_getClass("NSEvent"), "mouseLocation", .{});
 }
 
-pub export fn widget_application_init() callconv(.c) void {
-    const app = macos.send(macos.Ref, macos.objc_getClass("NSApplication"), "sharedApplication", .{});
-    // NSApplicationActivationPolicyAccessory = 1 (accessory panel without dock icon)
-    _ = macos.send(bool, app, "setActivationPolicy:", .{@as(isize, 1)});
-}
-
-pub export fn widget_application_run() callconv(.c) void {
-    const app = macos.send(macos.Ref, macos.objc_getClass("NSApplication"), "sharedApplication", .{});
-    macos.send(void, app, "run", .{});
-}
+pub extern fn widget_application_init() void;
+pub extern fn widget_application_run() void;
