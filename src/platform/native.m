@@ -62,7 +62,9 @@ static __strong NSMenuItem* statusAnimationsItem;
 static __strong NSMenuItem* statusGlassItem;
 static __strong NSMenuItem* statusDimItem;
 static __strong NSMenuItem* statusTrackItem;
+static __strong NSMenuItem* statusArtistItem;
 static __strong NSMenuItem* statusPlayItem;
+static NSTimer* statusMenuTimer;
 static __strong NSMenuItem* statusSourceItems[4];
 static __strong NSMenuItem* statusModeItems[5];
 static __strong NSMenuItem* statusIdleItems[4];
@@ -371,8 +373,13 @@ static WallifyView* globalMetalView = nil;
     statusAnimationsItem.state = s.animations ? NSControlStateValueOn : NSControlStateValueOff;
     statusGlassItem.state = s.native_glass ? NSControlStateValueOn : NSControlStateValueOff;
     statusDimItem.state = s.dim_paused ? NSControlStateValueOn : NSControlStateValueOff;
-    statusTrackItem.title = s.playing ? @"♫ Playing" : @"Not Playing";
+    statusTrackItem.title = [NSString stringWithUTF8String:s.title] ?: @"";
+    if (!statusTrackItem.title.length) statusTrackItem.title = @"Nothing Playing";
+    NSString* artist = [NSString stringWithUTF8String:s.artist] ?: @"";
+    statusArtistItem.title = artist.length ? artist : @"Choose music to get started";
     statusPlayItem.title = s.playing ? @"Pause" : @"Play";
+    statusPlayItem.image = [NSImage imageWithSystemSymbolName:s.playing ? @"pause.fill" : @"play.fill" accessibilityDescription:statusPlayItem.title];
+    statusItem.button.toolTip = [NSString stringWithFormat:@"Wallify · %@ · %@", s.playing ? @"Playing" : @"Paused", statusTrackItem.title];
     if (s.media_source >= 0 && s.media_source < 4)
         statusSourceItems[s.media_source].state = NSControlStateValueOn;
     for (int i = 0; i < 4; ++i)
@@ -390,6 +397,17 @@ static WallifyView* globalMetalView = nil;
 - (void)menuWillOpen:(NSMenu*)menu {
     (void)menu;
     [self refreshMenuState];
+    statusMenuTimer = [NSTimer timerWithTimeInterval:0.2 repeats:YES block:^(NSTimer* timer) {
+        (void)timer;
+        [self refreshMenuState];
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:statusMenuTimer forMode:NSEventTrackingRunLoopMode];
+}
+
+- (void)menuDidClose:(NSMenu*)menu {
+    (void)menu;
+    [statusMenuTimer invalidate];
+    statusMenuTimer = nil;
 }
 
 @end
@@ -575,7 +593,8 @@ bool wallify_create(int width, int height, int left, int top) {
 
     statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
 
-    statusItem.button.title = @"\u266b";
+    statusItem.button.image = [NSImage imageWithSystemSymbolName:@"music.note" accessibilityDescription:@"Wallify"];
+    statusItem.button.image.template = YES;
 
     NSMenu* menu = [[NSMenu alloc] initWithTitle:@"Wallify"];
     WallifyStatusMenuTarget* menuTarget = [WallifyStatusMenuTarget sharedTarget];
@@ -588,6 +607,10 @@ bool wallify_create(int width, int height, int left, int top) {
     statusTrackItem = [[NSMenuItem alloc] initWithTitle:@"Now Playing" action:nil keyEquivalent:@""];
     statusTrackItem.enabled = NO;
     [menu addItem:statusTrackItem];
+    statusArtistItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    statusArtistItem.enabled = NO;
+    [menu addItem:statusArtistItem];
+    [menu addItem:[NSMenuItem separatorItem]];
 
     statusPlayItem = [[NSMenuItem alloc] initWithTitle:@"Play" action:@selector(statusPlayPause:) keyEquivalent:@""];
     statusPlayItem.target = menuTarget;
@@ -595,10 +618,12 @@ bool wallify_create(int width, int height, int left, int top) {
 
     NSMenuItem* previous = [[NSMenuItem alloc] initWithTitle:@"Previous Track" action:@selector(statusPrevious:) keyEquivalent:@""];
     previous.target = menuTarget;
+    previous.image = [NSImage imageWithSystemSymbolName:@"backward.end.fill" accessibilityDescription:@"Previous Track"];
     [menu addItem:previous];
 
     NSMenuItem* next = [[NSMenuItem alloc] initWithTitle:@"Next Track" action:@selector(statusNext:) keyEquivalent:@""];
     next.target = menuTarget;
+    next.image = [NSImage imageWithSystemSymbolName:@"forward.end.fill" accessibilityDescription:@"Next Track"];
     [menu addItem:next];
 
     [menu addItem:[NSMenuItem separatorItem]];

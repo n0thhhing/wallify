@@ -35,6 +35,8 @@ typedef struct {
     int font_scale;      // 0: small, 1: normal, 2: large
     int media_key_target; // 0: off, 1: active, 2: spotify, 3: spotifast
     bool playing;
+    char title[512];
+    char artist[512];
 } WallifySettingsSnapshot;
 
 // Exported from Zig

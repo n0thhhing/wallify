@@ -32,6 +32,8 @@ pub const WallifySettingsSnapshot = extern struct {
     font_scale: c_int,
     media_key_target: c_int,
     playing: bool,
+    title: [512]u8,
+    artist: [512]u8,
 };
 
 pub extern fn wallify_show_settings_window() void;
@@ -86,7 +88,13 @@ pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) call
             .font_scale = @intFromEnum(state.setting_font_scale),
             .media_key_target = @intFromEnum(state.setting_media_key_target),
             .playing = state.global_rate > 0.0,
+            .title = @splat(0),
+            .artist = @splat(0),
         };
+        const title_len = @min(state.global_title_len, ptr.title.len - 1);
+        const artist_len = @min(state.global_artist_len, ptr.artist.len - 1);
+        @memcpy(ptr.title[0..title_len], state.global_title[0..title_len]);
+        @memcpy(ptr.artist[0..artist_len], state.global_artist[0..artist_len]);
     }
 }
 
