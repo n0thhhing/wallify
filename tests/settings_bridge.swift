@@ -51,8 +51,6 @@ func defaultsStub() {}
 func positionStub() {}
 @_cdecl("wallify_open_inspector")
 func inspectorStub() {}
-@_cdecl("wallify_settings_path")
-func pathStub() -> UnsafePointer<CChar>? { nil }
 
 @main
 struct SettingsBridgeCheck {
@@ -101,6 +99,34 @@ struct SettingsBridgeCheck {
         }
         status.playPause(); status.previous(); status.next()
         precondition(playbackCommands == ["play_pause", "previous", "next"])
+        checkConfigurationPaths()
         print("Swift settings bridge checks passed")
+    }
+
+    static func checkConfigurationPaths() {
+        let files = FileManager.default
+        let scratch = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? files.removeItem(at: scratch) }
+        let resources = scratch.appendingPathComponent("Wallify.app/Contents/Resources", isDirectory: true)
+        let home = scratch.appendingPathComponent("home", isDirectory: true)
+        do {
+            try files.createDirectory(at: resources, withIntermediateDirectories: true)
+            try "bundled settings".write(to: resources.appendingPathComponent("widget-settings.conf"),
+                                        atomically: true, encoding: .utf8)
+            let bundle = scratch.appendingPathComponent("Wallify.app")
+            let support = prepareConfiguration(bundleURL: bundle, resourceURL: resources, home: home)
+            precondition(support == home.appendingPathComponent("Library/Application Support/Wallify/widget-settings.conf").path)
+            let seeded = try String(contentsOfFile: support, encoding: .utf8)
+            precondition(seeded == "bundled settings")
+            try "saved preferences".write(toFile: support, atomically: true, encoding: .utf8)
+            _ = prepareConfiguration(bundleURL: bundle, resourceURL: resources, home: home)
+            let preserved = try String(contentsOfFile: support, encoding: .utf8)
+            precondition(preserved == "saved preferences")
+            let override = home.appendingPathComponent(".config/Wallify/widget-settings.conf")
+            try files.createDirectory(at: override.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try "override".write(to: override, atomically: true, encoding: .utf8)
+            precondition(prepareConfiguration(bundleURL: bundle, resourceURL: resources, home: home) == override.path)
+            precondition(prepareConfiguration(bundleURL: scratch.appendingPathComponent("wallify"), resourceURL: nil, home: home) == "widget-settings.conf")
+        } catch { preconditionFailure("Configuration check failed: \(error)") }
     }
 }

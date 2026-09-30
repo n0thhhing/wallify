@@ -1,5 +1,42 @@
 import AppKit
 
+private var configurationPath: NSString = "widget-settings.conf"
+
+// Keep the existing XDG override, Application Support default, and bare-binary fallback.
+func prepareConfiguration(bundleURL: URL, resourceURL: URL?, home: URL) -> String {
+    guard bundleURL.pathExtension == "app" else { return "widget-settings.conf" }
+    let files = FileManager.default
+    let override = home.appendingPathComponent(".config/Wallify/widget-settings.conf")
+    let support = home.appendingPathComponent("Library/Application Support/Wallify", isDirectory: true)
+    let destination = support.appendingPathComponent("widget-settings.conf")
+    do {
+        try files.createDirectory(at: support, withIntermediateDirectories: true)
+    } catch { NSLog("Wallify: cannot create settings directory: %@", error.localizedDescription) }
+    if files.fileExists(atPath: override.path) { return override.path }
+    if !files.fileExists(atPath: destination.path), let resourceURL {
+        do {
+            try files.copyItem(at: resourceURL.appendingPathComponent("widget-settings.conf"), to: destination)
+        } catch { NSLog("Wallify: cannot seed settings: %@", error.localizedDescription) }
+    }
+    return destination.path
+}
+
+@_cdecl("wallify_prepare")
+public func preparePlatform() {
+    NSLog("Wallify: preparing native platform")
+    let bundle = Bundle.main
+    configurationPath = prepareConfiguration(bundleURL: bundle.bundleURL, resourceURL: bundle.resourceURL,
+                                              home: FileManager.default.homeDirectoryForCurrentUser) as NSString
+    if bundle.bundleURL.pathExtension == "app", let resources = bundle.resourceURL {
+        if !FileManager.default.changeCurrentDirectoryPath(resources.path) {
+            NSLog("Wallify: cannot enter bundle resources: %@", resources.path)
+        }
+    }
+}
+
+@_cdecl("wallify_settings_path")
+public func configurationFilePath() -> UnsafePointer<CChar> { configurationPath.fileSystemRepresentation }
+
 @MainActor
 final class StatusMenu: NSObject, NSMenuDelegate {
     static let shared = StatusMenu()

@@ -44,7 +44,7 @@ The Inspector is a separate MetalKit + Dear ImGui window intended for developmen
 
 ## Configuration & Storage
 
-`src/settings.zig` handles serialization and deserialization of `widget-settings.conf`. The active path is resolved at startup by `wallify_prepare()` in `platform/native.m`:
+`src/settings.zig` handles serialization and deserialization of `widget-settings.conf`. Swift's `wallify_prepare()` in `platform/application.swift` resolves the active path at startup and seeds bundled defaults only when the destination does not exist:
 1. `~/.config/Wallify/widget-settings.conf` (XDG standard — takes precedence if present)
 2. `~/Library/Application Support/Wallify/widget-settings.conf` (macOS default fallback)
 3. `./widget-settings.conf` (bare development executable fallback)
@@ -56,4 +56,4 @@ Settings mutations in the UI or context menu immediately update `state.zig`, req
 The build compiles Zig, Swift application/menu code and SwiftUI Settings, the Objective-C renderer bridge, and a Metal library:
 - `./run` builds `ReleaseFast`, packages `Wallify.app`, and signs all binaries.
 - `scripts/package-app.sh` packages the bundle, generates `Info.plist`, and embeds assets.
-- `zig build test` executes unit tests covering playback clocks, layout/hitboxes, GPU command clipping, settings snapshot synchronization, and Swift menu actions/checkmarks.
+- `zig build test` executes unit tests covering playback clocks, layout/hitboxes, GPU command clipping, settings snapshot synchronization, Swift menu actions/checkmarks, and configuration path precedence/default seeding.

@@ -912,65 +912,6 @@ int wallify_width(void) { return atomic_load(&surfaceWidth); }
 
 int wallify_height(void) { return atomic_load(&surfaceHeight); }
 
-static NSString* settingsPath;
-
-void wallify_prepare(void) {
-    @autoreleasepool {
-        NSLog(@"Wallify: preparing native platform");
-
-        NSBundle* bundle = NSBundle.mainBundle;
-
-        if ([bundle.bundlePath.pathExtension isEqualToString:@"app"]) {
-            NSFileManager* fm = [NSFileManager defaultManager];
-
-            NSString* home = NSHomeDirectory();
-            NSString* xdgDir = [home stringByAppendingPathComponent:@".config/Wallify"];
-            NSString* xdgPath = [xdgDir stringByAppendingPathComponent:@"widget-settings.conf"];
-            NSString* support = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory,
-                                                                     NSUserDomainMask, YES)
-                                     .firstObject stringByAppendingPathComponent:@"Wallify"];
-
-            NSString* supportPath =
-                [support stringByAppendingPathComponent:@"widget-settings.conf"];
-
-            if ([fm fileExistsAtPath:xdgPath]) {
-                [fm createDirectoryAtPath:support
-                    withIntermediateDirectories:YES
-                                     attributes:nil
-                                          error:nil];
-
-                settingsPath = xdgPath;
-
-            } else {
-
-                [fm createDirectoryAtPath:support
-                    withIntermediateDirectories:YES
-                                     attributes:nil
-                                          error:nil];
-
-                if (![fm fileExistsAtPath:supportPath]) {
-                    [fm copyItemAtPath:[bundle.resourcePath
-                                           stringByAppendingPathComponent:@"widget-settings.conf"]
-                                toPath:supportPath
-                                 error:nil];
-                }
-
-                settingsPath = supportPath;
-            }
-
-            [[NSFileManager defaultManager] changeCurrentDirectoryPath:bundle.resourcePath];
-
-        } else {
-
-            settingsPath = @"widget-settings.conf";
-        }
-    }
-}
-
-const char* wallify_settings_path(void) {
-    return (settingsPath ?: @"widget-settings.conf").fileSystemRepresentation;
-}
-
 NSInteger wallify_panel_window_number(void) { return panel ? [panel windowNumber] : 0; }
 
 bool wallify_panel_offsets(double* out_x, double* out_y) {
@@ -1005,7 +946,6 @@ bool wallify_panel_offsets(double* out_x, double* out_y) {
     return true;
 }
 
-// Settings is implemented in SwiftUI through settings_window.h.
 #import "idle_animation.m"
 
 void wallify_update_glass_rect(double x, double y, double w, double h, double radius, float tint_r,
