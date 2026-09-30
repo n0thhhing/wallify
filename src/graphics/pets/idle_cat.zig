@@ -27,7 +27,7 @@ pub fn draw(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: bool) void {
 
     const c = canvas.add(native.gpu.WALLIFY_NEAREST, @intFromEnum(gpu.Texture.cat), .{
         .x = card.x + (card.w - w) / 2,
-        .y = card.y + card.h - h,
+        .y = card.y + card.h - h - 5,
         .w = w,
         .h = h,
     }, .{ 1, 1, 1, 1 });
@@ -50,7 +50,7 @@ pub fn drawSleepEffects(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: 
         const size: f64 = if (i == 2) 2.0 else 1.0;
         // Pixel-snap coordinates to prevent sub-pixel raster jitter / flickering
         const x = @floor(card.x + (card.w - 110.0) / 2.0 + 20.0 + phase * 23.0);
-        const y = @floor(card.y + 85.0 - phase * 42.0);
+        const y = @floor(card.y + 105.0 - phase * 42.0);
 
         // Adjacent pixels share color and opacity, so submit one strip per run.
         const strips: []const Strip = if (petted) &heart_strips else &sleep_strips;

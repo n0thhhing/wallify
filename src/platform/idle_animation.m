@@ -78,7 +78,8 @@ static void idleCommandLayers(CALayer* root, const DrawCommand* frames, size_t f
         NSMutableArray* opacities = [NSMutableArray arrayWithCapacity:frameCount];
         for (size_t frame = 0; frame < frameCount; ++frame) {
             DrawCommand c = frames[frame * commandCount + index];
-            [positions addObject:[NSValue valueWithPoint:NSMakePoint(c.dx - c.clip_x, c.dy - c.clip_y)]];
+            [positions addObject:[NSValue valueWithPoint:NSMakePoint(
+                c.dx - c.clip_x, c.clip_h - (c.dy - c.clip_y) - c.dh)]];
             [bounds addObject:[NSValue valueWithRect:NSMakeRect(0, 0, c.dw, c.dh)]];
             [rects addObject:[NSValue valueWithRect:NSMakeRect(c.sx, c.sy, c.sw, c.sh)]];
             [opacities addObject:@(c.alpha)];
