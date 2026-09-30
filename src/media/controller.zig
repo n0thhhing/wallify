@@ -391,7 +391,7 @@ pub fn metadataLoop(io: std.Io) void {
         "DynaLoader::dl_install_xsub(\"main::fetch\", $sym); " ++
         "DynaLoader::dl_install_xsub(\"main::init_notifications\", $init_sym); " ++
         "DynaLoader::dl_install_xsub(\"main::wait_notification\", $wait_sym); " ++
-        "print \"$\\n\"; " ++
+        "print \"$$\\n\"; " ++
         "init_notifications(); " ++
         "my $wake = 1; " ++
         "$SIG{USR1} = sub { $wake = 1; }; " ++
