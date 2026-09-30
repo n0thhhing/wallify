@@ -22,6 +22,8 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 
 `graphics/raster.swift` uses Core Text for Unicode measurement, ellipsis truncation, alignment, and text rasterization; AppKit supplies cached SF Symbol images for playback controls. ImageIO decodes artwork directly into the same RGBA buffers consumed by Metal. Zig retains texture-cache policy, artwork transitions, and color extraction.
 
+`platform/desktop_glass.swift` owns native glass creation, clipping, and Metal-view reparenting. It coalesces unchanged geometry before scheduling AppKit work and restores the full-window Metal view when glass is disabled or unavailable. `platform/widget_window.swift` also owns panel movement and the coordinate offsets used for desktop snapping.
+
 ## Media Subsystem & Auto Source
 
 `media/controller.zig` coordinates playback state and metadata across multiple backends:

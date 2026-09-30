@@ -77,6 +77,10 @@ func idleTextureStub(_ textureID: Int32) -> UnsafeMutableRawPointer? {
 }
 @_cdecl("wallify_idle_surface")
 func idleSurfaceStub() -> UnsafeMutableRawPointer? { Unmanaged.passUnretained(idleTestSurface).toOpaque() }
+@_cdecl("wallify_width")
+func widthStub() -> Int32 { 200 }
+@_cdecl("wallify_height")
+func heightStub() -> Int32 { 100 }
 
 @main
 struct SettingsBridgeCheck {
@@ -86,6 +90,7 @@ struct SettingsBridgeCheck {
         checkIdleAnimation()
         checkNowPlayingHelper()
         checkRasterGraphics()
+        checkDesktopGlass()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -179,6 +184,42 @@ struct SettingsBridgeCheck {
         precondition(lastPointer?.0 == -1 && lastPointer?.1 == -1 && lastPointer?.2 == 0)
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
+        panel.orderOut(nil)
+    }
+
+    @MainActor static func checkDesktopGlass() {
+        precondition(widgetPanelOrigin(visibleFrame: NSRect(x: -1920, y: 24, width: 1920, height: 1023),
+                                       height: 180, left: 20, top: 30) == NSPoint(x: -1900, y: 837))
+        precondition(widgetScreenOffsets(primaryFrame: NSRect(x: 0, y: 0, width: 1920, height: 1080),
+                                         visibleFrame: NSRect(x: -1920, y: 24, width: 1920, height: 1023)) == NSPoint(x: -1920, y: 33))
+        let panel = Unmanaged<NSPanel>.fromOpaque(createWidgetPanel(200, 100)).takeRetainedValue()
+        let metalView = Unmanaged<NSView>.fromOpaque(createWidgetView(200, 100)).takeRetainedValue()
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        container.addSubview(metalView)
+        panel.contentView = container
+        precondition(widgetPanelWindowNumber() == panel.windowNumber)
+        if let screen = panel.screen ?? NSScreen.main {
+            moveWidgetPanelNow(20, 30)
+            precondition(panel.frame.origin == widgetPanelOrigin(visibleFrame: screen.visibleFrame, height: panel.frame.height, left: 20, top: 30))
+        }
+        let owner = DesktopGlass()
+        let geometry = DesktopGlassGeometry(rect: NSRect(x: 10, y: 7, width: 180, height: 76), radius: 16, active: true)
+        owner.update(geometry, panel: panel, metalView: metalView, size: NSSize(width: 200, height: 100))
+        if #available(macOS 26.0, *) {
+            let glass = container.subviews.first as! NSGlassEffectView
+            precondition(glass.frame == NSRect(x: 10, y: 17, width: 180, height: 76))
+            precondition(glass.cornerRadius == 16 && glass.tintColor == nil)
+            precondition(metalView.superview === glass.contentView)
+            precondition(metalView.frame == NSRect(x: -10, y: -17, width: 200, height: 100))
+            owner.update(DesktopGlassGeometry(rect: geometry.rect, radius: 16, active: false),
+                         panel: panel, metalView: metalView, size: NSSize(width: 200, height: 100))
+            precondition(glass.isHidden && metalView.superview === container && metalView.frame == container.bounds)
+            owner.update(geometry, panel: panel, metalView: metalView, size: NSSize(width: 200, height: 100))
+            precondition(!glass.isHidden && container.subviews.count == 1 && metalView.superview === glass.contentView)
+        } else { precondition(metalView.superview === container && metalView.frame == container.bounds) }
+        owner.update(DesktopGlassGeometry(rect: geometry.rect, radius: 16, active: false),
+                     panel: panel, metalView: metalView, size: NSSize(width: 200, height: 100))
+        precondition(metalView.autoresizingMask == [.width, .height])
         panel.orderOut(nil)
     }
 

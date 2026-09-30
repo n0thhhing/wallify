@@ -2,6 +2,7 @@ import AppKit
 
 @MainActor
 final class WidgetView: NSView {
+    static weak var current: WidgetView?
     static var contextEvent: NSEvent?
 
     override var isFlipped: Bool { true }
@@ -39,6 +40,7 @@ final class WidgetView: NSView {
 
 @MainActor
 final class WidgetPanel: NSPanel {
+    static weak var current: WidgetPanel?
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
@@ -66,6 +68,7 @@ final class WidgetPanel: NSPanel {
     panel.isReleasedWhenClosed = false
     panel.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
     panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
+    WidgetPanel.current = panel
     NotificationCenter.default.addObserver(panel, selector: #selector(WidgetPanel.occlusionChanged(_:)),
                                            name: NSWindow.didChangeOcclusionStateNotification, object: panel)
     // The Objective-C renderer takes ownership with __bridge_transfer.
@@ -74,7 +77,9 @@ final class WidgetPanel: NSPanel {
 
 @_cdecl("wallify_create_widget_view")
 @MainActor public func createWidgetView(_ width: Int32, _ height: Int32) -> UnsafeMutableRawPointer {
-    Unmanaged.passRetained(WidgetView(frame: NSRect(x: 0, y: 0, width: Int(width), height: Int(height)))).toOpaque()
+    let view = WidgetView(frame: NSRect(x: 0, y: 0, width: Int(width), height: Int(height)))
+    WidgetView.current = view
+    return Unmanaged.passRetained(view).toOpaque()
 }
 
 @_cdecl("wallify_context_menu_event")
@@ -84,3 +89,35 @@ final class WidgetPanel: NSPanel {
 
 @_cdecl("wallify_clear_context_menu_event")
 @MainActor public func clearContextMenuEvent() { WidgetView.contextEvent = nil }
+
+func widgetPanelOrigin(visibleFrame: NSRect, height: CGFloat, left: Int32, top: Int32) -> NSPoint {
+    NSPoint(x: visibleFrame.minX + CGFloat(left), y: visibleFrame.maxY - CGFloat(top) - height)
+}
+
+func widgetScreenOffsets(primaryFrame: NSRect, visibleFrame: NSRect) -> NSPoint {
+    NSPoint(x: visibleFrame.minX, y: primaryFrame.maxY - visibleFrame.maxY)
+}
+
+@_cdecl("wallify_move_panel_now")
+@MainActor public func moveWidgetPanelNow(_ left: Int32, _ top: Int32) {
+    guard let panel = WidgetPanel.current, let screen = panel.screen ?? NSScreen.main else { return }
+    panel.setFrameOrigin(widgetPanelOrigin(visibleFrame: screen.visibleFrame, height: panel.frame.height, left: left, top: top))
+}
+
+@_cdecl("wallify_move")
+public func moveWidgetPanel(_ left: Int32, _ top: Int32) {
+    DispatchQueue.main.async { moveWidgetPanelNow(left, top) }
+}
+
+@_cdecl("wallify_panel_window_number")
+@MainActor public func widgetPanelWindowNumber() -> Int { WidgetPanel.current?.windowNumber ?? 0 }
+
+@_cdecl("wallify_panel_offsets")
+@MainActor public func widgetPanelOffsets(_ x: UnsafeMutablePointer<Double>?, _ y: UnsafeMutablePointer<Double>?) -> Bool {
+    guard let panel = WidgetPanel.current, let primary = NSScreen.screens.first ?? NSScreen.main,
+          let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first else { return false }
+    let offsets = widgetScreenOffsets(primaryFrame: primary.frame, visibleFrame: screen.visibleFrame)
+    x?.pointee = offsets.x
+    y?.pointee = offsets.y
+    return true
+}

@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_settings.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_settings.addFileArg(b.path("src/platform/idle_animation.swift"));
     swift_settings.addFileArg(b.path("src/platform/media_keys.swift"));
     swift_settings.addFileArg(b.path("src/platform/media_remote.swift"));
@@ -194,6 +195,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_check.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_check.addFileArg(b.path("src/platform/idle_animation.swift"));
     swift_check.addFileArg(b.path("src/platform/media_keys.swift"));
     swift_check.addFileArg(b.path("src/platform/media_remote.swift"));
@@ -235,5 +237,6 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_menu_next",               "_wallify_pointer",
         "_wallify_set_window_visible",      "_wallify_media_key_event",
         "_wallify_copy_idle_texture",       "_wallify_idle_surface",
+        "_wallify_width",                   "_wallify_height",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

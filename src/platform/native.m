@@ -46,9 +46,6 @@ static id<MTLTexture> loadedTextures[WALLIFY_MAX_TEXTURES];
 static id<MTLTexture> latestTextures[WALLIFY_MAX_TEXTURES];
 static dispatch_semaphore_t inFlight;
 static BOOL profiling;
-static BOOL lastGlassUpdateValid;
-static BOOL lastGlassActive;
-static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     *out = (WallifyRendererStats){0};
@@ -105,23 +102,7 @@ void wallify_profile_scene(double seconds) {
     }
 }
 
-// Let AppKit own the glass material, optical filters, and rim.
-static NSGlassEffectView* globalGlassView = nil;
-static NSView* globalGlassContentView = nil;
-static NSView* globalMetalView = nil;
-
-@interface WallifyDesktopGlassView : NSGlassEffectView
-@end
-
-@implementation WallifyDesktopGlassView
-@end
-
-static void movePanel(int left, int top) {
-    NSRect screen = (panel.screen ?: NSScreen.mainScreen).visibleFrame;
-
-    [panel setFrameOrigin:NSMakePoint(screen.origin.x + left,
-                                      NSMaxY(screen) - top - panel.frame.size.height)];
-}
+static NSView* globalMetalView;
 
 bool wallify_create(int width, int height, int left, int top) {
     profiling = getenv("WALLIFY_PROFILE") != NULL;
@@ -248,7 +229,7 @@ bool wallify_create(int width, int height, int left, int top) {
 
     panel.contentView = container;
 
-    movePanel(left, top);
+    wallify_move_panel_now(left, top);
 
     [panel makeKeyAndOrderFront:nil];
 
@@ -741,49 +722,9 @@ void wallify_resize(int width, int height) {
     atomic_store(&surfaceHeight, height);
 }
 
-void wallify_move(int left, int top) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      movePanel(left, top);
-    });
-}
-
 int wallify_width(void) { return atomic_load(&surfaceWidth); }
 
 int wallify_height(void) { return atomic_load(&surfaceHeight); }
-
-NSInteger wallify_panel_window_number(void) { return panel ? [panel windowNumber] : 0; }
-
-bool wallify_panel_offsets(double* out_x, double* out_y) {
-    if (!panel) {
-        return false;
-    }
-
-    NSScreen* primary = NSScreen.screens.firstObject ?: NSScreen.mainScreen;
-
-    NSScreen* screen = panel.screen ?: (NSScreen.mainScreen ?: primary);
-
-    if (!screen || !primary) {
-        return false;
-    }
-
-    NSRect visible = screen.visibleFrame;
-
-    NSRect primFrame = primary.frame;
-
-    double primTop = primFrame.origin.y + primFrame.size.height;
-
-    double screenVisibleTop = visible.origin.y + visible.size.height;
-
-    if (out_x) {
-        *out_x = visible.origin.x;
-    }
-
-    if (out_y) {
-        *out_y = primTop - screenVisibleTop;
-    }
-
-    return true;
-}
 
 void* wallify_copy_idle_texture(int textureID) {
     if (textureID < 0 || textureID >= WALLIFY_MAX_TEXTURES) return NULL;
@@ -794,98 +735,3 @@ void* wallify_copy_idle_texture(int textureID) {
 }
 
 void* wallify_idle_surface(void) { return (__bridge void*)surface; }
-
-void wallify_update_glass_rect(double x, double y, double w, double h, double radius, float tint_r,
-                               float tint_g, float tint_b, bool active) {
-    // Artwork colors belong to the controls, not the desktop glass material.
-    (void)tint_r;
-    (void)tint_g;
-    (void)tint_b;
-
-    // The renderer can call this once per scene. Avoid queueing identical AppKit work
-    // on the main thread when the glass geometry/material has not changed.
-    if (lastGlassUpdateValid &&
-        lastGlassActive == active &&
-        lastGlassX == x && lastGlassY == y &&
-        lastGlassW == w && lastGlassH == h &&
-        lastGlassRadius == radius) {
-        return;
-    }
-
-    lastGlassUpdateValid = YES;
-    lastGlassActive = active;
-    lastGlassX = x;
-    lastGlassY = y;
-    lastGlassW = w;
-    lastGlassH = h;
-    lastGlassRadius = radius;
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (!panel || !globalMetalView)
-          return;
-      NSView* container = panel.contentView;
-      if (!container)
-          return;
-
-      [CATransaction begin];
-      [CATransaction setDisableActions:YES];
-      if (@available(macOS 26.0, *)) {
-          if (active) {
-              if (!globalGlassView) {
-                  globalGlassView = [[WallifyDesktopGlassView alloc] initWithFrame:NSZeroRect];
-                  globalGlassView.style = NSGlassEffectViewStyleRegular;
-
-                  // On this runtime style=4 resets to style=0 / _variant=0.
-                  // Select the private variant explicitly, leaving its optical
-                  // filters and rim under AppKit's control.
-                  SEL widgetVariant = NSSelectorFromString(@"set_variant:");
-                  if ([globalGlassView respondsToSelector:widgetVariant]) {
-                      ((void (*)(id, SEL, NSInteger))objc_msgSend)(globalGlassView, widgetVariant,
-                                                                   5);
-                  }
-                  // Keep the optical material neutral. tintColor changes the
-                  // glass highlights as well as its fill; it is not a dimmer.
-                  globalGlassView.appearance =
-                      [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-                  globalGlassView.tintColor = nil;
-                  globalGlassContentView = [[NSView alloc] initWithFrame:NSZeroRect];
-                  globalGlassContentView.wantsLayer = YES;
-                  // Let the widget material supply its own background shading.
-                  globalGlassContentView.layer.backgroundColor = NSColor.clearColor.CGColor;
-                  globalGlassContentView.layer.cornerCurve = kCACornerCurveContinuous;
-                  globalGlassContentView.layer.masksToBounds = YES;
-                  globalGlassContentView.clipsToBounds = YES;
-                  globalGlassView.contentView = globalGlassContentView;
-                  [container addSubview:globalGlassView];
-              }
-              globalGlassView.hidden = NO;
-              if (globalMetalView.superview != globalGlassContentView) {
-                  [globalMetalView removeFromSuperview];
-                  globalMetalView.autoresizingMask = NSViewNotSizable;
-                  [globalGlassContentView addSubview:globalMetalView];
-              }
-              double flippedY = atomic_load(&surfaceHeight) - y - h;
-              NSRect frame = NSMakeRect(x, flippedY, w, h);
-              if (!NSEqualRects(globalGlassView.frame, frame))
-                  globalGlassView.frame = frame;
-              globalGlassView.cornerRadius = radius;
-
-              globalGlassContentView.frame = globalGlassView.bounds;
-              globalGlassContentView.layer.cornerRadius = radius;
-              // Metal keeps its full-window coordinates inside the clipped card.
-              globalMetalView.frame = NSMakeRect(-x, -flippedY, atomic_load(&surfaceWidth),
-                                                 atomic_load(&surfaceHeight));
-              [CATransaction commit];
-              return;
-          }
-      }
-      globalGlassView.hidden = YES;
-      if (globalMetalView.superview != container) {
-          [globalMetalView removeFromSuperview];
-          globalMetalView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-          [container addSubview:globalMetalView];
-      }
-      globalMetalView.frame = container.bounds;
-      [CATransaction commit];
-    });
-}
