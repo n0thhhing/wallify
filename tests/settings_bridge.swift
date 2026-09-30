@@ -83,6 +83,7 @@ struct SettingsBridgeCheck {
         checkSpotifyBridge()
         checkSpotifastBridge()
         checkIdleAnimation()
+        checkNowPlayingHelper()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -177,6 +178,61 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkNowPlayingHelper() {
+        let center = NotificationCenter()
+        let notifications = NowPlayingNotifications(center: center)
+        precondition(notifications.wait(timeout: .now()) == 0)
+        for name in NowPlayingNotifications.names {
+            center.post(name: Notification.Name(name), object: nil)
+            precondition(notifications.wait(timeout: .now()) == 1)
+        }
+        precondition(notifications.wait(timeout: .now()) == 0)
+        let late = NowPlayingReply()
+        precondition(late.wait(timeout: .now()) == nil)
+        late.complete(["title": "late"])
+        let next = NowPlayingReply()
+        precondition(next.wait(timeout: .now()) == nil)
+        next.complete(["title": "current"])
+        precondition(next.wait(timeout: .now())?["title"] as? String == "current")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        catch { preconditionFailure(error.localizedDescription) }
+        let art = directory.appendingPathComponent("artwork")
+        let output = NowPlayingOutput(artworkURL: art)
+        let now = Date(timeIntervalSince1970: 1000)
+        var info: [String: Any] = ["kMRMediaRemoteNowPlayingInfoTitle": "Track",
+                                   "kMRMediaRemoteNowPlayingInfoArtist": "Artist",
+                                   "kMRMediaRemoteNowPlayingInfoPlaybackRate": 2,
+                                   "kMRMediaRemoteNowPlayingInfoElapsedTime": 10,
+                                   "kMRMediaRemoteNowPlayingInfoDuration": 120,
+                                   "kMRMediaRemoteNowPlayingInfoTimestamp": now.addingTimeInterval(-3)]
+        precondition(output.line(info, now: now) == "Track|||Artist|||0|||2.00|||16.00|||120.00\n")
+        info["kMRMediaRemoteNowPlayingInfoArtworkData"] = Data([1, 2, 3])
+        precondition(output.line(info, now: now).contains("|||1|||"))
+        precondition((try? Data(contentsOf: art)) == Data([1, 2, 3]))
+        try? FileManager.default.removeItem(at: art)
+        _ = output.line(info, now: now)
+        precondition(!FileManager.default.fileExists(atPath: art.path))
+        info["kMRMediaRemoteNowPlayingInfoTitle"] = "Another track"
+        info["kMRMediaRemoteNowPlayingInfoArtworkData"] = nil
+        precondition(output.line(info, now: now).contains("|||0|||"))
+        info["kMRMediaRemoteNowPlayingInfoArtworkData"] = Data([4, 5])
+        precondition(output.line(info, now: now).contains("|||1|||"))
+        precondition((try? Data(contentsOf: art)) == Data([4, 5]))
+        info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] = 0
+        precondition(output.line(info, now: now).contains("|||0.00|||10.00|||"))
+        info["kMRMediaRemoteNowPlayingInfoTimestamp"] = now.addingTimeInterval(10)
+        info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] = 1
+        precondition(output.line(info, now: now).contains("|||1.00|||10.00|||"))
+        precondition(output.line(nil) == "\n" && output.line([:]) == "\n")
+        precondition(output.line(["kMRMediaRemoteNowPlayingInfoTitle": 42]) == "\n")
+        precondition(output.line(["kMRMediaRemoteNowPlayingInfoTitle": String(repeating: "é", count: 128)]) == "\n")
+        precondition(output.line(["kMRMediaRemoteNowPlayingInfoTitle": "Track", "kMRMediaRemoteNowPlayingInfoPlaybackRate": true]) == "Track||||||0|||0.00|||0.00|||0.00\n")
+        let unwritable = NowPlayingOutput(artworkURL: directory.appendingPathComponent("missing/artwork"))
+        precondition(unwritable.line(info, now: now).contains("|||0|||"))
     }
 
     static func checkIdleAnimation() {

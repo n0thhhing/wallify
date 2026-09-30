@@ -23,10 +23,9 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 ## Media Subsystem & Auto Source
 
 `media/controller.zig` coordinates playback state and metadata across multiple backends:
-- **System Now Playing**: Reads the macOS `MediaRemote` private framework through the metadata helper. The Zig controller forwards play/pause/track commands and seeking to `platform/media_remote.swift`, which dynamically resolves the private framework symbols and safely skips unavailable functions.
+- **System Now Playing**: `media/metadata_fetcher.swift` implements the metadata helper loaded by Perl, preserving its exported C entry points and line protocol. Swift owns notification observers, bounded asynchronous queries, elapsed-time correction, and atomic artwork writes. Every query has its own completion token, so late callbacks cannot satisfy the next query or publish stale metadata. The Zig controller forwards play/pause/track commands and seeking to `platform/media_remote.swift`, which dynamically resolves the private framework symbols and safely skips unavailable functions.
 - **Spotify Direct**: Swift queries and controls Spotify via AppleScript (`media/spotify.swift`); `media/spotify.zig` declares its C interface. Distributed playback notifications coalesce through a lock and semaphore to wake the metadata worker and signal the MediaRemote helper.
 - **Spotifast transport**: `media/spotifast.swift` owns the persistent loopback metadata connection, separate command connections, and native launching. `media/spotifast.zig` retains payload parsing for the controller. Incomplete response lines close the connection before retrying, so subsequent queries cannot consume stale fragments.
-- **Spotifast**: Communicates over high-speed local TCP IPC (`media/spotifast.zig`).
 - **Auto Source**: Dynamically pings the Spotifast TCP socket with a non-blocking connection. If Spotifast is responsive, it routes requests there; if inactive, it instantly falls back to System Now Playing.
 
 ## Hardware Media Key Redirect

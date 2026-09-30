@@ -3,6 +3,11 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const swift_target = b.fmt("{s}-apple-macosx12.0", .{switch (target.result.cpu.arch) {
+        .aarch64 => "arm64",
+        .x86_64 => "x86_64",
+        else => @panic("Wallify requires an Apple desktop architecture"),
+    }});
     const debug_inspector = b.option(bool, "debug-inspector", "Build the Dear ImGui developer inspector") orelse false;
     const macos_sdk = std.mem.trim(u8, b.run(&.{ "xcrun", "--sdk", "macosx", "--show-sdk-path" }), " \n\r\t");
 
@@ -12,40 +17,24 @@ pub fn build(b: *std.Build) void {
     // Decode source PNGs once per asset change; outputs live only in Zig's cache.
 
     // MediaRemote bridge loaded by the Perl metadata helper.
-    const dylib = b.addLibrary(.{
-        .name = "metadata_fetcher",
-        .linkage = .dynamic,
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-            .root_source_file = b.path("src/media/metadata_fetcher.zig"),
-            .link_libc = true,
-        }),
+    const metadata = b.addSystemCommand(&.{
+        "xcrun",                            "swiftc",                     "-swift-version",     "5",                          "-emit-library",
+        "-module-name",                     "MetadataFetcher",            "-module-cache-path", "/tmp/wallify-swift-modules", "-target",
+        swift_target,                       "-no-toolchain-stdlib-rpath", "-Xlinker",           "-install_name",              "-Xlinker",
+        "@rpath/libmetadata_fetcher.dylib",
     });
-    dylib.root_module.linkFramework("CoreFoundation", .{});
-    dylib.root_module.linkFramework("Foundation", .{});
-    const metadata_notifications = b.addSystemCommand(&.{
-        "/usr/bin/clang",
-        "-fobjc-arc",
-        "-fmodules",
-        "-c",
-    });
-    metadata_notifications.addFileArg(b.path("src/media/metadata_notifications.m"));
-    metadata_notifications.addArg("-o");
-    dylib.root_module.addObjectFile(metadata_notifications.addOutputFileArg("metadata-notifications.o"));
-    b.installArtifact(dylib);
+    metadata.addArg(if (optimize == .Debug) "-Onone" else "-O");
+    metadata.addFileArg(b.path("src/media/metadata_fetcher.swift"));
+    metadata.addArg("-o");
+    const metadata_dylib = metadata.addOutputFileArg("libmetadata_fetcher.dylib");
+    b.getInstallStep().dependOn(&b.addInstallFile(metadata_dylib, "lib/libmetadata_fetcher.dylib").step);
 
     // SwiftUI settings retains the existing C settings contract.
     const swift_settings = b.addSystemCommand(&.{
-        "xcrun",         "swiftc",          "-swift-version",                  "5",                          "-emit-library",
-        "-module-name",  "WallifySettings", "-module-cache-path",              "/tmp/wallify-swift-modules", "-target",
-        b.fmt("{s}-apple-macosx12.0", .{switch (target.result.cpu.arch) {
-            .aarch64 => "arm64",
-            .x86_64 => "x86_64",
-            else => @panic("Wallify requires an Apple desktop architecture"),
-        }}),
-        "-Xlinker",      "-undefined",      "-Xlinker",                        "dynamic_lookup",             "-Xlinker",
-        "-install_name", "-Xlinker",        "@rpath/libWallifySettings.dylib", "-no-toolchain-stdlib-rpath",
+        "xcrun",        "swiftc",          "-swift-version",     "5",                               "-emit-library",
+        "-module-name", "WallifySettings", "-module-cache-path", "/tmp/wallify-swift-modules",      "-target",
+        swift_target,   "-Xlinker",        "-undefined",         "-Xlinker",                        "dynamic_lookup",
+        "-Xlinker",     "-install_name",   "-Xlinker",           "@rpath/libWallifySettings.dylib", "-no-toolchain-stdlib-rpath",
     });
     swift_settings.addArg(if (optimize == .Debug) "-Onone" else "-O");
     swift_settings.addArg("-import-objc-header");
@@ -174,6 +163,17 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&b.addRunArtifact(exe).step);
 
     const test_step = b.step("test", "Run unit tests");
+    const helper_check = b.addSystemCommand(&.{
+        "/usr/bin/perl", "-e",
+        "use DynaLoader; open(STDOUT, '>', '/dev/null') or die $!; " ++
+            "my $h = DynaLoader::dl_load_file($ARGV[0]) or die DynaLoader::dl_error(); " ++
+            "for my $name (qw(mrc_printNowPlayingInfo mrc_notifications_init mrc_wait_for_notification mrc_sendCommand)) { " ++
+            "my $s = DynaLoader::dl_find_symbol($h, $name) or die qq(missing $name); " ++
+            "DynaLoader::dl_install_xsub(qq(main::$name), $s); } " ++
+            "mrc_notifications_init(); mrc_notifications_init(); mrc_printNowPlayingInfo();",
+    });
+    helper_check.addFileArg(metadata_dylib);
+    test_step.dependOn(&helper_check.step);
     const test_artifact = b.addTest(.{
         .root_module = mod,
     });
@@ -198,6 +198,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/media_remote.swift"));
     swift_check.addFileArg(b.path("src/media/spotify.swift"));
     swift_check.addFileArg(b.path("src/media/spotifast.swift"));
+    swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
     swift_check.addArg("-o");
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");
