@@ -15,6 +15,8 @@ private var visible = Int32(0)
 }
 @_cdecl("wallify_set_window_visible")
 func visibilityStub(_ value: Int32) { visible = value }
+@_cdecl("wallify_media_key_event")
+func mediaKeyStub(_ key: Int32) {}
 
 @_cdecl("wallify_menu_play_pause")
 func playStub() { playbackCommands.append("play_pause") }
@@ -111,6 +113,16 @@ struct SettingsBridgeCheck {
         precondition(playbackCommands == ["play_pause", "previous", "next"])
         checkConfigurationPaths()
         checkWidgetWindow()
+        for key in [16, 19, 20] {
+            let down = mediaKeyAction(data: (key << 16) | 0x0A00)
+            let up = mediaKeyAction(data: (key << 16) | 0x0B00)
+            precondition(down?.key == Int32(key) && down?.pressed == true)
+            precondition(up?.key == Int32(key) && up?.pressed == false)
+        }
+        for key in [0, 1, 2, 7] {
+            precondition(mediaKeyAction(data: (key << 16) | 0x0A00) == nil)
+            precondition(mediaKeyAction(data: (key << 16) | 0x0B00) == nil)
+        }
         print("Swift settings bridge checks passed")
     }
 

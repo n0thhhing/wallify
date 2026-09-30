@@ -29,10 +29,11 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 ## Hardware Media Key Redirect
 
 To prevent macOS from automatically waking Apple Music when hardware media keys (F7 / F8 / F9) are pressed:
-- `platform/native.m` optionally installs a low-level `CGEventTap` on `kCGSessionEventTap` watching for `NSSystemDefined` events with subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS`.
+- Swift's `platform/media_keys.swift` optionally installs a low-level `CGEventTap` on `kCGSessionEventTap` watching for `NSSystemDefined` events with subtype `NX_SUBTYPE_AUX_CONTROL_BUTTONS`.
 - When key codes for play/pause (16), next track (19), or previous track (20) are intercepted, the event is consumed (`return NULL;`) so `rpcd` / Apple Music never receive it.
 - The event is forwarded to `wallify_media_key_event()` in `media/controller.zig`, which routes playback through the user's chosen target (`active`, `spotify`, or `spotifast`).
 - Requires macOS Accessibility permission (`NSAccessibilityUsageDescription` declared in `Info.plist`).
+- The tap and callback use the main run loop. Playback key releases are consumed without issuing duplicate commands; volume and brightness events pass through. Timeout-disabled taps are re-enabled automatically.
 
 ## App Controls & Diagnostics
 

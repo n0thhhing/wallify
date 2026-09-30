@@ -245,7 +245,7 @@ pub fn togglePlayback() void {
     state.requestFrame();
 }
 
-/// Called from the CGEventTap in native.m when a hardware media key is pressed.
+/// Called from the Swift CGEventTap when a hardware media key is pressed.
 /// keyCode: 16=play-pause, 19=next, 20=previous (NX_KEYTYPE constants).
 /// Routes the command based on setting_media_key_target, bypassing the normal
 /// active-source resolution so the user's explicit override is always honored.
