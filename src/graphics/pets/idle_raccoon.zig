@@ -14,7 +14,7 @@ pub fn draw(canvas: *gpu.Canvas, card: gpu.Rect, time: f64, petted: bool) void {
     const height = sprites.raccoon_height;
     const c = canvas.add(native.gpu.WALLIFY_NEAREST, @intFromEnum(gpu.Texture.raccoon), .{
         .x = @floor(card.x + (card.w - width) / 2),
-        .y = @floor(card.y + card.h - height - 5),
+        .y = @floor(card.y + card.h - height),
         .w = width,
         .h = height,
     }, .{ 1, 1, 1, 1 });
