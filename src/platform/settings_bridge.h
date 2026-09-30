@@ -1,5 +1,6 @@
 #include "settings_window.h"
 #include "debug_stats.h"
+#include "gpu.h"
 
 extern const char *wallify_settings_path(void);
 extern void wallify_open_inspector(void);
@@ -9,3 +10,5 @@ extern void wallify_menu_next(void);
 extern void wallify_pointer(double x, double y, int kind);
 extern void wallify_set_window_visible(int visible);
 extern void wallify_media_key_event(int key_code);
+extern void *wallify_copy_idle_texture(int texture_id);
+extern void *wallify_idle_surface(void);

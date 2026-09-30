@@ -1,4 +1,6 @@
 import AppKit
+import QuartzCore
+import Metal
 
 // Link the real Settings model against a small in-memory native bridge.
 private var current = WallifySettingsSnapshot()
@@ -64,11 +66,23 @@ func positionStub() {}
 @_cdecl("wallify_open_inspector")
 func inspectorStub() {}
 
+// Renderer callbacks are supplied by native.m in the app.
+private var idleTestTexture: MTLTexture?
+private let idleTestSurface = CALayer()
+@_cdecl("wallify_copy_idle_texture")
+func idleTextureStub(_ textureID: Int32) -> UnsafeMutableRawPointer? {
+    guard let texture = idleTestTexture, textureID == 0 else { return nil }
+    return Unmanaged.passRetained(texture as AnyObject).toOpaque()
+}
+@_cdecl("wallify_idle_surface")
+func idleSurfaceStub() -> UnsafeMutableRawPointer? { Unmanaged.passUnretained(idleTestSurface).toOpaque() }
+
 @main
 struct SettingsBridgeCheck {
     @MainActor static func main() {
         checkSpotifyBridge()
         checkSpotifastBridge()
+        checkIdleAnimation()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -163,6 +177,66 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkIdleAnimation() {
+        let layer = CALayer()
+        idleKeyframes(layer, property: "opacity", values: [NSNumber(value: 0.5), NSNumber(value: 0.5)],
+                      period: 2, phase: 0.5, speed: 2, started: 10)
+        precondition(layer.opacity == 0.5 && layer.animation(forKey: "opacity") == nil)
+        idleKeyframes(layer, property: "opacity", values: [NSNumber(value: 0.5), NSNumber(value: 1)],
+                      period: 2, phase: 2.5, speed: 2, started: 10)
+        let animation = layer.animation(forKey: "opacity") as! CAKeyframeAnimation
+        precondition(animation.calculationMode == .discrete && animation.duration == 1)
+        precondition(animation.beginTime == 10 && animation.timeOffset == 0.25 && animation.repeatCount.isInfinite)
+        precondition(animation.keyTimes == [0, 0.5])
+        var first = DrawCommand()
+        first.dx = 30; first.dy = 40; first.dw = 20; first.dh = 10
+        first.clip_x = 5; first.clip_y = 10; first.clip_h = 100
+        first.r = 1; first.alpha = 0.5; first.sw = 0.25; first.sh = 0.5
+        var second = first
+        second.dx = 35; second.alpha = 1; second.sx = 0.25
+        let root = CALayer()
+        idleCommandLayers(root, frames: [first, second], frameCount: 2, commandCount: 1,
+                          image: nil, period: 2, phase: 0, speed: 1, started: 0)
+        let child = root.sublayers!.first!
+        precondition(child.position == CGPoint(x: 25, y: 60))
+        precondition(child.bounds == CGRect(x: 0, y: 0, width: 20, height: 10))
+        precondition(child.contentsRect == CGRect(x: 0, y: 0, width: 0.25, height: 0.5))
+        precondition(child.magnificationFilter == .nearest && child.anchorPoint == .zero)
+        precondition(child.animation(forKey: "bounds") == nil && child.animation(forKey: "position") != nil)
+        precondition(child.animation(forKey: "contentsRect") != nil && child.animation(forKey: "opacity") != nil)
+        precondition(!startIdleAnimation(nil, 0, 1, nil, 0, 0, 1, 0, 1))
+        withUnsafePointer(to: &first) {
+            precondition(!startIdleAnimation($0, 1, 1, nil, 0, 0, 1, 0, 0))
+            precondition(!startIdleAnimation($0, 1, 1, nil, UInt.max, 2, 1, 0, 1))
+            precondition(!startIdleAnimation($0, 1, 1, nil, 0, 0, 1, 0, 1))
+        }
+        let device = MTLCreateSystemDefaultDevice()!
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+        descriptor.storageMode = .shared
+        idleTestTexture = device.makeTexture(descriptor: descriptor)!
+        let pixel: [UInt8] = [255, 0, 0, 255]
+        pixel.withUnsafeBytes {
+            idleTestTexture!.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: 4)
+        }
+        idleTestSurface.bounds = CGRect(x: 0, y: 0, width: 200, height: 160)
+        first.clip_w = 100; first.clip_radius = 6
+        withUnsafePointer(to: &first) {
+            precondition(startIdleAnimation($0, 1, 1, nil, 0, 0, 1, 0, 1))
+        }
+        first.dx = 200
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        let attached = idleTestSurface.sublayers!.first!
+        precondition(attached.frame == CGRect(x: 5, y: 50, width: 100, height: 100))
+        precondition(attached.isGeometryFlipped && attached.masksToBounds && attached.cornerRadius == 6)
+        precondition(attached.sublayers!.first!.position == CGPoint(x: 25, y: 60))
+        let image = attached.sublayers!.first!.contents as! CGImage
+        precondition(image.width == 1 && image.height == 1)
+        stopIdleAnimation()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        precondition(idleTestSurface.sublayers?.isEmpty != false)
+        idleTestTexture = nil
     }
 
     static func checkSpotifastBridge() {

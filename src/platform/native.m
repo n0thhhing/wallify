@@ -785,7 +785,15 @@ bool wallify_panel_offsets(double* out_x, double* out_y) {
     return true;
 }
 
-#import "idle_animation.m"
+void* wallify_copy_idle_texture(int textureID) {
+    if (textureID < 0 || textureID >= WALLIFY_MAX_TEXTURES) return NULL;
+    [frameLock lock];
+    id<MTLTexture> texture = loadedTextures[textureID];
+    [frameLock unlock];
+    return (__bridge_retained void*)texture;
+}
+
+void* wallify_idle_surface(void) { return (__bridge void*)surface; }
 
 void wallify_update_glass_rect(double x, double y, double w, double h, double radius, float tint_r,
                                float tint_g, float tint_b, bool active) {

@@ -18,6 +18,8 @@ Set `WALLIFY_PROFILE=1` when measuring renderer behavior. The profile stream rep
 
 The intended steady-state path is a small dynamic pass over a cached scene. A cache rebuild is expected after metadata/artwork changes that alter static commands, widget resizing, or a backing-scale change. Repeated cache rebuilds during otherwise idle playback are a signal to investigate rather than a normal steady-state condition.
 
+`platform/idle_animation.swift` owns the repeating Core Animation layer tree for idle companions. It copies Zig's sampled draw commands before dispatching to the main queue, converts retained Metal sprite textures into cached images, and preserves discrete frame timing, clipping, and nearest-neighbor scaling. The renderer exposes only the texture and surface accessors needed by this bridge.
+
 ## Media Subsystem & Auto Source
 
 `media/controller.zig` coordinates playback state and metadata across multiple backends:

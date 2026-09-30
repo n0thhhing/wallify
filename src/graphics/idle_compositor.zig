@@ -39,7 +39,7 @@ pub const Sequence = struct {
 };
 
 // Sample the existing renderer once, rather than maintaining a second set of
-// pet geometry in Objective-C. The compositor repeats these keyframes itself.
+// pet geometry in Swift. The compositor repeats these keyframes itself.
 pub fn sample(style: state.IdleStyle, card: gpu.Rect, sequence: *Sequence) void {
     const is_banana = style == .banana_cat;
     sequence.sprite_count = if (is_banana) 45 else 5;

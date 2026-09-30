@@ -52,9 +52,11 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/platform/settings_bridge.h"));
     swift_settings.addFileInput(b.path("src/platform/settings_window.h"));
     swift_settings.addFileInput(b.path("src/platform/debug_stats.h"));
+    swift_settings.addFileInput(b.path("src/platform/gpu.h"));
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_settings.addFileArg(b.path("src/platform/idle_animation.swift"));
     swift_settings.addFileArg(b.path("src/platform/media_keys.swift"));
     swift_settings.addFileArg(b.path("src/platform/media_remote.swift"));
     swift_settings.addFileArg(b.path("src/media/spotify.swift"));
@@ -81,7 +83,6 @@ pub fn build(b: *std.Build) void {
     native.addArg("-include");
     native.addFileArg(b.path("src/platform/gpu.h"));
     native.addFileArg(b.path("src/platform/native.m"));
-    native.addFileInput(b.path("src/platform/idle_animation.m"));
     native.addFileInput(b.path("src/platform/settings_window.h"));
     native.addFileInput(b.path("src/platform/debug_stats.h"));
     native.addArg("-o");
@@ -188,9 +189,11 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/settings_bridge.h"));
     swift_check.addFileInput(b.path("src/platform/settings_window.h"));
     swift_check.addFileInput(b.path("src/platform/debug_stats.h"));
+    swift_check.addFileInput(b.path("src/platform/gpu.h"));
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_check.addFileArg(b.path("src/platform/idle_animation.swift"));
     swift_check.addFileArg(b.path("src/platform/media_keys.swift"));
     swift_check.addFileArg(b.path("src/platform/media_remote.swift"));
     swift_check.addFileArg(b.path("src/media/spotify.swift"));
@@ -228,5 +231,6 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_menu_play_pause",         "_wallify_menu_previous",
         "_wallify_menu_next",               "_wallify_pointer",
         "_wallify_set_window_visible",      "_wallify_media_key_event",
+        "_wallify_copy_idle_texture",       "_wallify_idle_surface",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }
