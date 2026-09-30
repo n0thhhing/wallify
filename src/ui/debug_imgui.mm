@@ -725,7 +725,7 @@ static void drawInspectorStatusBar(const WallifyDebugSnapshot& s) {
     const char* status =
         !widgetVisible ? "Sleeping (occluded)" :
         s.transition_active ? "Transitioning" :
-        (s.frame_requested ? "Live" : "Idle");
+        (s.frame_requested ? "Frame pending" : "No frame pending");
 
     char titleText[48];
     if (s.title_len) {
