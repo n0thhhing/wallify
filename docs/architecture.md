@@ -22,7 +22,7 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 
 `media/controller.zig` coordinates playback state and metadata across multiple backends:
 - **System Now Playing**: Reads the macOS `MediaRemote` private framework through the metadata helper. The Zig controller forwards play/pause/track commands and seeking to `platform/media_remote.swift`, which dynamically resolves the private framework symbols and safely skips unavailable functions.
-- **Spotify Direct**: Queries and controls Spotify via AppleScript (`media/spotify.zig`).
+- **Spotify Direct**: Swift queries and controls Spotify via AppleScript (`media/spotify.swift`); `media/spotify.zig` declares its C interface. Distributed playback notifications coalesce through a lock and semaphore to wake the metadata worker and signal the MediaRemote helper.
 - **Spotifast**: Communicates over high-speed local TCP IPC (`media/spotifast.zig`).
 - **Auto Source**: Dynamically pings the Spotifast TCP socket with a non-blocking connection. If Spotifast is responsive, it routes requests there; if inactive, it instantly falls back to System Now Playing.
 

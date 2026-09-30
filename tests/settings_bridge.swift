@@ -67,6 +67,7 @@ func inspectorStub() {}
 @main
 struct SettingsBridgeCheck {
     @MainActor static func main() {
+        checkSpotifyBridge()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -161,6 +162,49 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkSpotifyBridge() {
+        precondition(spotifyBundleIdentifier == "com.spotify.client")
+        let lines = spotifyQueryScript.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        let artwork = lines.firstIndex(of: "set tArt to artwork url of current track")!
+        precondition(lines[artwork - 1] == "try" && lines[artwork + 1] == "end try")
+        precondition(spotifyQueryScript.contains("set tArt to \"\""))
+        precondition(spotifyQueryScript.contains("set {tName, tArtist, tState, tPos, tDur}"))
+        precondition(spotifyQueryScript.contains("return \"NO_TRACK\"") && spotifyQueryScript.contains("return \"CLOSED\""))
+        for command: Int32 in 0...4 {
+            let script = spotifyControlScript(command)!
+            precondition(script.contains("tell application \"Spotify\""))
+            precondition(script.contains("to activate") == (command == 0 || command == 2))
+        }
+        precondition(spotifyControlScript(5) == nil && spotifyControlScript(-1) == nil)
+        precondition(spotifySeekScript(12.346)!.hasSuffix("12.35"))
+        precondition(spotifySeekScript(.nan) == nil && spotifySeekScript(.infinity) == nil && spotifySeekScript(-1) == nil)
+        let events = SpotifyEvents()
+        precondition(events.takeState() == -1 && events.wait(milliseconds: 0) == 0)
+        events.notify()
+        events.notify()
+        precondition(events.wait(milliseconds: 0) == 1)
+        precondition(events.takeState() == -1 && events.wait(milliseconds: 0) == 0)
+        events.notify()
+        precondition(events.takeState() == 1 && events.takeState() == -1)
+        precondition(events.wait(milliseconds: 0) == 1)
+        let wake = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            precondition(events.wait(milliseconds: 1000) == 1)
+            wake.signal()
+        }
+        events.notify()
+        precondition(wake.wait(timeout: .now() + 2) == .success)
+        var buffer = [UInt8](repeating: 0xFF, count: 8)
+        buffer.withUnsafeMutableBufferPointer {
+            precondition(copySpotifyResult("é|||track", to: $0.baseAddress!, capacity: 5) == 5)
+        }
+        precondition(Array(buffer.prefix(5)) == Array("é|||".utf8) && buffer[5] == 0xFF)
+        buffer.withUnsafeMutableBufferPointer {
+            precondition(copySpotifyResult("", to: $0.baseAddress!, capacity: 8) == 0)
+            precondition(copySpotifyResult("track", to: $0.baseAddress!, capacity: 0) == 0)
+        }
     }
 
     static func checkConfigurationPaths() {
