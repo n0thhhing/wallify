@@ -68,6 +68,7 @@ func inspectorStub() {}
 struct SettingsBridgeCheck {
     @MainActor static func main() {
         checkSpotifyBridge()
+        checkSpotifastBridge()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -162,6 +163,85 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkSpotifastBridge() {
+        precondition((0...4).map { spotifastControlVerb(Int32($0))! } == ["play", "pause", "playpause", "previous", "next"])
+        precondition(spotifastControlVerb(-1) == nil && spotifastControlVerb(5) == nil)
+        precondition(spotifastSeekVerb(12.345) == "seek-to 12345" && spotifastSeekVerb(-1) == "seek-to 0")
+        precondition(spotifastSeekVerb(.nan) == nil && spotifastSeekVerb(.infinity) == nil && spotifastSeekVerb(Double.greatestFiniteMagnitude) == nil)
+        precondition(String(decoding: spotifastQueryResult(nil), as: UTF8.self) == "CLOSED")
+        for stopped in ["fastpotify:now stopped\n", "fastpotify:now\r\n", " stopped "] {
+            precondition(String(decoding: spotifastQueryResult(Array(stopped.utf8)), as: UTF8.self) == "NO_TRACK")
+        }
+        let listener = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        precondition(listener >= 0)
+        defer { Darwin.close(listener) }
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(listener, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        precondition(bound == 0 && Darwin.listen(listener, 4) == 0)
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(listener, $0, &length) }
+        }
+        precondition(named == 0)
+        let port = UInt16(bigEndian: address.sin_port)
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            func acceptClient() -> Int32 {
+                let socket = Darwin.accept(listener, nil, nil)
+                precondition(socket >= 0)
+                return socket
+            }
+            func expect(_ verb: String, on socket: Int32) {
+                var request: [UInt8] = []
+                var byte: UInt8 = 0
+                repeat {
+                    precondition(Darwin.read(socket, &byte, 1) == 1)
+                    request.append(byte)
+                } while byte != 10
+                precondition(String(decoding: request, as: UTF8.self) == "fastpotify:\(verb)\n")
+            }
+            func send(_ text: String, on socket: Int32) {
+                let bytes = Array(text.utf8)
+                precondition(bytes.withUnsafeBytes { Darwin.write(socket, $0.baseAddress!, $0.count) } == bytes.count)
+            }
+            let first = acceptClient()
+            expect("nowplaying", on: first)
+            send("fastpotify:now ", on: first)
+            send("playing\tTrack\tArtist\n", on: first)
+            expect("nowplaying", on: first)
+            send("incomplete", on: first)
+            Darwin.close(first)
+            let second = acceptClient()
+            expect("nowplaying", on: second)
+            send("fastpotify:now paused\tTrack\tArtist\n", on: second)
+            let control = acceptClient()
+            expect("next", on: control)
+            send("ok\n", on: control)
+            Darwin.close(control)
+            expect("nowplaying", on: second)
+            send("fastpotify:now stopped\n", on: second)
+            Darwin.close(second)
+            done.signal()
+        }
+        let connection = SpotifastConnection(port: port)
+        precondition(connection.request("nowplaying\nnext") == nil)
+        precondition(connection.request(String(repeating: "x", count: 116)) == nil)
+        let first = connection.request("nowplaying", persistent: true)!
+        precondition(String(decoding: first, as: UTF8.self) == "fastpotify:now playing\tTrack\tArtist\n")
+        let second = connection.request("nowplaying", persistent: true)!
+        precondition(String(decoding: second, as: UTF8.self) == "fastpotify:now paused\tTrack\tArtist\n")
+        precondition(connection.request("next") == Array("ok\n".utf8))
+        precondition(spotifastQueryResult(connection.request("nowplaying", persistent: true)) == Array("NO_TRACK".utf8))
+        precondition(done.wait(timeout: .now() + 2) == .success)
     }
 
     static func checkSpotifyBridge() {
