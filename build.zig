@@ -35,6 +35,28 @@ pub fn build(b: *std.Build) void {
     dylib.root_module.addObjectFile(metadata_notifications.addOutputFileArg("metadata-notifications.o"));
     b.installArtifact(dylib);
 
+    // SwiftUI settings retains the existing C settings contract.
+    const swift_settings = b.addSystemCommand(&.{
+        "xcrun",         "swiftc",          "-swift-version",                  "5",                          "-emit-library",
+        "-module-name",  "WallifySettings", "-module-cache-path",              "/tmp/wallify-swift-modules", "-target",
+        b.fmt("{s}-apple-macosx12.0", .{switch (target.result.cpu.arch) {
+            .aarch64 => "arm64",
+            .x86_64 => "x86_64",
+            else => @panic("Wallify requires an Apple desktop architecture"),
+        }}),
+        "-Xlinker",      "-undefined",      "-Xlinker",                        "dynamic_lookup",             "-Xlinker",
+        "-install_name", "-Xlinker",        "@rpath/libWallifySettings.dylib", "-no-toolchain-stdlib-rpath",
+    });
+    swift_settings.addArg(if (optimize == .Debug) "-Onone" else "-O");
+    swift_settings.addArg("-import-objc-header");
+    swift_settings.addFileArg(b.path("src/platform/settings_bridge.h"));
+    swift_settings.addFileInput(b.path("src/platform/settings_window.h"));
+    swift_settings.addFileInput(b.path("src/platform/debug_stats.h"));
+    swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
+    swift_settings.addArg("-o");
+    const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
+    b.getInstallStep().dependOn(&b.addInstallFile(settings_dylib, "lib/libWallifySettings.dylib").step);
+
     // Desktop player.
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -43,6 +65,9 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     linkMacos(mod);
+    mod.addObjectFile(settings_dylib);
+    mod.addRPathSpecial("@executable_path/../lib");
+    mod.addRPathSpecial("@executable_path/../Frameworks");
     mod.linkFramework("ServiceManagement", .{});
     mod.addOptions("build_options", build_options);
     mod.addIncludePath(b.path("src/platform"));
@@ -50,7 +75,6 @@ pub fn build(b: *std.Build) void {
     native.addArg("-include");
     native.addFileArg(b.path("src/platform/gpu.h"));
     native.addFileArg(b.path("src/platform/native.m"));
-    native.addFileInput(b.path("src/platform/settings_window.m"));
     native.addFileInput(b.path("src/platform/idle_animation.m"));
     native.addFileInput(b.path("src/platform/settings_window.h"));
     native.addFileInput(b.path("src/platform/debug_stats.h"));
@@ -128,6 +152,7 @@ pub fn build(b: *std.Build) void {
         .name = "wallify",
         .root_module = mod,
     });
+    retainSettingsBridge(exe);
     b.installArtifact(exe);
     const install_metal = b.addInstallBinFile(metallib_out, "default.metallib");
     b.getInstallStep().dependOn(&install_metal.step);
@@ -145,7 +170,29 @@ pub fn build(b: *std.Build) void {
     const test_artifact = b.addTest(.{
         .root_module = mod,
     });
+    retainSettingsBridge(test_artifact);
+    test_artifact.root_module.addRPath(settings_dylib.dirname());
     test_step.dependOn(&b.addRunArtifact(test_artifact).step);
+
+    const swift_check = b.addSystemCommand(&.{
+        "xcrun",              "swiftc",                     "-swift-version", "5",
+        "-module-cache-path", "/tmp/wallify-swift-modules",
+    });
+    swift_check.addArg("-import-objc-header");
+    swift_check.addFileArg(b.path("src/platform/settings_bridge.h"));
+    swift_check.addFileInput(b.path("src/platform/settings_window.h"));
+    swift_check.addFileInput(b.path("src/platform/debug_stats.h"));
+    swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
+    swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
+    swift_check.addArg("-o");
+    const check_binary = swift_check.addOutputFileArg("settings-bridge-check");
+    const run_check = b.addSystemCommand(&.{"/usr/bin/env"});
+    run_check.addFileArg(check_binary);
+    test_step.dependOn(&run_check.step);
+    const run_flag_check = b.addSystemCommand(&.{"/usr/bin/env"});
+    run_flag_check.addFileArg(check_binary);
+    run_flag_check.addArg("--settings");
+    test_step.dependOn(&run_flag_check.step);
 }
 
 fn linkMacos(module: *std.Build.Module) void {
@@ -155,4 +202,16 @@ fn linkMacos(module: *std.Build.Module) void {
     module.linkFramework("CoreText", .{});
     module.linkFramework("AppKit", .{});
     module.linkFramework("CoreGraphics", .{});
+}
+
+// Swift resolves these callbacks from its host executable. Keep them through
+// dead stripping, and reject a missing callback at link time rather than launch.
+fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
+    artifact.rdynamic = true;
+    for ([_][]const u8{
+        "_wallify_settings_get_snapshot",   "_wallify_settings_apply_bool",
+        "_wallify_settings_apply_int",      "_wallify_settings_restore_defaults",
+        "_wallify_settings_reset_position", "_wallify_settings_path",
+        "_wallify_debug_renderer_stats",    "_wallify_open_inspector",
+    }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/n0thhhing/wallify/actions/workflows/ci.yml/badge.svg)](https://github.com/n0thhhing/wallify/actions/workflows/ci.yml)
 
-A native macOS music widget written in Zig with an AppKit window and Metal GPU renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
+A native macOS music widget written in Zig with an AppKit window, SwiftUI Settings, and Metal GPU renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
 
 ## Features
 
@@ -18,7 +18,7 @@ A native macOS music widget written in Zig with an AppKit window and Metal GPU r
 
 ## Run
 
-**Requirements:** Zig **0.16.0**, Clang, and the Xcode Metal toolchain (`xcrun metal` / `xcrun metallib`). Metal-capable Mac required.
+**Requirements:** Zig **0.16.0**, Swift (via Xcode), Clang, and the Xcode Metal toolchain (`xcrun metal` / `xcrun metallib`). Metal-capable Mac required.
 
 ```sh
 ./run                    # Build ReleaseFast, package, and launch Wallify.app

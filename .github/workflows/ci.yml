@@ -35,7 +35,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .zig-cache
-          key: \${{ runner.os }}-zig-0.16-\${{ github.ref_name }}-\${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig', 'src/**/*.m', 'src/**/*.mm', 'src/**/*.h', 'src/**/*.metal') }}
+          key: \${{ runner.os }}-zig-0.16-\${{ github.ref_name }}-\${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig', 'src/**/*.m', 'src/**/*.swift', 'src/**/*.mm', 'src/**/*.h', 'src/**/*.metal') }}
           restore-keys: |
             \${{ runner.os }}-zig-0.16-\${{ github.ref_name }}-
             \${{ runner.os }}-zig-0.16-

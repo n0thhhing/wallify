@@ -57,7 +57,7 @@ done
 echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Packaging ${APP_NAME}.app...${RESET}"
 
 # 1. Build project if requested or if binaries are missing
-if [[ "$DO_BUILD" == true ]] || [[ ! -f "zig-out/bin/wallify" ]] || [[ ! -f "zig-out/lib/libmetadata_fetcher.dylib" ]] || [[ ! -f "zig-out/bin/default.metallib" ]]; then
+if [[ "$DO_BUILD" == true ]] || [[ ! -f "zig-out/bin/wallify" ]] || [[ ! -f "zig-out/lib/libmetadata_fetcher.dylib" ]] || [[ ! -f "zig-out/bin/default.metallib" ]] || [[ ! -f "zig-out/lib/libWallifySettings.dylib" ]]; then
     echo -e "  ${CYAN}•${RESET} Compiling binaries via zig build (-Doptimize=${OPTIMIZE})..."
     # Ensure macOS SDK path is discovered properly
     if ! xcrun --show-sdk-path >/dev/null 2>&1; then
@@ -80,7 +80,7 @@ if [[ "$DO_BUILD" == true ]] || [[ ! -f "zig-out/bin/wallify" ]] || [[ ! -f "zig
 fi
 
 # Sanity check required binaries
-for bin in "zig-out/bin/wallify" "zig-out/lib/libmetadata_fetcher.dylib" "zig-out/bin/default.metallib"; do
+for bin in "zig-out/bin/wallify" "zig-out/lib/libmetadata_fetcher.dylib" "zig-out/lib/libWallifySettings.dylib" "zig-out/bin/default.metallib"; do
     if [[ ! -f "$bin" ]]; then
         echo -e "${RED}Error: Required build artifact missing: $bin${RESET}" >&2
         exit 1
@@ -99,6 +99,7 @@ chmod +x "$APP_DIR/Contents/MacOS/Wallify"
 
 # Place dynamic libraries in Frameworks
 cp zig-out/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Frameworks/"
+cp zig-out/lib/libWallifySettings.dylib "$APP_DIR/Contents/Frameworks/"
 
 # 4. Copy Metal shaders & assets
 cp zig-out/bin/default.metallib "$APP_DIR/Contents/Resources/default.metallib"
@@ -163,6 +164,7 @@ fi
 
 # Sign frameworks and executable
 codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libmetadata_fetcher.dylib"
+codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libWallifySettings.dylib"
 codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/MacOS/Wallify"
 # Sign top-level bundle
 codesign --deep "${SIGN_ARGS[@]}" "$APP_DIR"

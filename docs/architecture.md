@@ -38,7 +38,7 @@ To prevent macOS from automatically waking Apple Music when hardware media keys 
 
 The status-bar menu is the fast path for common actions. It mirrors the live settings snapshot so checkmarks and the Play/Pause label stay synchronized with Settings, while media commands go through the same Zig media controller as the widget itself. In developer builds, the menu also exposes the Dear ImGui Inspector.
 
-The native Settings window is definition-driven: pages and controls are described once, then the Zig settings bridge applies the corresponding state changes and persists them. The Performance page surfaces the native renderer's current device/timing information and links directly to the Inspector. The System section uses Apple's `SMAppService` main-app login-item API for Launch at Login; registration errors are logged rather than silently changing the UI.
+The Settings window uses SwiftUI hosted in an AppKit window (`platform/settings_window.swift`). Its controls read the existing C settings snapshot and call the Zig settings bridge, which applies state changes and persists them. Swift is compiled into `libWallifySettings.dylib`, linked by the Zig executable, and packaged in the app’s Frameworks directory. The renderer and widget state remain in Zig during this first migration step. The Performance page surfaces the native renderer's current device/timing information and links directly to the Inspector. The System section uses Apple's `SMAppService` main-app login-item API for Launch at Login; registration errors are logged rather than silently changing the UI.
 
 The Inspector is a separate MetalKit + Dear ImGui window intended for development builds. Its Performance tab combines AppKit window occlusion, the renderer statistics bridge, and the frame scheduler's state to make the power model visible. The Console / Events tab captures stdout/stderr into a bounded in-memory log while mirroring the original terminal stream. This makes cache rebuilds, texture uploads, GPU failures, and visibility transitions inspectable without adding per-frame log spam.
 
@@ -53,7 +53,7 @@ Settings mutations in the UI or context menu immediately update `state.zig`, req
 
 ## Build and Verification
 
-The build compiles Zig, the Objective-C bridge, and a Metal library:
+The build compiles Zig, SwiftUI Settings, the Objective-C bridge, and a Metal library:
 - `./run` builds `ReleaseFast`, packages `Wallify.app`, and signs all binaries.
 - `scripts/package-app.sh` packages the bundle, generates `Info.plist`, and embeds assets.
 - `zig build test` executes unit tests covering playback clocks, layout/hitboxes, GPU command clipping, and settings snapshot synchronization.

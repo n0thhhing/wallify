@@ -1312,7 +1312,7 @@ bool wallify_panel_offsets(double* out_x, double* out_y) {
     return true;
 }
 
-#import "settings_window.m"
+// Settings is implemented in SwiftUI through settings_window.h.
 #import "idle_animation.m"
 
 void wallify_update_glass_rect(double x, double y, double w, double h, double radius, float tint_r,
