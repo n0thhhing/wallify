@@ -54,6 +54,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileInput(b.path("src/platform/debug_stats.h"));
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
+    swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
     swift_settings.addArg("-o");
     const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
     b.getInstallStep().dependOn(&b.addInstallFile(settings_dylib, "lib/libWallifySettings.dylib").step);
@@ -185,6 +186,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileInput(b.path("src/platform/debug_stats.h"));
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
+    swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
     swift_check.addArg("-o");
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");
@@ -216,6 +218,7 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_settings_reset_position", "_wallify_settings_path",
         "_wallify_debug_renderer_stats",    "_wallify_open_inspector",
         "_wallify_menu_play_pause",         "_wallify_menu_previous",
-        "_wallify_menu_next",
+        "_wallify_menu_next",               "_wallify_pointer",
+        "_wallify_set_window_visible",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

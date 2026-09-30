@@ -1,6 +1,6 @@
 # Architecture
 
-`main.zig` initializes assets and boots background animation and media telemetry workers. Swift's `platform/application.swift` initializes AppKit, owns the status-bar menu, and runs the native event loop through C entry points. `state.Layout` owns logical-point geometry used across rendering, input hitboxes, and native panel sizing.
+`main.zig` initializes assets and boots background animation and media telemetry workers. Swift's `platform/application.swift` initializes AppKit, owns the status-bar menu, and runs the native event loop through C entry points. `platform/widget_window.swift` supplies the desktop panel and input view, retains right-click events for synchronous context menus, and forwards visibility changes to the scheduler. The Objective-C renderer owns those Swift-created objects through ARC and attaches its existing Metal layer to the input view. `state.Layout` owns logical-point geometry used across rendering, input hitboxes, and native panel sizing.
 
 ## GPU Renderer & Native Glass
 
@@ -56,4 +56,4 @@ Settings mutations in the UI or context menu immediately update `state.zig`, req
 The build compiles Zig, Swift application/menu code and SwiftUI Settings, the Objective-C renderer bridge, and a Metal library:
 - `./run` builds `ReleaseFast`, packages `Wallify.app`, and signs all binaries.
 - `scripts/package-app.sh` packages the bundle, generates `Info.plist`, and embeds assets.
-- `zig build test` executes unit tests covering playback clocks, layout/hitboxes, GPU command clipping, settings snapshot synchronization, Swift menu actions/checkmarks, and configuration path precedence/default seeding.
+- `zig build test` executes unit tests covering playback clocks, layout/hitboxes, GPU command clipping, settings snapshot synchronization, Swift menu actions/checkmarks, configuration path precedence/default seeding, and desktop panel/input event behavior.

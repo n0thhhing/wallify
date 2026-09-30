@@ -5,6 +5,16 @@ private var current = WallifySettingsSnapshot()
 private var lastBool: (Int32, Bool)?
 private var lastInt: (Int32, Int32)?
 private var playbackCommands: [String] = []
+private var lastPointer: (Double, Double, Int32)?
+private var visible = Int32(0)
+
+@_cdecl("wallify_pointer")
+@MainActor func pointerStub(_ x: Double, _ y: Double, _ kind: Int32) {
+    if kind == 3 { precondition(contextMenuEvent() != nil) }
+    lastPointer = (x, y, kind)
+}
+@_cdecl("wallify_set_window_visible")
+func visibilityStub(_ value: Int32) { visible = value }
 
 @_cdecl("wallify_menu_play_pause")
 func playStub() { playbackCommands.append("play_pause") }
@@ -100,7 +110,42 @@ struct SettingsBridgeCheck {
         status.playPause(); status.previous(); status.next()
         precondition(playbackCommands == ["play_pause", "previous", "next"])
         checkConfigurationPaths()
+        checkWidgetWindow()
         print("Swift settings bridge checks passed")
+    }
+
+    @MainActor static func checkWidgetWindow() {
+        let panel = Unmanaged<NSPanel>.fromOpaque(createWidgetPanel(200, 100)).takeRetainedValue()
+        let view = Unmanaged<WidgetView>.fromOpaque(createWidgetView(200, 100)).takeRetainedValue()
+        panel.contentView = view
+        precondition(panel.canBecomeKey && !panel.canBecomeMain)
+        precondition(!panel.isOpaque && !panel.hasShadow && !panel.hidesOnDeactivate)
+        precondition(panel.level.rawValue == NSWindow.Level.normal.rawValue - 1)
+        precondition(panel.collectionBehavior.contains([.canJoinAllSpaces, .stationary]))
+        precondition(view.isFlipped && !view.acceptsFirstResponder && view.acceptsFirstMouse(for: nil))
+        view.updateTrackingAreas()
+        view.updateTrackingAreas()
+        precondition(view.trackingAreas.count == 1)
+        let event = NSEvent.mouseEvent(with: .leftMouseDown, location: NSPoint(x: 20, y: 30),
+                                       modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber,
+                                       context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+        view.mouseDown(with: event)
+        precondition(lastPointer?.0 == 20 && lastPointer?.1 == 70 && lastPointer?.2 == 1)
+        view.mouseUp(with: event)
+        precondition(lastPointer?.2 == 2)
+        view.mouseDragged(with: event)
+        precondition(lastPointer?.2 == 0)
+        view.rightMouseDown(with: event)
+        precondition(lastPointer?.2 == 3)
+        let retainedEvent = Unmanaged<NSEvent>.fromOpaque(contextMenuEvent()!).takeUnretainedValue()
+        precondition(retainedEvent === event)
+        clearContextMenuEvent()
+        precondition(contextMenuEvent() == nil)
+        view.mouseExited(with: event)
+        precondition(lastPointer?.0 == -1 && lastPointer?.1 == -1 && lastPointer?.2 == 0)
+        (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
+        precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
+        panel.orderOut(nil)
     }
 
     static func checkConfigurationPaths() {

@@ -50,8 +50,6 @@ static BOOL lastGlassUpdateValid;
 static BOOL lastGlassActive;
 static double lastGlassX, lastGlassY, lastGlassW, lastGlassH, lastGlassRadius;
 static atomic_ulong sceneNanos, gpuNanos, uploadedBytes, sceneFrames, renderedFrames, drawCalls;
-// AppKit retains the pending event until the context menu is presented.
-static __strong NSEvent* pendingContextMenuEvent;
 void wallify_debug_renderer_stats(WallifyRendererStats* out) {
     *out = (WallifyRendererStats){0};
     snprintf(out->device_name, sizeof(out->device_name), "%s", device.name.UTF8String ?: "Unavailable");
@@ -107,126 +105,10 @@ void wallify_profile_scene(double seconds) {
     }
 }
 
-@interface WallifyView : NSView
-@end
-
-@implementation WallifyView
-
-- (BOOL)isFlipped {
-    return YES;
-}
-
-- (NSView*)hitTest:(NSPoint)point {
-    return self;
-}
-
-- (BOOL)acceptsFirstResponder {
-    return NO;
-}
-
-- (BOOL)acceptsFirstMouse:(NSEvent*)event {
-    (void)event;
-    return YES;
-}
-
-- (void)updateTrackingAreas {
-    for (NSTrackingArea* area in self.trackingAreas) {
-        [self removeTrackingArea:area];
-    }
-
-    NSTrackingArea* area = [[NSTrackingArea alloc]
-        initWithRect:NSZeroRect
-             options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited |
-                     NSTrackingActiveAlways | NSTrackingInVisibleRect
-               owner:self
-            userInfo:nil];
-
-    [self addTrackingArea:area];
-    [super updateTrackingAreas];
-}
-
-- (void)pointer:(NSEvent*)event kind:(int)kind {
-    NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
-
-    wallify_pointer(p.x, p.y, kind);
-}
-
-- (void)mouseDown:(NSEvent*)e {
-    [self pointer:e kind:1];
-}
-
-- (void)mouseUp:(NSEvent*)e {
-    [self pointer:e kind:2];
-}
-
-- (void)mouseMoved:(NSEvent*)e {
-    [self pointer:e kind:0];
-}
-
-- (void)mouseDragged:(NSEvent*)e {
-    [self pointer:e kind:0];
-}
-
-- (void)mouseExited:(NSEvent*)e {
-    (void)e;
-    wallify_pointer(-1, -1, 0);
-}
-
-- (void)rightMouseDown:(NSEvent*)e {
-    // AppKit's contextual menu tracking is anchored to the original
-    // right-button-down event. Present synchronously while that event is
-    // still being handled so hover/highlighting starts immediately.
-    pendingContextMenuEvent = e;
-    [self pointer:e kind:3];
-}
-
-- (void)rightMouseUp:(NSEvent*)e {
-    (void)e;
-}
-
-
-
-@end
-
-@interface WallifyPanel : NSPanel
-@end
-
-@implementation WallifyPanel
-
-- (BOOL)canBecomeKeyWindow {
-    return YES;
-}
-
-- (BOOL)canBecomeMainWindow {
-    return NO;
-}
-
-- (BOOL)_hasActiveAppearance {
-    return YES;
-}
-
-- (BOOL)_hasActiveAppearanceIgnoringKeyFocus {
-    return YES;
-}
-
-- (BOOL)_hasActiveControls {
-    return YES;
-}
-
-- (BOOL)_hasKeyAppearance {
-    return YES;
-}
-
-- (BOOL)_hasMainAppearance {
-    return YES;
-}
-
-@end
-
 // Let AppKit own the glass material, optical filters, and rim.
 static NSGlassEffectView* globalGlassView = nil;
 static NSView* globalGlassContentView = nil;
-static WallifyView* globalMetalView = nil;
+static NSView* globalMetalView = nil;
 
 @interface WallifyDesktopGlassView : NSGlassEffectView
 @end
@@ -333,32 +215,8 @@ bool wallify_create(int width, int height, int left, int top) {
 
     NSRect bounds = NSMakeRect(0, 0, atomic_load(&surfaceWidth), atomic_load(&surfaceHeight));
 
-    panel = [[WallifyPanel alloc] initWithContentRect:bounds
-                                            styleMask:NSWindowStyleMaskBorderless
-                                              backing:NSBackingStoreBuffered
-                                                defer:NO];
-
-    panel.title = @"Wallify";
-
-    panel.opaque = NO;
-
-    panel.backgroundColor = NSColor.clearColor;
-
-    panel.hasShadow = NO;
-
-    panel.hidesOnDeactivate = NO;
-
-    panel.releasedWhenClosed = NO;
-
-    /*
-     * Keep Wallify attached to the desktop.
-     */
-    panel.level = NSNormalWindowLevel - 1;
-
-    panel.collectionBehavior =
-        NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorStationary;
-
-    WallifyView* view = [[WallifyView alloc] initWithFrame:bounds];
+    panel = (__bridge_transfer NSPanel*)wallify_create_widget_panel(width, height);
+    NSView* view = (__bridge_transfer NSView*)wallify_create_widget_view(width, height);
 
     globalMetalView = view;
 
@@ -399,17 +257,6 @@ bool wallify_create(int width, int height, int left, int top) {
      * widget that contributes no visible pixels does not need animation or
      * Metal work, so let the Zig animation loop sleep until visibility returns.
      */
-    // This observer is intentionally process-lifetime: the Wallify panel lives for the lifetime of the app.
-    [[NSNotificationCenter defaultCenter]
-        addObserverForName:NSWindowDidChangeOcclusionStateNotification
-                    object:panel
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification* note) {
-                    NSWindow* window = note.object;
-                    BOOL visible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
-                    wallify_set_window_visible(visible ? 1 : 0);
-                }];
-
     wallify_set_window_visible(
         (panel.occlusionState & NSWindowOcclusionStateVisible) != 0 ? 1 : 0);
 
@@ -668,16 +515,8 @@ void wallify_present_split(float width,
 }
 
 
-void* wallify_context_menu_event(void) {
-    return (__bridge void*)pendingContextMenuEvent;
-}
-
 void* wallify_context_menu_view(void) {
     return (__bridge void*)globalMetalView;
-}
-
-void wallify_clear_context_menu_event(void) {
-    pendingContextMenuEvent = nil;
 }
 
 void wallify_swap_textures(int src, int dest) {
