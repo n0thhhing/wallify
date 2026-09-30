@@ -123,6 +123,9 @@ struct SettingsBridgeCheck {
             precondition(mediaKeyAction(data: (key << 16) | 0x0A00) == nil)
             precondition(mediaKeyAction(data: (key << 16) | 0x0B00) == nil)
         }
+        withMediaRemoteSymbol("WallifyMissingMediaRemoteSymbol") { _ in
+            preconditionFailure("A missing MediaRemote symbol must be ignored")
+        }
         print("Swift settings bridge checks passed")
     }
 
