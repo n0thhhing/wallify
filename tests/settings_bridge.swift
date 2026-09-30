@@ -1,6 +1,7 @@
 import AppKit
 import QuartzCore
 import Metal
+import ImageIO
 
 // Link the real Settings model against a small in-memory native bridge.
 private var current = WallifySettingsSnapshot()
@@ -84,6 +85,7 @@ struct SettingsBridgeCheck {
         checkSpotifastBridge()
         checkIdleAnimation()
         checkNowPlayingHelper()
+        checkRasterGraphics()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -178,6 +180,65 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkRasterGraphics() {
+        _ = NSApplication.shared
+        let text = Array("Music 🎵 café".utf8)
+        let measured = text.withUnsafeBufferPointer { rasterTextWidth($0.baseAddress, UInt($0.count), 20, 0) }
+        precondition(measured > 0)
+        precondition(rasterTextWidth(nil, 0, 20, 0) == 0)
+        let invalid: [UInt8] = [0xFF]
+        invalid.withUnsafeBufferPointer { precondition(rasterTextWidth($0.baseAddress, 1, 20, 0) == 0) }
+        precondition(rasterContext(nil, width: 10, height: 10) == nil)
+        var pixels = [UInt32](repeating: 0, count: 160 * 64)
+        pixels.withUnsafeMutableBufferPointer { buffer in
+            precondition(rasterContext(buffer.baseAddress, width: UInt.max, height: 1) == nil)
+            text.withUnsafeBufferPointer {
+                drawRasterText(buffer.baseAddress, 160, 64, $0.baseAddress, UInt($0.count), 10, 5, 60, 20, 0, 0, 255, 255, 255)
+            }
+        }
+        precondition(pixels.contains { $0 != 0 })
+        for y in 0..<64 {
+            precondition(pixels[(y * 160)..<(y * 160 + 10)].allSatisfy { $0 == 0 })
+            precondition(pixels[(y * 160 + 70)..<(y * 160 + 160)].allSatisfy { $0 == 0 })
+        }
+        let short = Array("Hi".utf8)
+        func rasterColumns(right: Int32) -> [Int] {
+            var buffer = [UInt32](repeating: 0, count: 160 * 64)
+            buffer.withUnsafeMutableBufferPointer { destination in
+                short.withUnsafeBufferPointer {
+                    drawRasterText(destination.baseAddress, 160, 64, $0.baseAddress, UInt($0.count), 10, 5, 100, 20, 1, right, 255, 0, 0)
+                }
+            }
+            return (0..<160).filter { x in (0..<64).contains { buffer[$0 * 160 + x] != 0 } }
+        }
+        let left = rasterColumns(right: 0), right = rasterColumns(right: 1)
+        precondition(!left.isEmpty && !right.isEmpty && right.first! > left.last!)
+        for kind: Int32 in 0...3 {
+            var icon = [UInt32](repeating: 0, count: 96 * 96)
+            icon.withUnsafeMutableBufferPointer { drawRasterIcon($0.baseAddress, 96, 96, 48, 48, kind, 0, 1, 2) }
+            precondition(icon.contains { $0 != 0 })
+        }
+        precondition(drawRasterSymbol(nil, 0) == 0 && drawRasterSymbol(nil, -1) == 0)
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        var sourcePixels = [UInt32](repeating: 0xFF0000FF, count: 4)
+        sourcePixels.withUnsafeMutableBufferPointer {
+            let image = rasterContext($0.baseAddress, width: 2, height: 2)!.makeImage()!
+            let destination = CGImageDestinationCreateWithURL(scratch as CFURL, "public.png" as CFString, 1, nil)!
+            CGImageDestinationAddImage(destination, image, nil)
+            precondition(CGImageDestinationFinalize(destination))
+        }
+        var decoded = [UInt32](repeating: 0, count: 4)
+        decoded.withUnsafeMutableBufferPointer { buffer in
+            let path = Array(scratch.path.utf8)
+            path.withUnsafeBufferPointer {
+                precondition(artworkRasterPixels(buffer.baseAddress, 2, 2, $0.baseAddress, UInt($0.count)))
+            }
+            precondition(!decodeArtwork(scratch.appendingPathExtension("missing"), pixels: buffer.baseAddress, width: 2, height: 2))
+        }
+        precondition(decoded == sourcePixels)
     }
 
     static func checkNowPlayingHelper() {

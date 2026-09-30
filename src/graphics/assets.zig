@@ -10,6 +10,8 @@ pub var has_art = false;
 // extracted colors/settings, so the cache needs an explicit signal that the GPU
 // artwork texture itself changed.
 pub var artwork_generation: u64 = 0;
+extern "c" fn widget_artwork_pixels(pixels: [*]u32, width: usize, height: usize, path: [*]const u8, length: usize) bool;
+
 var initialized = false;
 var art_hash: ?u64 = null;
 pub const transition_duration = 0.5;
@@ -63,7 +65,6 @@ pub fn refreshArtwork() void {
     // Use CoreGraphics to decode the raw JPEG/PNG directly in memory.
     // This entirely eliminates the ~100ms stutter of spawning `sips` via posix fork/exec
     // in the background, and saves us from shipping libjpeg/libpng.
-    const macos = @import("../platform/macos.zig");
     const path = "/tmp/art.raw";
 
     // PERF: Apple Music high-res artwork files can exceed 2MB.
@@ -89,39 +90,6 @@ pub fn refreshArtwork() void {
     if (art_hash != null and art_hash.? == mtime_hash) return;
     const hash = mtime_hash;
 
-    const url = macos.CFURLCreateFromFileSystemRepresentation(null, path, path.len, 0);
-    if (url == null) {
-        clearArtwork();
-        state.global_has_artwork = false;
-        return;
-    }
-    defer macos.CFRelease(url);
-
-    const src = macos.CGImageSourceCreateWithURL(url, null);
-    if (src == null) {
-        clearArtwork();
-        state.global_has_artwork = false;
-        return;
-    }
-    defer macos.CFRelease(src);
-
-    const max_size: i32 = 180;
-    const size_num = macos.CFNumberCreate(null, 3, &max_size);
-    defer macos.CFRelease(size_num);
-
-    const keys = [_]macos.Ref{ macos.kCGImageSourceCreateThumbnailFromImageAlways, macos.kCGImageSourceThumbnailMaxPixelSize };
-    const values = [_]macos.Ref{ macos.kCFBooleanTrue, size_num };
-    const options = macos.CFDictionaryCreate(null, &keys, &values, 2, &macos.kCFTypeDictionaryKeyCallBacks, &macos.kCFTypeDictionaryValueCallBacks);
-    defer macos.CFRelease(options);
-
-    const img = macos.CGImageSourceCreateThumbnailAtIndex(src, 0, options);
-    if (img == null) {
-        clearArtwork();
-        state.global_has_artwork = false;
-        return;
-    }
-    defer macos.CGImageRelease(img);
-
     const w = 180;
     const h = 180;
     // CPU artwork pixels are intentionally short-lived; the Metal texture becomes the long-lived copy.
@@ -133,18 +101,11 @@ pub fn refreshArtwork() void {
     defer std.heap.page_allocator.free(pixels);
     @memset(pixels, 0);
 
-    const space = macos.CGColorSpaceCreateDeviceRGB();
-    defer macos.CGColorSpaceRelease(space);
-
-    const ctx = macos.CGBitmapContextCreate(@ptrCast(pixels.ptr), w, h, 8, w * 4, space, macos.kCGImageAlphaPremultipliedLast | macos.kCGBitmapByteOrder32Big);
-    if (ctx == null) {
+    if (!widget_artwork_pixels(pixels.ptr, w, h, path.ptr, path.len)) {
         clearArtwork();
         state.global_has_artwork = false;
         return;
     }
-    defer macos.CGContextRelease(ctx);
-
-    macos.CGContextDrawImage(ctx, macos.rect(0, 0, w, h), img);
 
     var sums = [_]u64{ 0, 0, 0 };
     for (0..h) |y| for (0..w) |x| {

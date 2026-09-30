@@ -20,6 +20,8 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 
 `platform/idle_animation.swift` owns the repeating Core Animation layer tree for idle companions. It copies Zig's sampled draw commands before dispatching to the main queue, converts retained Metal sprite textures into cached images, and preserves discrete frame timing, clipping, and nearest-neighbor scaling. The renderer exposes only the texture and surface accessors needed by this bridge.
 
+`graphics/raster.swift` uses Core Text for Unicode measurement, ellipsis truncation, alignment, and text rasterization; AppKit supplies cached SF Symbol images for playback controls. ImageIO decodes artwork directly into the same RGBA buffers consumed by Metal. Zig retains texture-cache policy, artwork transitions, and color extraction.
+
 ## Media Subsystem & Auto Source
 
 `media/controller.zig` coordinates playback state and metadata across multiple backends:
