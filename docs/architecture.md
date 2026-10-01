@@ -2,7 +2,7 @@
 
 See [Swift port status](swift-port.md) for migrated components and the remaining order of work.
 
-`main.zig` initializes assets and boots background animation and media telemetry workers. Swift's `platform/application.swift` initializes AppKit, owns the status-bar menu, and runs the native event loop through C entry points. `platform/widget_window.swift` supplies the desktop panel and input view, retains right-click events for synchronous context menus, and forwards visibility changes to the scheduler. `platform/metal_renderer.swift` owns the panel, Metal layer, GPU pipeline, texture slots, and frame presentation. `state.Layout` owns logical-point geometry used across rendering, input hitboxes, and native panel sizing.
+`main.zig` initializes assets and boots background animation and media telemetry workers. Swift's `platform/application.swift` initializes AppKit, owns the status-bar menu, and runs the native event loop through C entry points. `platform/widget_window.swift` supplies the desktop panel and input view, retains right-click events for synchronous context menus, and forwards visibility changes to the scheduler. `platform/metal_renderer.swift` owns the panel, Metal layer, GPU pipeline, texture slots, and frame presentation. Swift's `ui/layout.swift` supplies nominal geometry and interpolation across the five desktop grid modes, plus rounded hit testing. Zig's `state.Layout` caches the geometry used by rendering, input actions, and panel sizing.
 
 ## GPU Renderer & Native Glass
 
@@ -35,8 +35,16 @@ The Now Playing helper queries native application playback state alongside metad
 `media/controller.zig` coordinates playback state and metadata across multiple backends:
 - **System Now Playing**: `media/metadata_fetcher.swift` implements the metadata helper loaded by Perl, preserving its exported C entry points and line protocol. Swift owns notification observers, bounded asynchronous queries, elapsed-time correction, and atomic artwork writes. Every query has its own completion token, so late callbacks cannot satisfy the next query or publish stale metadata. The Zig controller forwards play/pause/track commands and seeking to `platform/media_remote.swift`, which dynamically resolves the private framework symbols and safely skips unavailable functions.
 - **Spotify Direct**: Swift queries and controls Spotify via AppleScript (`media/spotify.swift`); `media/spotify.zig` declares its C interface. Distributed playback notifications coalesce through a lock and semaphore to wake the metadata worker and signal the MediaRemote helper.
-- **Spotifast transport**: `media/spotifast.swift` owns the persistent loopback metadata connection, separate command connections, and native launching. `media/spotifast.zig` retains payload parsing for the controller. Incomplete response lines close the connection before retrying, so subsequent queries cannot consume stale fragments.
+- **Spotifast transport**: `media/spotifast.swift` owns the persistent loopback metadata connection, separate command connections, and native launching. Incomplete response lines close the connection before retrying, so subsequent queries cannot consume stale fragments.
 - **Auto Source**: Dynamically pings the Spotifast TCP socket with a non-blocking connection. If Spotifast is responsive, it routes requests there; if inactive, it instantly falls back to System Now Playing.
+
+`media/payload.swift` parses Spotify, Spotifast and Now Playing responses, returning spans into the caller's UTF-8 buffer through shared C structs. Numeric inputs must be finite and are clamped to nonnegative values; artwork URLs respect the existing 512-byte cache. Zig retains state application, source routing and the metadata worker lifecycle.
+
+`media/playback.swift` owns elapsed-time interpolation, short correction smoothing and local playback intent reconciliation. Existing Zig seek, pause and stale-snapshot tests exercise these Swift implementations through their C adapters. External changes continue to be accepted on the first snapshot when no local intent is pending.
+
+`media/artwork_download.swift` uses URLSession for HTTP/HTTPS artwork, cancels previous requests, and serializes atomic file publication with generation checks. Changing sources, clearing a track or receiving newer artwork invalidates old downloads. Only the current generation can notify the Zig color/state refresh callback.
+
+`media/action_queue.swift` keeps at most 32 pending commands on a serial DispatchQueue. Contiguous seeks coalesce to the latest target, preserving command order between scrub sequences. A drain is scheduled only while work is pending, replacing the detached command thread and semaphore. Backend routing still runs through the Zig controller.
 
 ## Hardware Media Key Redirect
 

@@ -15,16 +15,21 @@ Work happens in the original checkout on `swift-port`. Each completed slice keep
 | Idle layer animation | `src/platform/idle_animation.swift` | Sprite definitions and command sampling |
 | Text, symbols and artwork decoding | `src/graphics/raster.swift` | Asset caching, colors and transitions |
 | MediaRemote helper and controls | `src/media/metadata_fetcher.swift`, `src/platform/media_remote.swift` | Metadata controller and playback state |
-| Spotify and Spotifast | `src/media/spotify.swift`, `spotifast.swift` | Spotifast payload parser and backend routing |
+| Spotify and Spotifast | `src/media/spotify.swift`, `spotifast.swift` | Backend routing |
+| Media payload parsing | `src/media/payload.swift` | Borrowed byte-span adapters and shared state application |
+| Playback clock and intent reconciliation | `src/media/playback.swift` | Clock/intent storage and thin C adapters |
+| Artwork downloading | `src/media/artwork_download.swift` | Color extraction and state notification |
+| Media command queue | `src/media/action_queue.swift` | Backend routing and optimistic playback state |
+| Layout and rounded hit testing | `src/ui/layout.swift` | Geometry cache, input action dispatch and visibility policy |
 | Hardware media keys | `src/platform/media_keys.swift` | Target routing |
 
 The Objective-C renderer has been removed. Metal shaders remain Metal source. The optional development Inspector still uses Dear ImGui/C++.
 
 ## Remaining migration order
 
-1. Media payload parsing, playback clocks and state coordination.
+1. Media source routing, metadata worker lifecycle and state coordination.
 2. Configuration serialization and shared widget state.
-3. Layout, hitboxes and input actions.
+3. Input actions and snap grid solving; layout and rounded hit testing are already Swift.
 4. Animation, asset caches and scene composition.
 5. Swift executable startup and build/package cleanup after Zig responsibilities are gone.
 

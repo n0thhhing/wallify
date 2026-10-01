@@ -13,8 +13,6 @@ extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
 const SPOTIFY_POLL_INTERVAL_MS: u64 = 2000;
 const SPOTIFAST_POLL_INTERVAL_MS: u64 = 1000;
 const QUERY_FAILURE_RETRY_MS: u64 = 2000;
-const METADATA_HELPER_FALLBACK_INTERVAL_US: []const u8 = "2000000";
-const ARTWORK_BITMAP_SIZE: []const u8 = "328";
 const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
 const METADATA_LINE_BUFFER_SIZE: usize = 2048;
 const ARTWORK_URL_BUFFER_SIZE: usize = 512;
