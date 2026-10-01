@@ -1,7 +1,8 @@
-# Zig build & cache artifacts
+# Swift build output and historical caches
 .zig-cache/
 .zig-local-cache/
 zig-out/
+build/
 
 # macOS system files & logs
 .DS_Store

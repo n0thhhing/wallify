@@ -15,7 +15,7 @@ RESET="\033[0m"
 
 APP_NAME="Wallify"
 BUNDLE_ID="com.wallify.widget"
-APP_DIR="$PWD/zig-out/${APP_NAME}.app"
+APP_DIR="$PWD/build/${APP_NAME}.app"
 ENTITLEMENTS="$PWD/scripts/Wallify.entitlements"
 
 DO_BUILD=false
@@ -31,10 +31,10 @@ show_help() {
     echo "Usage: ./scripts/package-app.sh [options]"
     echo ""
     echo "Options:"
-    echo "  -b, --build             Force re-compile with 'zig build' first"
+    echo "  -b, --build             Force re-compile with './scripts/build.sh' first"
     echo "  -O, --optimize <mode>   Optimization level: ReleaseFast (default), Debug, ReleaseSafe, ReleaseSmall"
     echo "  -i, --install           Install application to /Applications/${APP_NAME}.app"
-    echo "  -d, --dmg               Create a redistributable DMG installer at zig-out/${APP_NAME}.dmg"
+    echo "  -d, --dmg               Create a redistributable DMG installer at build/${APP_NAME}.dmg"
     echo "  -r, --run               Relaunch the app immediately after packaging via 'open'"
     echo "  -k, --kickstart         Relaunch the app via launchctl (used for background widget mode)"
     echo "  -h, --help              Show this help message"
@@ -57,30 +57,26 @@ done
 echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Packaging ${APP_NAME}.app...${RESET}"
 
 # 1. Build project if requested or if binaries are missing
-if [[ "$DO_BUILD" == true ]] || [[ ! -f "zig-out/bin/wallify" ]] || [[ ! -f "zig-out/lib/libmetadata_fetcher.dylib" ]] || [[ ! -f "zig-out/bin/default.metallib" ]] || [[ ! -f "zig-out/lib/libWallifySettings.dylib" ]]; then
-    echo -e "  ${CYAN}•${RESET} Compiling binaries via zig build (-Doptimize=${OPTIMIZE})..."
+if [[ "$DO_BUILD" == true ]] || [[ ! -f "build/bin/wallify" ]] || [[ ! -f "build/lib/libmetadata_fetcher.dylib" ]] || [[ ! -f "build/bin/default.metallib" ]]; then
+    echo -e "  ${CYAN}•${RESET} Compiling binaries via Swift (-O ${OPTIMIZE})..."
     # Ensure macOS SDK path is discovered properly
     if ! xcrun --show-sdk-path >/dev/null 2>&1; then
         if [[ -d "/Library/Developer/CommandLineTools" ]]; then
             export DEVELOPER_DIR="/Library/Developer/CommandLineTools"
         fi
     fi
-    if ! command -v zig &> /dev/null; then
-        echo -e "${RED}Error: 'zig' command not found in PATH.${RESET}" >&2
-        exit 1
-    fi
-    BUILD_ARGS=(-Doptimize="${OPTIMIZE}")
+    BUILD_ARGS=(-O "${OPTIMIZE}")
     if [[ "${OPTIMIZE}" == "Debug" ]]; then
-        if [[ ! -d ".zig-cache/wallify-imgui" ]]; then
+        if [[ ! -d "build/vendor/imgui" ]]; then
             bash ./scripts/fetch-imgui.sh
         fi
-        BUILD_ARGS+=(-Ddebug-inspector=true)
+        BUILD_ARGS+=(--debug-inspector)
     fi
-    zig build "${BUILD_ARGS[@]}"
+    ./scripts/build.sh "${BUILD_ARGS[@]}"
 fi
 
 # Sanity check required binaries
-for bin in "zig-out/bin/wallify" "zig-out/lib/libmetadata_fetcher.dylib" "zig-out/lib/libWallifySettings.dylib" "zig-out/bin/default.metallib"; do
+for bin in "build/bin/wallify" "build/lib/libmetadata_fetcher.dylib" "build/bin/default.metallib"; do
     if [[ ! -f "$bin" ]]; then
         echo -e "${RED}Error: Required build artifact missing: $bin${RESET}" >&2
         exit 1
@@ -94,15 +90,15 @@ mkdir -p "$APP_DIR/Contents/MacOS" \
          "$APP_DIR/Contents/Resources/assets"
 
 # 3. Copy binaries & libraries
-cp zig-out/bin/wallify "$APP_DIR/Contents/MacOS/Wallify"
+cp build/bin/wallify "$APP_DIR/Contents/MacOS/Wallify"
 chmod +x "$APP_DIR/Contents/MacOS/Wallify"
 
 # Place dynamic libraries in Frameworks
-cp zig-out/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Frameworks/"
-cp zig-out/lib/libWallifySettings.dylib "$APP_DIR/Contents/Frameworks/"
+cp build/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Frameworks/"
 
 # 4. Copy Metal shaders & assets
-cp zig-out/bin/default.metallib "$APP_DIR/Contents/Resources/default.metallib"
+cp build/bin/default.metallib "$APP_DIR/Contents/Resources/default.metallib"
+cp src/assets/bin/*.bin "$APP_DIR/Contents/Resources/assets/"
 if [[ -f assets/spotify_icon.png ]]; then
     cp assets/spotify_icon.png "$APP_DIR/Contents/Resources/assets/"
 fi
@@ -164,7 +160,6 @@ fi
 
 # Sign frameworks and executable
 codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libmetadata_fetcher.dylib"
-codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libWallifySettings.dylib"
 codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/MacOS/Wallify"
 # Sign top-level bundle
 codesign --deep "${SIGN_ARGS[@]}" "$APP_DIR"
@@ -184,7 +179,7 @@ fi
 
 # 9. Optional: Generate DMG disk image
 if [[ "$DO_DMG" == true ]]; then
-    DMG_PATH="zig-out/${APP_NAME}.dmg"
+    DMG_PATH="build/${APP_NAME}.dmg"
     DMG_TMP="/tmp/${APP_NAME}-dmg"
     echo -e "  ${CYAN}•${RESET} Creating disk image: ${DMG_PATH}..."
     rm -rf "$DMG_TMP" "$DMG_PATH"

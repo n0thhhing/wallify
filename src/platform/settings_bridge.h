@@ -33,3 +33,6 @@ extern WallifyPanelSnap widget_nearby_panel_snap(int left, int top, double x, do
 extern void widget_show_snap_outline(double x, double y, double width, double height);
 extern void widget_hide_snap_outline(void);
 extern void widget_set_snap_debug(double mix, double width, double height, bool dragging);
+extern void wallify_imgui_inspector_show(void);
+extern void wallify_imgui_inspector_hide(void);
+extern void wallify_debug_console_install(void);

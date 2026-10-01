@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-CACHE_DIR="$ROOT/.zig-cache/wallify-imgui"
+CACHE_DIR="$ROOT/build/vendor/imgui"
 REMOTE="https://github.com/ocornut/imgui.git"
 COMMIT="4212de7d5b651895ccfe728f4eef9595e1d8d38a"
 

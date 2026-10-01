@@ -171,7 +171,8 @@ public func runAnimationWorker() {
         if !state.pointee.setting_hide_text && sceneLayout.geometry.compact_mix > 0.01 && title != marqueeTitle {
             marqueeTitle = title; marqueeWidth = textCache.width(title, 15, true)
         }
-        let step = advanceAnimations(&state.pointee, now: now, previous: previousTime, lastDraw: lastDraw, idle: spotifyIsIdle(),
+        let idle = spotifyIsIdle()
+        let step = advanceAnimations(&state.pointee, now: now, previous: previousTime, lastDraw: lastDraw, idle: idle,
             compositorActive: idleCompositor.active, compositorElapsed: idleCompositor.elapsed(now - previousTime), layout: sceneLayout, titleWidth: marqueeWidth)
         previousTime = now
         if let (w, h) = step.resize { resizeMetalWidget(w, h) }

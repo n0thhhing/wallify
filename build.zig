@@ -53,6 +53,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/ui/context_menu.swift"));
     swift_settings.addFileArg(b.path("src/ui/layout.swift"));
     swift_settings.addFileArg(b.path("src/ui/input.swift"));
+    swift_settings.addFileArg(b.path("src/ui/inspector.swift"));
     swift_settings.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_snap.swift"));
@@ -222,6 +223,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/ui/context_menu.swift"));
     swift_check.addFileArg(b.path("src/ui/layout.swift"));
     swift_check.addFileArg(b.path("src/ui/input.swift"));
+    swift_check.addFileArg(b.path("src/ui/inspector.swift"));
     swift_check.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_snap.swift"));

@@ -24,8 +24,8 @@ pkill -f "metadata_fetcher.dylib" 2>/dev/null || true
 echo -e "  ${CYAN}•${RESET} Wiping temporary artwork files (/tmp/)..."
 rm -f /tmp/art.raw /tmp/art.bmp /tmp/art-next.bmp /tmp/mrc_artwork /tmp/mrc_artwork_tmp /tmp/wallify-poses.ppm /tmp/wallify-poses.png 2>/dev/null || true
 
-# 3. Nuke Zig caches and build output
-echo -e "  ${CYAN}•${RESET} Nuking zig-cache and build directories..."
-rm -rf zig-cache .zig-cache zig-out 2>/dev/null || true
+# 3. Remove build output
+echo -e "  ${CYAN}•${RESET} Removing build output..."
+rm -rf build 2>/dev/null || true
 
-echo -e "  ${GREEN}✓${RESET} Clean slate achieved. Run 'zig build' to recompile."
+echo -e "  ${GREEN}✓${RESET} Clean slate achieved. Run './scripts/build.sh' to recompile."

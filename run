@@ -15,7 +15,7 @@ DIM="\033[2m"
 RESET="\033[0m"
 
 APP_NAME="Wallify"
-APP_BUNDLE="zig-out/${APP_NAME}.app"
+APP_BUNDLE="build/${APP_NAME}.app"
 APP_EXEC="${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
 OPTIMIZE="ReleaseFast"
@@ -94,9 +94,8 @@ if [[ "$DO_KILL_ONLY" == true ]]; then
 fi
 
 # 1. Environment & Prerequisites Validation
-if ! command -v zig >/dev/null 2>&1; then
-    echo -e "${RED}Error: 'zig' compiler not found in PATH.${RESET}" >&2
-    echo "Install via Homebrew: brew install zig" >&2
+if ! xcrun --find swiftc >/dev/null 2>&1; then
+    echo "Error: Xcode Swift compiler is required." >&2
     exit 1
 fi
 
@@ -114,7 +113,7 @@ fi
 # 3. Optional: Run tests
 if [[ "$DO_TEST" == true ]]; then
     echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Running test suite...${RESET}"
-    if ! zig build test --summary all; then
+    if ! ./scripts/build.sh -O Debug --test; then
         echo -e "${RED}✗ Tests failed. Aborting launch.${RESET}" >&2
         exit 1
     fi
@@ -123,7 +122,7 @@ fi
 
 source_snapshot() {
     find . \
-        -type d \( -name .git -o -name .zig-cache -o -name zig-out \) -prune -o \
+        -type d \( -name .git -o -name build \) -prune -o \
         -type f -exec stat -f '%m:%z:%N' {} + 2>/dev/null |
         shasum -a 256 |
         awk '{print $1}'
@@ -173,7 +172,7 @@ if [[ "$DO_WATCH" == true ]]; then
     fi
 
     echo -e "${BOLD}${CYAN}==>${RESET} ${BOLD}Watch mode enabled${RESET}"
-    echo -e "  ${DIM}Rebuilds when files outside .git/.zig-cache/zig-out change.${RESET}"
+    echo -e "  ${DIM}Rebuilds when files outside .git/build/vendor/build change.${RESET}"
 
     if [[ ${#WATCH_INITIAL_ARGS[@]} -gt 0 ]]; then
         if ! "$0" "${WATCH_INITIAL_ARGS[@]}"; then
@@ -220,20 +219,20 @@ fi
 echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Building ${APP_NAME} (${OPTIMIZE})...${RESET}"
 
 # Debug mode is the only mode that opts into the Dear ImGui inspector.
-BUILD_ARGS=(-Doptimize="${OPTIMIZE}")
+BUILD_ARGS=(-O "${OPTIMIZE}")
 if [[ "${OPTIMIZE}" == "Debug" ]]; then
     bash ./scripts/fetch-imgui.sh
-    BUILD_ARGS+=(-Ddebug-inspector=true)
+    BUILD_ARGS+=(--debug-inspector)
 fi
 
 # Build with requested optimization level before stopping the existing process
-if ! zig build "${BUILD_ARGS[@]}"; then
+if ! ./scripts/build.sh "${BUILD_ARGS[@]}"; then
     echo -e "${RED}✗ Compilation failed. Preserving existing running instance.${RESET}" >&2
     exit 1
 fi
 
 # Package app bundle (without auto-running yet)
-PACKAGE_FLAGS=(-O "$OPTIMIZE")
+PACKAGE_FLAGS=()
 if [[ "$DO_INSTALL" == true ]]; then
     PACKAGE_FLAGS+=(-i)
 fi
@@ -241,7 +240,7 @@ if [[ "$DO_DMG" == true ]]; then
     PACKAGE_FLAGS+=(-d)
 fi
 
-./scripts/package-app.sh "${PACKAGE_FLAGS[@]}"
+./scripts/package-app.sh ${PACKAGE_FLAGS[@]+"${PACKAGE_FLAGS[@]}"}
 
 # 5. Stop running instance safely before starting new one
 if pgrep -x "$APP_NAME" >/dev/null 2>&1; then

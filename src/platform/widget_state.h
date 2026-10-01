@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "media_core.h"
 
-// Shared during the port: Swift owns storage; Zig rendering borrows it.
+// Swift owns this widget state; C layout permits native Inspector snapshots.
 typedef struct {
     uint8_t global_title[256];
     size_t global_title_len;

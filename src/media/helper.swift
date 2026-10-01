@@ -3,7 +3,7 @@ import Darwin
 
 // Apple's Perl bundle identity lets the existing MediaRemote helper read metadata.
 let nowPlayingHelperScript = #"""
-use strict; use warnings; use Cwd qw(abs_path); use DynaLoader; $| = 1; $SIG{PIPE} = sub { exit(0); }; my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || (), qw(zig-out/lib/libmetadata_fetcher.dylib ../Frameworks/libmetadata_fetcher.dylib ../Resources/libmetadata_fetcher.dylib ../Resources/zig-out/lib/libmetadata_fetcher.dylib /Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib)) { if ($p && -f $p) { $abs = abs_path($p); last; } } if (!$abs) { exit(1); } my $libref = DynaLoader::dl_load_file($abs) or exit(2); my $sym = DynaLoader::dl_find_symbol($libref, "mrc_printNowPlayingInfo") or exit(3); my $init_sym = DynaLoader::dl_find_symbol($libref, "mrc_notifications_init") or exit(4); my $wait_sym = DynaLoader::dl_find_symbol($libref, "mrc_wait_for_notification") or exit(5); DynaLoader::dl_install_xsub("main::fetch", $sym); DynaLoader::dl_install_xsub("main::init_notifications", $init_sym); DynaLoader::dl_install_xsub("main::wait_notification", $wait_sym); print "$$\n"; init_notifications(); my $wake = 1; $SIG{USR1} = sub { $wake = 1; }; while (1) { if ($wake) { $wake = 0; fetch(); } else { wait_notification(); fetch(); } }
+use strict; use warnings; use Cwd qw(abs_path); use DynaLoader; $| = 1; $SIG{PIPE} = sub { exit(0); }; my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || (), qw(build/lib/libmetadata_fetcher.dylib ../Frameworks/libmetadata_fetcher.dylib ../Resources/libmetadata_fetcher.dylib ../Resources/build/lib/libmetadata_fetcher.dylib /Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib)) { if ($p && -f $p) { $abs = abs_path($p); last; } } if (!$abs) { exit(1); } my $libref = DynaLoader::dl_load_file($abs) or exit(2); my $sym = DynaLoader::dl_find_symbol($libref, "mrc_printNowPlayingInfo") or exit(3); my $init_sym = DynaLoader::dl_find_symbol($libref, "mrc_notifications_init") or exit(4); my $wait_sym = DynaLoader::dl_find_symbol($libref, "mrc_wait_for_notification") or exit(5); DynaLoader::dl_install_xsub("main::fetch", $sym); DynaLoader::dl_install_xsub("main::init_notifications", $init_sym); DynaLoader::dl_install_xsub("main::wait_notification", $wait_sym); print "$$\n"; init_notifications(); my $wake = 1; $SIG{USR1} = sub { $wake = 1; }; while (1) { if ($wake) { $wake = 0; fetch(); } else { wait_notification(); fetch(); } }
 """#
 
 func runNowPlayingHelper(script: String = nowPlayingHelperScript, receive: ([UInt8]) -> Bool) {
@@ -13,6 +13,14 @@ func runNowPlayingHelper(script: String = nowPlayingHelperScript, receive: ([UIn
     process.arguments = ["-e", script]
     var environment = ProcessInfo.processInfo.environment
     environment["PERL_SIGNALS"] = "unsafe"
+    if environment["WALLIFY_FETCHER_DYLIB"] == nil {
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+        let candidates = [Bundle.main.privateFrameworksURL?.appendingPathComponent("libmetadata_fetcher.dylib"),
+                          executable.appendingPathComponent("../lib/libmetadata_fetcher.dylib")]
+        environment["WALLIFY_FETCHER_DYLIB"] = candidates.compactMap { $0 }.first {
+            FileManager.default.fileExists(atPath: $0.path)
+        }?.path
+    }
     process.environment = environment
     process.standardOutput = pipe
     do { try process.run() }

@@ -39,14 +39,14 @@ typedef struct {
     char artist[512];
 } WallifySettingsSnapshot;
 
-// Exported from Zig
+// Swift callbacks
 extern void wallify_settings_get_snapshot(WallifySettingsSnapshot *out_snapshot);
 extern void wallify_settings_apply_bool(int key, bool val);
 extern void wallify_settings_apply_int(int key, int val);
 extern void wallify_settings_restore_defaults(void);
 extern void wallify_settings_reset_position(void);
 
-// Exported to Zig & native AppKit menu handlers
+// Native AppKit entry points
 void wallify_show_settings_window(void);
 void wallify_install_status_menu(void);
 void *wallify_create_widget_panel(int width, int height);
