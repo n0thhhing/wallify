@@ -99,6 +99,7 @@ struct SettingsBridgeCheck {
     @MainActor static func main() {
         checkMetalRenderer()
         checkPerformanceSample()
+        checkLayoutInterpolation()
         if CommandLine.arguments.contains("--benchmark-math") { benchmarkMath(); return }
         if CommandLine.arguments.contains("--benchmark") { benchmarkFramePreparation(); return }
         checkSpotifyBridge()

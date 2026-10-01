@@ -1,6 +1,6 @@
 import Foundation
 
-func checkPerformanceSample() {
+func checkLayoutInterpolation() {
     func fields(_ layout: WallifyLayoutGeometry) -> [Double] {
         withUnsafeBytes(of: layout) { Array($0.bindMemory(to: Double.self)) }
     }
@@ -20,6 +20,9 @@ func checkPerformanceSample() {
     var layout = WallifyLayoutGeometry()
     precondition(!widgetLayoutGeometry(-1, 0, 0, &layout) && !widgetLayoutGeometry(0, 5, 0, &layout))
     precondition(!widgetLayoutGeometry(0, 1, .nan, &layout) && !widgetLayoutGeometry(0, 1, 0, nil))
+}
+
+func checkPerformanceSample() {
     var sample = PerformanceSample()
     sample.update(now: 10, cpu: 2, frames: 100, gpu: 1_000_000)
     precondition(sample.cpuPercent == 0)
@@ -59,7 +62,7 @@ func benchmarkMath() {
         var started = monotonicTime()
         for i in 0..<20_000 {
             precondition(widgetLayoutGeometry(Int32(i % 5), Int32((i + 1) % 5), Double(i % 101) / 100, &layout))
-            checksum += layout.art_x + layout.compact_mix
+            checksum += withUnsafeBytes(of: layout) { $0.bindMemory(to: Double.self).reduce(0, +) }
         }
         layoutSamples.append((monotonicTime() - started) * 1_000_000 / 20_000)
         started = monotonicTime()

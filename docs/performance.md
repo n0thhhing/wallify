@@ -65,3 +65,21 @@ enables detailed lifetime logs and upload counters.
 Snap previews now ignore unchanged geometry/radius and repeated hides.
 Unchanged previews also avoid the player-window query and window ordering.
 Hiding clears the visible state so showing the same target again still works.
+
+## SIMD layout interpolation
+
+Layout mode endpoints are packed once into SIMD16<Double>; resizing
+interpolates the 16 fields without allocating or dispatching writable key paths.
+All 25 mode pairs are checked at intermediate, endpoint, and clamped mixes,
+with invalid inputs still rejected.
+
+Run `--benchmark-math` instead of `--benchmark` to measure layout and artwork
+math. It consumes every layout field and checksums outputs. Alternating three
+fresh scalar/SIMD processes gave layout medians of 0.404/0.005 µs (about 80×
+faster); both produced checksum 181714614. The unchanged artwork-color control
+was 20.512/20.364 µs. This improves layout calculations during resizing, not
+whole-app CPU usage by 80×; steady frames already cache layout geometry.
+
+A SIMD3<Double> RGB accumulation trial took 51.331 µs versus the original
+20.462 µs for 180×180 artwork. It was discarded. Merely spelling an operation
+as SIMD does not guarantee faster generated code.
