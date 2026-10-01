@@ -2,6 +2,7 @@ import Foundation
 
 // Renderer/animation caches are owned by one worker. Native state access uses this
 // recursive lock so callbacks can request/save while the worker updates a frame.
+// ponytail: one scene lock; split state from caches only if measured contention warrants it.
 let sceneLock = NSRecursiveLock()
 
 struct StaticSceneKey: Equatable {
