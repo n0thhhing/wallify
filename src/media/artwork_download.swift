@@ -49,7 +49,8 @@ final class ArtworkDownload {
         defer { sceneLock.unlock() }
         lock.lock()
         defer { lock.unlock() }
-        // Cancellation is advisory; this ticket check keeps yesterday's album off today's track.
+        // URLSession can finish after cancellation. Reject stale generations before
+        // writing the shared artwork file or notifying the current track.
         guard token == generation else { return }
         task = nil
         var published = false

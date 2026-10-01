@@ -22,8 +22,8 @@ final class NowPlayingNotifications {
         observers = Self.names.map { name in
             center.addObserver(forName: Notification.Name(name), object: nil, queue: nil) { [semaphore] _ in
                 semaphore.signal()
-                // MediaRemote can notify before its metadata cache catches up.
-                // One quick echo catches that race without turning notifications into polling.
+                // Notifications can precede the cached playback update. Query immediately
+                // for responsiveness, then wake once more after 100 ms to catch the new rate.
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + .milliseconds(100)) {
                     semaphore.signal()
                 }

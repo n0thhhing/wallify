@@ -22,8 +22,8 @@ final class DesktopGlass {
             if glass == nil {
                 let view = NSGlassEffectView(frame: .zero)
                 view.style = .regular
-                // Preserve the desktop optical variant selected by the native port.
-                // AppKit's hidden style knob: ask first so its disappearance leaves regular glass.
+                // This private selector selects the desktop glass appearance. Guard it
+                // at runtime so AppKit versions without it retain the regular material.
                 let selector = NSSelectorFromString("set_variant:")
                 if view.responds(to: selector) {
                     typealias SetVariant = @convention(c) (AnyObject, Selector, Int) -> Void
@@ -56,7 +56,8 @@ final class DesktopGlass {
             view.cornerRadius = geometry.radius
             inner.frame = view.bounds
             inner.layer?.cornerRadius = geometry.radius
-            // Move the canvas backward by the crop offset; its drawing coordinates stay unchanged.
+            // The glass clips to the card, but Metal still draws the whole widget.
+            // Offset its view inside the card to preserve the shared layout coordinates.
             metalView.frame = NSRect(x: -rect.minX, y: -flippedY, width: size.width, height: size.height)
             return
         }

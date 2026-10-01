@@ -9,7 +9,8 @@ final class FrameWakeups {
     func wake() {
         lock.lock()
         defer { lock.unlock() }
-        // A doorbell, not a to-do list: ten producers still owe the worker only one wakeup.
+        // Requests mark shared state dirty rather than queue individual frames.
+        // Keep one wake token so bursts cannot leave the worker draining stale signals.
         if !pending {
             pending = true
             semaphore.signal()
