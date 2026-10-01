@@ -10,10 +10,6 @@ extern "c" fn popen(command: [*c]const u8, modes: [*c]const u8) ?*anyopaque;
 extern "c" fn pclose(stream: *anyopaque) c_int;
 extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
 
-extern "c" fn dispatch_semaphore_create(value: isize) ?*anyopaque;
-extern "c" fn dispatch_semaphore_signal(dsema: *anyopaque) isize;
-extern "c" fn dispatch_semaphore_wait(dsema: *anyopaque, timeout: u64) isize;
-
 const SPOTIFY_POLL_INTERVAL_MS: u64 = 2000;
 const SPOTIFAST_POLL_INTERVAL_MS: u64 = 1000;
 const QUERY_FAILURE_RETRY_MS: u64 = 2000;
@@ -42,35 +38,15 @@ fn sleep_ms(ms: u64) void {
 
 pub const MediaRemoteCommand = media_remote.MediaRemoteCommand;
 
-const ActionKind = enum {
-    command,
-    seek,
-};
+extern fn wallify_enqueue_media_command(command: u32) callconv(.c) void;
+extern fn wallify_enqueue_media_seek(target: f64) callconv(.c) void;
 
-const MediaAction = struct {
-    kind: ActionKind,
-    cmd: MediaRemoteCommand = .play,
-    seek_target: f64 = 0.0,
-};
-
-const ACTION_QUEUE_CAPACITY: usize = 32;
-var action_queue: [ACTION_QUEUE_CAPACITY]MediaAction = undefined;
-var queue_tail: usize = 0;
-var queue_count: usize = 0;
-var queue_lock: std.atomic.Mutex = .unlocked;
-// The command worker is intentionally detached and lives for the process lifetime; the semaphore has the same lifetime.
-// Actions themselves remain bounded in a fixed 32-entry queue.
-var command_sema: ?*anyopaque = null;
-var worker_started = std.atomic.Value(bool).init(false);
-
-fn lockQueue() void {
-    while (!queue_lock.tryLock()) {
-        std.atomic.spinLoopHint();
-    }
+pub export fn wallify_execute_media_command(command: u32) callconv(.c) void {
+    triggerCommandInner(@enumFromInt(command));
 }
 
-fn unlockQueue() void {
-    queue_lock.unlock();
+pub export fn wallify_execute_media_seek(target: f64) callconv(.c) void {
+    triggerSeekInner(target);
 }
 
 pub fn triggerSeekInner(target: f64) void {
@@ -136,75 +112,9 @@ fn getActiveSource() state.MediaSource {
     return source;
 }
 
-fn commandWorkerLoop() void {
-    while (true) {
-        if (command_sema) |s| {
-            _ = dispatch_semaphore_wait(s, ~@as(u64, 0));
-        }
-
-        var action: ?MediaAction = null;
-        {
-            lockQueue();
-            defer unlockQueue();
-            if (queue_count > 0) {
-                action = action_queue[queue_tail];
-                queue_tail = (queue_tail + 1) % ACTION_QUEUE_CAPACITY;
-                queue_count -= 1;
-            }
-        }
-
-        if (action) |act| {
-            switch (act.kind) {
-                .command => triggerCommandInner(act.cmd),
-                .seek => triggerSeekInner(act.seek_target),
-            }
-        }
-    }
-}
-
-pub fn ensureWorkerStarted() void {
-    if (worker_started.swap(true, .acq_rel)) return;
-    command_sema = dispatch_semaphore_create(0);
-    std.log.info("media: command worker starting", .{});
-    const t = std.Thread.spawn(.{}, commandWorkerLoop, .{}) catch {
-        worker_started.store(false, .release);
-        return;
-    };
-    t.detach();
-}
-
-fn enqueueAction(action: MediaAction) void {
-    ensureWorkerStarted();
-
-    lockQueue();
-    defer unlockQueue();
-
-    // If it's a seek action and the most recent queued action is also a seek, coalesce it!
-    // Rapidly scrubbing the progress bar generates hundreds of seek commands per second.
-    // Sending all of these to MediaRemote would saturate the macOS IPC queue, causing the media daemon
-    // to freeze or crash. By collapsing contiguous seek requests, we only ever dispatch the very last
-    // thumb position when the queue worker wakes up.
-    if (action.kind == .seek and queue_count > 0) {
-        const last_idx = (queue_tail + queue_count - 1) % ACTION_QUEUE_CAPACITY;
-        if (action_queue[last_idx].kind == .seek) {
-            action_queue[last_idx].seek_target = action.seek_target;
-            return;
-        }
-    }
-
-    if (queue_count < ACTION_QUEUE_CAPACITY) {
-        const idx = (queue_tail + queue_count) % ACTION_QUEUE_CAPACITY;
-        action_queue[idx] = action;
-        queue_count += 1;
-        if (command_sema) |s| {
-            _ = dispatch_semaphore_signal(s);
-        }
-    }
-}
-
 pub fn triggerSeek(target: f64) void {
     std.log.info("media: queue seek={d:.2}s, source={s}", .{ target, @tagName(getActiveSource()) });
-    enqueueAction(.{ .kind = .seek, .seek_target = target });
+    wallify_enqueue_media_seek(target);
 }
 
 pub fn triggerCommand(cmd: MediaRemoteCommand) void {
@@ -212,7 +122,7 @@ pub fn triggerCommand(cmd: MediaRemoteCommand) void {
         @tagName(cmd),
         @tagName(getActiveSource()),
     });
-    enqueueAction(.{ .kind = .command, .cmd = cmd });
+    wallify_enqueue_media_command(@intFromEnum(cmd));
 }
 
 pub export fn wallify_menu_play_pause() callconv(.c) void {
@@ -667,19 +577,4 @@ test "parseSpotifyPayload parses full format correctly" {
 test "parseSpotifyPayload returns null for truncated inputs" {
     try std.testing.expect(parseSpotifyPayload("") == null);
     try std.testing.expect(parseSpotifyPayload("Only Title") == null);
-}
-
-test "action queue coalesces seeks and ensures bounded capacity" {
-    lockQueue();
-    queue_tail = 0;
-    queue_count = 0;
-    unlockQueue();
-
-    enqueueAction(.{ .kind = .seek, .seek_target = 10.0 });
-    enqueueAction(.{ .kind = .seek, .seek_target = 20.0 });
-
-    lockQueue();
-    defer unlockQueue();
-    try std.testing.expectEqual(@as(usize, 1), queue_count);
-    try std.testing.expectApproxEqAbs(@as(f64, 20.0), action_queue[0].seek_target, 0.001);
 }

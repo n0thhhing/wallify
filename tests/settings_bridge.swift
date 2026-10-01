@@ -16,6 +16,10 @@ private var contextSelection = Int32(0)
 func contextSelectionStub(_ tag: Int32) { contextSelection = tag }
 @_cdecl("wallify_artwork_downloaded")
 func artworkDownloadedStub(_ available: Bool) {}
+@_cdecl("wallify_execute_media_command")
+func executeCommandStub(_ command: UInt32) {}
+@_cdecl("wallify_execute_media_seek")
+func executeSeekStub(_ target: Double) {}
 
 @_cdecl("wallify_pointer")
 @MainActor func pointerStub(_ x: Double, _ y: Double, _ kind: Int32) {
@@ -88,6 +92,7 @@ struct SettingsBridgeCheck {
         checkContextMenu()
         checkArtworkDownload()
         checkMediaPayloads()
+        checkMediaActions()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -182,6 +187,28 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkMediaActions() {
+        let worker = DispatchQueue(label: "wallify.check.media.commands")
+        worker.suspend()
+        var executed: [MediaAction] = []
+        let queue = MediaActionQueue(worker: worker) { executed.append($0) }
+        precondition(queue.enqueue(.seek(10)))
+        precondition(queue.enqueue(.seek(20)))
+        precondition(queue.enqueue(.command(0)))
+        precondition(queue.enqueue(.seek(30)))
+        precondition(queue.enqueue(.seek(40)))
+        for _ in 0..<29 { precondition(queue.enqueue(.command(1))) }
+        precondition(!queue.enqueue(.command(4)))
+        worker.resume()
+        worker.sync {}
+        precondition(executed.count == 32)
+        precondition(Array(executed.prefix(3)) == [.seek(20), .command(0), .seek(40)])
+        precondition(executed.dropFirst(3).allSatisfy { $0 == .command(1) })
+        precondition(queue.enqueue(.seek(50)))
+        worker.sync {}
+        precondition(executed.last == .seek(50) && executed.count == 33)
     }
 
     static func checkMediaPayloads() {

@@ -58,6 +58,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/media/spotify.swift"));
     swift_settings.addFileArg(b.path("src/media/spotifast.swift"));
     swift_settings.addFileArg(b.path("src/media/artwork_download.swift"));
+    swift_settings.addFileArg(b.path("src/media/action_queue.swift"));
     swift_settings.addFileArg(b.path("src/media/playback.swift"));
     swift_settings.addFileArg(b.path("src/media/payload.swift"));
     swift_settings.addFileArg(b.path("src/graphics/raster.swift"));
@@ -209,6 +210,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/media/spotify.swift"));
     swift_check.addFileArg(b.path("src/media/spotifast.swift"));
     swift_check.addFileArg(b.path("src/media/artwork_download.swift"));
+    swift_check.addFileArg(b.path("src/media/action_queue.swift"));
     swift_check.addFileArg(b.path("src/media/playback.swift"));
     swift_check.addFileArg(b.path("src/media/payload.swift"));
     swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
@@ -251,5 +253,6 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_pointer",                 "_wallify_set_window_visible",
         "_wallify_media_key_event",         "_widget_debug_window_show",
         "_wallify_context_menu_selected",   "_wallify_artwork_downloaded",
+        "_wallify_execute_media_command",   "_wallify_execute_media_seek",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }
