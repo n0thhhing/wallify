@@ -22,6 +22,10 @@ final class NowPlayingNotifications {
         observers = Self.names.map { name in
             center.addObserver(forName: Notification.Name(name), object: nil, queue: nil) { [semaphore] _ in
                 semaphore.signal()
+                // MediaRemote can notify before its metadata cache catches up.
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + .milliseconds(100)) {
+                    semaphore.signal()
+                }
             }
         }
     }
@@ -112,19 +116,43 @@ final class NowPlayingReply {
     private let lock = NSLock()
     private let semaphore = DispatchSemaphore(value: 0)
     private var info: [String: Any]?
+    private var receivedInfo = false
+    private var receivedPlaying: Bool
+    private var playing: Bool?
+
+    init(expectsPlaying: Bool = false) { receivedPlaying = !expectsPlaying }
+
+    private func signalIfComplete() {
+        if receivedInfo && receivedPlaying { semaphore.signal() }
+    }
 
     func complete(_ dictionary: NSDictionary?) {
         lock.lock()
         info = dictionary as? [String: Any]
+        receivedInfo = true
+        signalIfComplete()
         lock.unlock()
-        semaphore.signal()
+    }
+
+    func completePlaying(_ value: Bool) {
+        lock.lock()
+        playing = value
+        receivedPlaying = true
+        signalIfComplete()
+        lock.unlock()
     }
 
     func wait(timeout: DispatchTime) -> [String: Any]? {
         guard semaphore.wait(timeout: timeout) == .success else { return nil }
         lock.lock()
         defer { lock.unlock() }
-        return info
+        guard var result = info else { return nil }
+        if let playing = playing {
+            let key = "kMRMediaRemoteNowPlayingInfoPlaybackRate"
+            let rate = (result[key] as? NSNumber)?.doubleValue ?? 0
+            result[key] = playing ? (rate.isFinite && rate > 0 ? rate : 1.0) : 0.0
+        }
+        return result
     }
 }
 
@@ -149,8 +177,13 @@ public func printNowPlayingInfo() {
     autoreleasepool {
         guard let symbol = metadataSymbol("MRMediaRemoteGetNowPlayingInfo") else { writeMetadataLine("\n"); return }
         typealias Get = @convention(c) (DispatchQueue, @escaping @convention(block) (NSDictionary?) -> Void) -> Void
-        let reply = NowPlayingReply()
+        let playingSymbol = metadataSymbol("MRMediaRemoteGetNowPlayingApplicationIsPlaying")
+        let reply = NowPlayingReply(expectsPlaying: playingSymbol != nil)
         unsafeBitCast(symbol, to: Get.self)(DispatchQueue.global()) { reply.complete($0) }
+        if let playingSymbol = playingSymbol {
+            typealias GetPlaying = @convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void
+            unsafeBitCast(playingSymbol, to: GetPlaying.self)(DispatchQueue.global()) { reply.completePlaying($0) }
+        }
         writeMetadataLine(nowPlayingOutput.line(reply.wait(timeout: .now() + .milliseconds(100))))
     }
 }

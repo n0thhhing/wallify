@@ -498,6 +498,18 @@ struct SettingsBridgeCheck {
         precondition(next.wait(timeout: .now()) == nil)
         next.complete(["title": "current"])
         precondition(next.wait(timeout: .now())?["title"] as? String == "current")
+        // Native play state overrides a lagging metadata rate, in either callback order.
+        let pause = NowPlayingReply(expectsPlaying: true)
+        pause.complete(["kMRMediaRemoteNowPlayingInfoPlaybackRate": 1])
+        precondition(pause.wait(timeout: .now()) == nil)
+        pause.completePlaying(false)
+        precondition(pause.wait(timeout: .now())?["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double == 0)
+        let play = NowPlayingReply(expectsPlaying: true)
+        play.completePlaying(true)
+        precondition(play.wait(timeout: .now()) == nil)
+        play.complete(["kMRMediaRemoteNowPlayingInfoPlaybackRate": 0])
+        precondition(play.wait(timeout: .now())?["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double == 1)
+        precondition(notifications.wait(timeout: .now() + .milliseconds(300)) == 1)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }

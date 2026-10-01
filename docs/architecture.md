@@ -30,6 +30,8 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 
 ## Media Subsystem & Auto Source
 
+The Now Playing helper queries native application playback state alongside metadata, so a cached metadata rate cannot keep the play/pause icon stale. Notifications trigger an immediate query plus a single refresh 100 ms later to handle changes announced before the metadata cache updates. Queries retain separate completion tokens; both callback orders are covered by the helper checks.
+
 `media/controller.zig` coordinates playback state and metadata across multiple backends:
 - **System Now Playing**: `media/metadata_fetcher.swift` implements the metadata helper loaded by Perl, preserving its exported C entry points and line protocol. Swift owns notification observers, bounded asynchronous queries, elapsed-time correction, and atomic artwork writes. Every query has its own completion token, so late callbacks cannot satisfy the next query or publish stale metadata. The Zig controller forwards play/pause/track commands and seeking to `platform/media_remote.swift`, which dynamically resolves the private framework symbols and safely skips unavailable functions.
 - **Spotify Direct**: Swift queries and controls Spotify via AppleScript (`media/spotify.swift`); `media/spotify.zig` declares its C interface. Distributed playback notifications coalesce through a lock and semaphore to wake the metadata worker and signal the MediaRemote helper.
