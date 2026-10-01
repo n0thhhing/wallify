@@ -1,34 +1,21 @@
 const std = @import("std");
 
 // Reconcile asynchronous snapshots with the latest local playback intent.
-pub const PlaybackState = struct {
-    pending: ?bool = null,
+extern fn wallify_playback_request(intent: *PlaybackState, playing: bool, now: f64) callconv(.c) void;
+extern fn wallify_playback_accept(intent: *PlaybackState, playing: bool, now: f64, track_changed: bool) callconv(.c) bool;
+
+pub const PlaybackState = extern struct {
+    pending: c_int = -1,
     deadline: f64 = 0,
-    confirmed_since: ?f64 = null,
+    confirmed_since: f64 = -1,
 
     pub fn request(self: *PlaybackState, playing: bool, now: f64) void {
-        self.* = .{ .pending = playing, .deadline = now + 1.5 };
+        wallify_playback_request(self, playing, now);
     }
 
     pub fn accept(self: *PlaybackState, playing: bool, current: bool, now: f64, track_changed: bool) bool {
-        if (track_changed) {
-            self.* = .{};
-            return true;
-        }
-        if (self.pending) |expected| {
-            if (playing == expected) {
-                if (self.confirmed_since == null) self.confirmed_since = now;
-                if (now >= self.deadline and now - self.confirmed_since.? >= 0.4) self.pending = null;
-                return true;
-            }
-            self.confirmed_since = null;
-            if (now < self.deadline) return false;
-            self.pending = null; // A failed command must eventually reconcile.
-        }
         _ = current;
-        // External changes have no local intent to protect. Waiting for a second
-        // snapshot adds the source's entire fallback interval to pause/play.
-        return true;
+        return wallify_playback_accept(self, playing, now, track_changed);
     }
 };
 

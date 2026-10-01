@@ -42,6 +42,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileInput(b.path("src/platform/settings_window.h"));
     swift_settings.addFileInput(b.path("src/platform/debug_stats.h"));
     swift_settings.addFileInput(b.path("src/platform/gpu.h"));
+    swift_settings.addFileInput(b.path("src/platform/media_core.h"));
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
@@ -55,6 +56,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/media/spotify.swift"));
     swift_settings.addFileArg(b.path("src/media/spotifast.swift"));
     swift_settings.addFileArg(b.path("src/media/artwork_download.swift"));
+    swift_settings.addFileArg(b.path("src/media/playback.swift"));
     swift_settings.addFileArg(b.path("src/graphics/raster.swift"));
     swift_settings.addArg("-o");
     const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
@@ -188,6 +190,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileInput(b.path("src/platform/settings_window.h"));
     swift_check.addFileInput(b.path("src/platform/debug_stats.h"));
     swift_check.addFileInput(b.path("src/platform/gpu.h"));
+    swift_check.addFileInput(b.path("src/platform/media_core.h"));
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
@@ -201,6 +204,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/media/spotify.swift"));
     swift_check.addFileArg(b.path("src/media/spotifast.swift"));
     swift_check.addFileArg(b.path("src/media/artwork_download.swift"));
+    swift_check.addFileArg(b.path("src/media/playback.swift"));
     swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
     swift_check.addFileArg(b.path("src/graphics/raster.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));

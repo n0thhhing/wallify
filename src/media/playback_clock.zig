@@ -1,21 +1,20 @@
 const std = @import("std");
 
-pub const PlaybackClock = struct {
+extern fn wallify_playback_position(clock: *const PlaybackClock, now: f64, duration: f64) callconv(.c) f64;
+extern fn wallify_playback_sync(clock: *PlaybackClock, elapsed: f64, rate: f64, now: f64, duration: f64, snap: bool) callconv(.c) void;
+
+pub const PlaybackClock = extern struct {
     elapsed: f64 = 0,
     sampled_at: f64 = 0,
     rate: f64 = 0,
     correction: f64 = 0,
 
     pub fn position(self: PlaybackClock, now: f64, duration: f64) f64 {
-        const dt = @max(0, now - self.sampled_at);
-        const correction = self.correction * @max(0, 1 - dt / 0.4);
-        return @min(@max(0, duration), @max(0, self.elapsed + dt * self.rate + correction));
+        return wallify_playback_position(&self, now, duration);
     }
 
     pub fn sync(self: *PlaybackClock, elapsed: f64, rate: f64, now: f64, duration: f64, snap: bool) void {
-        const previous = self.position(now, duration);
-        const delta = previous - elapsed;
-        self.* = .{ .elapsed = elapsed, .sampled_at = now, .rate = rate, .correction = if (!snap and @abs(delta) < 2) delta else 0 };
+        wallify_playback_sync(self, elapsed, rate, now, duration, snap);
     }
 };
 

@@ -1,6 +1,7 @@
 #include "settings_window.h"
 #include "debug_stats.h"
 #include "gpu.h"
+#include "media_core.h"
 
 extern const char *wallify_settings_path(void);
 extern void wallify_open_inspector(void);
