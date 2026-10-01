@@ -23,6 +23,7 @@ final class DesktopGlass {
                 let view = NSGlassEffectView(frame: .zero)
                 view.style = .regular
                 // Preserve the desktop optical variant selected by the native port.
+                // AppKit's hidden style knob: ask first so its disappearance leaves regular glass.
                 let selector = NSSelectorFromString("set_variant:")
                 if view.responds(to: selector) {
                     typealias SetVariant = @convention(c) (AnyObject, Selector, Int) -> Void
@@ -55,6 +56,7 @@ final class DesktopGlass {
             view.cornerRadius = geometry.radius
             inner.frame = view.bounds
             inner.layer?.cornerRadius = geometry.radius
+            // Move the canvas backward by the crop offset; its drawing coordinates stay unchanged.
             metalView.frame = NSRect(x: -rect.minX, y: -flippedY, width: size.width, height: size.height)
             return
         }

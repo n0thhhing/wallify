@@ -49,6 +49,7 @@ final class ArtworkDownload {
         defer { sceneLock.unlock() }
         lock.lock()
         defer { lock.unlock() }
+        // Cancellation is advisory; this ticket check keeps yesterday's album off today's track.
         guard token == generation else { return }
         task = nil
         var published = false

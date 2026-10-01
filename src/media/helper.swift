@@ -34,6 +34,7 @@ func runNowPlayingHelper(script: String = nowPlayingHelperScript, receive: ([UIn
         return
     }
     pipe.fileHandleForReading.closeFile()
+    // This is our child, not every Perl process on the Mac: reap it on each source switch.
     defer {
         setSpotifyHelperPID(-1)
         fclose(stream)

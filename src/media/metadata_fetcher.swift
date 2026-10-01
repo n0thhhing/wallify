@@ -23,6 +23,7 @@ final class NowPlayingNotifications {
             center.addObserver(forName: Notification.Name(name), object: nil, queue: nil) { [semaphore] _ in
                 semaphore.signal()
                 // MediaRemote can notify before its metadata cache catches up.
+                // One quick echo catches that race without turning notifications into polling.
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + .milliseconds(100)) {
                     semaphore.signal()
                 }

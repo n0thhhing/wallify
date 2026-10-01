@@ -9,6 +9,7 @@ final class FrameWakeups {
     func wake() {
         lock.lock()
         defer { lock.unlock() }
+        // A doorbell, not a to-do list: ten producers still owe the worker only one wakeup.
         if !pending {
             pending = true
             semaphore.signal()

@@ -92,6 +92,7 @@ final class MetalRenderer: @unchecked Sendable {
         encoder.setRenderPipelineState(pipeline)
         if count > 0 {
             let length = count * MemoryLayout<DrawCommand>.stride
+            // Metal's inline bytes have a 4 KB ceiling; bigger scenes need a real GPU buffer.
             if length > 4096 {
                 guard let buffer = device?.makeBuffer(bytes: commands, length: length, options: .storageModeShared) else {
                     encoder.endEncoding()
