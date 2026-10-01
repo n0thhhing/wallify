@@ -37,3 +37,15 @@ the same benchmark and ReleaseFast build as above; memory stayed unchanged.
 This measures frame preparation, not whole-app CPU utilization. No update
 rate or animation quality was reduced. Tests compare all 3,600 seconds of
 an hour against the previous formatter and check negative/nonfinite values.
+
+## Window movement
+
+Dragging now moves the native panel immediately on the main thread, without
+waiting for the animation worker or requesting a Metal redraw for each
+position change. macOS composites the existing surface at its new position.
+Snap animation keeps its 60 Hz motion but does not redraw unchanged contents.
+Playback, hover changes, and visual effects still redraw independently.
+Regression checks verify that a pure drag produces a move and no redraw,
+and that position-only updates and snap steps move without drawing.
+This removes redundant submissions; whole-app CPU/GPU savings during live
+dragging have not been measured.

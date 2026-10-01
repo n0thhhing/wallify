@@ -31,9 +31,14 @@ func checkAnimationCoordination() {
     _ = step(0.3, previous: 0.2)
     precondition(state.seek_expansion == 1 && state.seek_velocity == 0)
     state.global_is_dragging = false; state.setting_animations = true; state.seek_expansion = 0
+    state.global_rate = 0; state.play_pause_mix = 0; state.global_anim_art_t = 0
+    state.panel_position_dirty = true
+    let positionOnly = step(0.31, previous: 0.3)
+    precondition(positionOnly.move && !positionOnly.draw)
     state.panel_snap_active = true; state.panel_snap_elapsed = 0; state.panel_save_after_snap = true
     state.panel_snap_start_left = 8; state.panel_snap_target_left = 188; state.panel_snap_start_top = 8; state.panel_snap_target_top = 8
-    _ = step(0.1)
+    let snapStep = step(0.1)
+    precondition(snapStep.move && !snapStep.draw && snapStep.interval == 1 / 60)
     precondition(state.widget_margin_left > 8 && state.widget_margin_left < 188)
     _ = step(0.2, previous: 0.1)
     let done = step(0.3, previous: 0.2)

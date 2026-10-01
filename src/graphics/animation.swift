@@ -54,13 +54,13 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
             }
         }
     }
-    if state.panel_position_dirty { state.panel_position_dirty = false; result.move = true; result.draw = true }
+    if state.panel_position_dirty { state.panel_position_dirty = false; result.move = true }
     if state.panel_snap_active {
         high = true; state.panel_snap_elapsed += dt
         let t = min(1, state.panel_snap_elapsed / 0.22), inverse = 1 - t, eased = 1 - inverse * inverse * inverse
         state.widget_margin_left = Int32((Double(state.panel_snap_start_left) + (Double(state.panel_snap_target_left) - Double(state.panel_snap_start_left)) * eased).rounded())
         state.widget_margin_top = Int32((Double(state.panel_snap_start_top) + (Double(state.panel_snap_target_top) - Double(state.panel_snap_start_top)) * eased).rounded())
-        state.panel_position_dirty = true; result.draw = true
+        result.move = true
         if t >= 1 { state.panel_snap_active = false; result.save = state.panel_save_after_snap; state.panel_save_after_snap = false }
     }
     if !state.setting_hide_text && !idle && layout.geometry.compact_mix > 0.01 && state.global_title_len > 0 && titleWidth > 126 && state.setting_animations {

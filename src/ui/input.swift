@@ -3,6 +3,7 @@ import AppKit
 enum PointerAction: Equatable {
     case redraw, menu, startDrag, hidePreview, preview(Double, Double, Double, Double)
     case dragDebug(Bool), save, openIdle, toggle, command(UInt32), seek(Double)
+    case move(Int32, Int32)
 }
 
 // The reducer shares geometry with rendering and leaves native side effects to the caller.
@@ -55,7 +56,8 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
             let nextTop = Int32(max(-180, min(Double(Int32.max), top)))
             if nextLeft != state.pointee.widget_margin_left || nextTop != state.pointee.widget_margin_top {
                 state.pointee.widget_margin_left = nextLeft; state.pointee.widget_margin_top = nextTop
-                state.pointee.panel_position_dirty = true
+                state.pointee.panel_position_dirty = false
+                actions.append(.move(nextLeft, nextTop))
             }
         }
         let live = snap(state.pointee.widget_margin_left, state.pointee.widget_margin_top)
@@ -82,7 +84,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
             actions += [.dragDebug(false), .hidePreview]
             if !state.pointee.panel_snap_active { actions.append(.save) }
         }
-        actions.append(.redraw)
+        if changed || click || release { actions.append(.redraw) }
         return actions
     }
     if idle {
@@ -129,6 +131,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
     for action in actions {
         switch action {
         case .redraw: requestWidgetFrame()
+        case let .move(left, top): moveWidgetPanelNow(left, top)
         case .menu: showWidgetContextMenu()
         case .startDrag: widget_start_drag(state.pointee.widget_margin_left, state.pointee.widget_margin_top, width)
         case .hidePreview: widget_hide_snap_outline()

@@ -38,7 +38,9 @@ func checkPointerActions() {
     state.pointee.panel_snap_active = true
     precondition(pointer(60, 60, 1, mouse: NSPoint(x: 100, y: 100)).contains(.startDrag))
     precondition(!state.pointee.panel_snap_active)
-    _ = pointer(60, 60, 0, mouse: NSPoint(x: 120, y: 80))
+    let movement = pointer(60, 60, 0, mouse: NSPoint(x: 120, y: 80))
+    precondition(movement.contains(.move(28, 28)) && !movement.contains(.redraw))
+    precondition(!state.pointee.panel_position_dirty)
     precondition(state.pointee.widget_margin_left == 28 && state.pointee.widget_margin_top == 28)
     var snap = WallifyPanelSnap()
     snap.found = true; snap.distance_sq = 100; snap.margin_left = 188; snap.margin_top = 8
