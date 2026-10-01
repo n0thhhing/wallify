@@ -1,4 +1,5 @@
 const std = @import("std");
+extern fn wallify_rounded_contains(x: f64, y: f64, width: f64, height: f64, radius: f64, px: f64, py: f64) callconv(.c) bool;
 
 pub const Point = struct { x: f64, y: f64 };
 pub const Rect = struct {
@@ -9,14 +10,7 @@ pub const Rect = struct {
     radius: f64 = 0,
 
     pub fn contains(self: Rect, p: Point) bool {
-        if (p.x < self.x or p.y < self.y or p.x >= self.x + self.w or p.y >= self.y + self.h) return false;
-        // Do actual math for the rounded corners instead of just a bounding box check.
-        // Otherwise, clicking the transparent corner of a button will trigger it instead of
-        // passing the click through to the window drag handler behind it.
-        const radius = @min(self.radius, @min(self.w, self.h) / 2);
-        const dx = @max(@max(self.x + radius - p.x, p.x - (self.x + self.w - radius)), 0);
-        const dy = @max(@max(self.y + radius - p.y, p.y - (self.y + self.h - radius)), 0);
-        return dx * dx + dy * dy <= radius * radius;
+        return wallify_rounded_contains(self.x, self.y, self.w, self.h, self.radius, p.x, p.y);
     }
 };
 
@@ -35,4 +29,9 @@ test "zero-radius rectangle behaves as half-open axis aligned box" {
     try std.testing.expect(!box.contains(.{ .x = 40, .y = 30 }));
     try std.testing.expect(!box.contains(.{ .x = 20, .y = 60 }));
     try std.testing.expect(!box.contains(.{ .x = 9.9, .y = 20 }));
+}
+
+test "invalid and empty hitboxes never accept a pointer" {
+    try std.testing.expect(!(Rect{ .x = 0, .y = 0, .w = 0, .h = 40 }).contains(.{ .x = 0, .y = 20 }));
+    try std.testing.expect(!(Rect{ .x = 0, .y = 0, .w = 40, .h = 40 }).contains(.{ .x = std.math.nan(f64), .y = 20 }));
 }

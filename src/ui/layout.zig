@@ -48,7 +48,7 @@ pub const ButtonDef = struct {
     }
 };
 
-const ModeGeometry = struct {
+const NativeGeometry = extern struct {
     art_x: f64,
     art_y: f64,
     art_size: f64,
@@ -62,8 +62,11 @@ const ModeGeometry = struct {
     title_y: f64,
     artist_y: f64,
     timestamp_y: f64,
-    buttons: [3]ButtonDef,
+    button_center: f64,
+    button_y: f64,
+    compact_mix: f64,
 };
+extern fn wallify_layout_geometry(from_mode: c_int, to_mode: c_int, mix: f64, output: *NativeGeometry) callconv(.c) bool;
 
 pub const Layout = struct {
     // Outer window sizes. One tile is 180×180 pt on the desktop grid.
@@ -135,145 +138,6 @@ pub const Layout = struct {
         .{ .id = .Next, .name = "Action: Next", .x = 390.0, .y = 132.0, .size = 12.0 },
     },
 
-    fn modeGeometry(mode: WidgetMode, width: f64, height: f64) ModeGeometry {
-        const card_w = @max(0.0, width - 16.0);
-        const card_h = @max(0.0, height - 16.0);
-
-        return switch (mode) {
-            .compact => .{
-                // 1×1: artwork fills the card; metadata/control overlays sit over it.
-                .art_x = 8.0,
-                .art_y = 8.0,
-                .art_size = @min(card_w, card_h),
-                .art_radius = 26.0,
-                .bar_x = 16.0,
-                .bar_y = 112.0,
-                .bar_w = @max(64.0, card_w - 32.0),
-                .bar_h = 5.0,
-                .text_x = 16.0,
-                .text_width = @max(64.0, card_w - 32.0),
-                .title_y = 116.0,
-                .artist_y = 137.0,
-                .timestamp_y = 99.0,
-                .buttons = .{
-                    .{ .id = .Prev, .name = "Action: Previous", .x = width / 2.0 - 46.0, .y = 48.0, .size = 12.0 },
-                    .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = width / 2.0, .y = 48.0, .size = 14.0 },
-                    .{ .id = .Next, .name = "Action: Next", .x = width / 2.0 + 46.0, .y = 48.0, .size = 12.0 },
-                },
-            },
-
-            .two_by_one, .expanded => blk: {
-                // 2×1 and 3×1 share the native horizontal player composition.
-                const art_size = @min(132.0, @max(64.0, card_h - 32.0));
-                const art_x = 24.0;
-                const art_y = 8.0 + (card_h - art_size) / 2.0;
-                const bar_x = 172.0;
-                const bar_w = @max(min_bar_width, width - 196.0);
-                const center = bar_x + bar_w / 2.0;
-                break :blk .{
-                    .art_x = art_x,
-                    .art_y = art_y,
-                    .art_size = art_size,
-                    .art_radius = 14.0,
-                    .bar_x = bar_x,
-                    .bar_y = 84.0,
-                    .bar_w = bar_w,
-                    .bar_h = 5.0,
-                    .text_x = bar_x,
-                    .text_width = bar_w,
-                    .title_y = 30.0,
-                    .artist_y = 54.0,
-                    .timestamp_y = 99.0,
-                    .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = 132.0, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = 132.0, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = 132.0, .size = 12.0 },
-                    },
-                };
-            },
-
-            .one_by_two => blk: {
-                // 1×2: artwork on top, metadata, progress, then controls.
-                const inset = 16.0;
-                const content_width = @max(0.0, width - 2.0 * inset);
-                const controls_y = height - 48.0;
-                const bar_y = controls_y - 60.0;
-                const title_y = bar_y - 64.0;
-                const art_y = 20.0;
-                const art_size = @max(0.0, @min(148.0, @min(content_width, title_y - art_y - 20.0)));
-                const art_x = (width - art_size) / 2.0;
-                const center = width / 2.0;
-                break :blk .{
-                    .art_x = art_x,
-                    .art_y = art_y,
-                    .art_size = art_size,
-                    .art_radius = 18.0,
-                    .bar_x = inset,
-                    .bar_y = bar_y,
-                    .bar_w = content_width,
-                    .bar_h = 5.0,
-                    .text_x = inset,
-                    .text_width = content_width,
-                    .title_y = title_y,
-                    .artist_y = title_y + 26.0,
-                    .timestamp_y = bar_y + 12.0,
-                    .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = controls_y, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = controls_y, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = controls_y, .size = 12.0 },
-                    },
-                };
-            },
-
-            .two_by_two => blk: {
-                // 2×2: centered artwork with a full-width player footer.
-                const inset = 24.0;
-                const controls_y = height - 34.0;
-                const bar_y = controls_y - 46.0;
-                const title_y = bar_y - 52.0;
-                const art_y = inset;
-                const art_size = @max(0.0, @min(192.0, @min(width - 2.0 * inset, title_y - art_y - 12.0)));
-                const art_x = (width - art_size) / 2.0;
-                const center = width / 2.0;
-                const content_width = @max(0.0, width - 2.0 * inset);
-                break :blk .{
-                    .art_x = art_x,
-                    .art_y = art_y,
-                    .art_size = art_size,
-                    .art_radius = 26.0,
-                    .bar_x = inset,
-                    .bar_y = bar_y,
-                    .bar_w = content_width,
-                    .bar_h = 5.0,
-                    .text_x = inset,
-                    .text_width = content_width,
-                    .title_y = title_y,
-                    .artist_y = bar_y - 26.0,
-                    .timestamp_y = bar_y + 12.0,
-                    .buttons = .{
-                        .{ .id = .Prev, .name = "Action: Previous", .x = center - button_spacing, .y = controls_y, .size = 12.0 },
-                        .{ .id = .PlayPause, .name = "Action: Play/Pause", .x = center, .y = controls_y, .size = 14.0 },
-                        .{ .id = .Next, .name = "Action: Next", .x = center + button_spacing, .y = controls_y, .size = 12.0 },
-                    },
-                };
-            },
-        };
-    }
-
-    fn lerp(a: f64, b: f64, t: f64) f64 {
-        return a + (b - a) * t;
-    }
-
-    fn lerpButton(a: ButtonDef, b: ButtonDef, t: f64) ButtonDef {
-        return .{
-            .id = a.id,
-            .name = a.name,
-            .x = lerp(a.x, b.x, t),
-            .y = lerp(a.y, b.y, t),
-            .size = lerp(a.size, b.size, t),
-        };
-    }
-
     /// Updates responsive geometry while smoothly morphing between two form factors.
     // Layout is pure geometry: keeping this cache stable lets rendering skip all interpolation math
     // when neither the window size nor the active form-factor transition changed.
@@ -298,38 +162,26 @@ pub const Layout = struct {
         self.width = panel_width;
         self.height = panel_height;
 
-        const t = std.math.clamp(mix, 0.0, 1.0);
-        const from_size = from_mode.dimensions();
-        const to_size = to_mode.dimensions();
-        const from = modeGeometry(from_mode, from_size.width, from_size.height);
-        const to = modeGeometry(to_mode, to_size.width, to_size.height);
-
-        self.art_x = lerp(from.art_x, to.art_x, t);
-        self.art_y = lerp(from.art_y, to.art_y, t);
-        self.art_size = @max(1.0, lerp(from.art_size, to.art_size, t));
-        self.art_radius = lerp(from.art_radius, to.art_radius, t);
-
-        self.bar_x = lerp(from.bar_x, to.bar_x, t);
-        self.bar_y = lerp(from.bar_y, to.bar_y, t);
-        self.bar_w = @max(1.0, lerp(from.bar_w, to.bar_w, t));
-        self.bar_h = lerp(from.bar_h, to.bar_h, t);
-
-        self.text_x = lerp(from.text_x, to.text_x, t);
-        self.text_width = @max(1.0, lerp(from.text_width, to.text_width, t));
-        self.title_y = lerp(from.title_y, to.title_y, t);
-        self.artist_y = lerp(from.artist_y, to.artist_y, t);
-        self.timestamp_y = lerp(from.timestamp_y, to.timestamp_y, t);
-
-        for (0..self.buttons.len) |i| {
-            self.buttons[i] = lerpButton(from.buttons[i], to.buttons[i], t);
+        var geometry: NativeGeometry = undefined;
+        if (!wallify_layout_geometry(@intFromEnum(from_mode), @intFromEnum(to_mode), mix, &geometry)) return;
+        self.art_x = geometry.art_x;
+        self.art_y = geometry.art_y;
+        self.art_size = geometry.art_size;
+        self.art_radius = geometry.art_radius;
+        self.bar_x = geometry.bar_x;
+        self.bar_y = geometry.bar_y;
+        self.bar_w = geometry.bar_w;
+        self.bar_h = geometry.bar_h;
+        self.text_x = geometry.text_x;
+        self.text_width = geometry.text_width;
+        self.title_y = geometry.title_y;
+        self.artist_y = geometry.artist_y;
+        self.timestamp_y = geometry.timestamp_y;
+        self.compact_mix = geometry.compact_mix;
+        for (&self.buttons, 0..) |*button, index| {
+            button.x = geometry.button_center + (@as(f64, @floatFromInt(index)) - 1) * button_spacing;
+            button.y = geometry.button_y;
         }
-
-        self.compact_mix =
-            lerp(
-                if (from_mode.isCompact()) 1.0 else 0.0,
-                if (to_mode.isCompact()) 1.0 else 0.0,
-                t,
-            );
 
         self.cache_width = panel_width;
         self.cache_height = panel_height;
@@ -427,4 +279,23 @@ test "layout produces exact card bounds for every form factor" {
         try std.testing.expectEqual(size.width - 16.0, card.w);
         try std.testing.expectEqual(size.height - 16.0, card.h);
     }
+}
+
+test "mode transitions interpolate artwork and input geometry together" {
+    var value = Layout{};
+    value.update(360, 180, .compact, .expanded, 0.5);
+    try std.testing.expectEqual(@as(f64, 16), value.art_x);
+    try std.testing.expectEqual(@as(f64, 148), value.art_size);
+    try std.testing.expectEqual(@as(f64, 94), value.bar_x);
+    try std.testing.expectEqual(@as(f64, 217), value.buttons[1].x);
+    try std.testing.expectEqual(@as(f64, 90), value.buttons[1].y);
+    try std.testing.expectEqual(@as(f64, 0.5), value.compact_mix);
+    try std.testing.expect(value.controlsVisible(true));
+    value.update(540, 180, .compact, .expanded, 2);
+    try std.testing.expectEqual(@as(f64, 344), value.buttons[1].x);
+    try std.testing.expectEqual(@as(f64, 132), value.art_size);
+    value.update(180, 180, .compact, .expanded, -1);
+    try std.testing.expectEqual(@as(f64, 90), value.buttons[1].x);
+    try std.testing.expectEqual(@as(f64, 164), value.art_size);
+    try std.testing.expect(!value.controlsVisible(true));
 }

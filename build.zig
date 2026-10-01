@@ -43,10 +43,12 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileInput(b.path("src/platform/debug_stats.h"));
     swift_settings.addFileInput(b.path("src/platform/gpu.h"));
     swift_settings.addFileInput(b.path("src/platform/media_core.h"));
+    swift_settings.addFileInput(b.path("src/platform/layout.h"));
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
     swift_settings.addFileArg(b.path("src/ui/context_menu.swift"));
+    swift_settings.addFileArg(b.path("src/ui/layout.swift"));
     swift_settings.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_snap.swift"));
@@ -192,10 +194,12 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileInput(b.path("src/platform/debug_stats.h"));
     swift_check.addFileInput(b.path("src/platform/gpu.h"));
     swift_check.addFileInput(b.path("src/platform/media_core.h"));
+    swift_check.addFileInput(b.path("src/platform/layout.h"));
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
     swift_check.addFileArg(b.path("src/ui/context_menu.swift"));
+    swift_check.addFileArg(b.path("src/ui/layout.swift"));
     swift_check.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_snap.swift"));
