@@ -221,7 +221,6 @@ echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Building ${APP_NAME} (${OPTIMIZE})...$
 # Debug mode is the only mode that opts into the Dear ImGui inspector.
 BUILD_ARGS=(-O "${OPTIMIZE}")
 if [[ "${OPTIMIZE}" == "Debug" ]]; then
-    bash ./scripts/fetch-imgui.sh
     BUILD_ARGS+=(--debug-inspector)
 fi
 

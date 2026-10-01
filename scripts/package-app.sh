@@ -67,9 +67,6 @@ if [[ "$DO_BUILD" == true ]] || [[ ! -f "build/bin/wallify" ]] || [[ ! -f "build
     fi
     BUILD_ARGS=(-O "${OPTIMIZE}")
     if [[ "${OPTIMIZE}" == "Debug" ]]; then
-        if [[ ! -d "build/vendor/imgui" ]]; then
-            bash ./scripts/fetch-imgui.sh
-        fi
         BUILD_ARGS+=(--debug-inspector)
     fi
     ./scripts/build.sh "${BUILD_ARGS[@]}"
