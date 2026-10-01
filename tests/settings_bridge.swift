@@ -93,6 +93,7 @@ struct SettingsBridgeCheck {
         checkArtworkDownload()
         checkMediaPayloads()
         checkMediaActions()
+        checkSpriteCommands()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -187,6 +188,31 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkSpriteCommands() {
+        let masks = [["11111", "00010", "00100", "01000", "11111"],
+                     ["01010", "11111", "11111", "01110", "00100"]]
+        for (strips, mask) in zip([sleepStrips, heartStrips], masks) {
+            var coverage = Array(repeating: Array(repeating: 0, count: 5), count: 5)
+            for (x, y, width) in strips { for column in x..<x + width { coverage[y][column] += 1 } }
+            for (y, row) in mask.enumerated() {
+                for (x, pixel) in row.enumerated() { precondition(coverage[y][x] == (pixel == "1" ? 1 : 0)) }
+            }
+        }
+        var card = WallifyCardRect(x: 8, y: 8, w: 524, h: 164, radius: 26)
+        var clip = card
+        var output = Array(repeating: DrawCommand(), count: 19)
+        output.withUnsafeMutableBufferPointer { commands in
+            precondition(drawPet(0, &card, &clip, 0.7, false, 0.5, commands.baseAddress, 19) == 16)
+            precondition(commands[0].alpha == 0.5 && commands[0].clip_radius == 26)
+            let original = commands[0]
+            precondition(drawPet(2, &card, &clip, 0.7, true, 1, commands.baseAddress, 18) == 0)
+            precondition(commands[0].dx == original.dx && commands[0].alpha == original.alpha)
+            precondition(drawPet(3, &card, &clip, 0.7, true, 1, commands.baseAddress, 19) == 18)
+            precondition(drawPet(0, &card, &clip, .nan, false, 1, commands.baseAddress, 19) == 0)
+        }
+        precondition(raccoonFrame(-0.1) == 4)
     }
 
     static func checkMediaActions() {

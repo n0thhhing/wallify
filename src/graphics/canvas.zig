@@ -9,16 +9,16 @@ pub const Texture = enum(c_int) {
     previous_artwork,
     glow,
     previous_glow,
-    cat,
-    banana,
+    cat = native.gpu.WALLIFY_CAT_TEXTURE,
+    banana = native.gpu.WALLIFY_BANANA_TEXTURE,
     spotify,
     play,
     pause,
     previous,
     next,
-    raccoon,
+    raccoon = native.gpu.WALLIFY_RACCOON_TEXTURE,
     text_start,
-    // Reserved texture slot: native.m binds this to the persistent static-scene render target.
+    // Reserved texture slot: the Swift renderer binds the persistent static-scene render target.
     // It must stay outside the normal texture-upload range.
     cached_scene = native.gpu.WALLIFY_CACHED_SCENE_TEXTURE,
 };

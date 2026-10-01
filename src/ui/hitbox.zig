@@ -2,7 +2,7 @@ const std = @import("std");
 extern fn wallify_rounded_contains(x: f64, y: f64, width: f64, height: f64, radius: f64, px: f64, py: f64) callconv(.c) bool;
 
 pub const Point = struct { x: f64, y: f64 };
-pub const Rect = struct {
+pub const Rect = extern struct {
     x: f64,
     y: f64,
     w: f64,

@@ -1,9 +1,12 @@
 #ifndef WALLIFY_GPU_H
 #define WALLIFY_GPU_H
-// Shared verbatim by Zig (@cImport), Objective-C, and Metal. Logical points.
+// Shared verbatim by Zig (@cImport), Swift, and Metal. Logical points.
 #define WALLIFY_MAX_COMMANDS 128
 #define WALLIFY_MAX_TEXTURES 64
 #define WALLIFY_CACHED_SCENE_TEXTURE (WALLIFY_MAX_TEXTURES - 1)
+#define WALLIFY_CAT_TEXTURE 5
+#define WALLIFY_BANANA_TEXTURE 6
+#define WALLIFY_RACCOON_TEXTURE 12
 #define WALLIFY_SOLID 0
 #define WALLIFY_TEXTURE 1
 #define WALLIFY_GRADIENT 2

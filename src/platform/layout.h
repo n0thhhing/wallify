@@ -1,4 +1,5 @@
 #pragma once
+typedef struct { double x, y, w, h, radius; } WallifyCardRect;
 typedef struct {
     double art_x, art_y, art_size, art_radius;
     double bar_x, bar_y, bar_w, bar_h;

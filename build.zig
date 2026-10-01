@@ -62,6 +62,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/media/playback.swift"));
     swift_settings.addFileArg(b.path("src/media/payload.swift"));
     swift_settings.addFileArg(b.path("src/graphics/raster.swift"));
+    swift_settings.addFileArg(b.path("src/graphics/sprites.swift"));
     swift_settings.addArg("-o");
     const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
     b.getInstallStep().dependOn(&b.addInstallFile(settings_dylib, "lib/libWallifySettings.dylib").step);
@@ -215,6 +216,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/media/payload.swift"));
     swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
     swift_check.addFileArg(b.path("src/graphics/raster.swift"));
+    swift_check.addFileArg(b.path("src/graphics/sprites.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
     swift_check.addArg("-o");
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");

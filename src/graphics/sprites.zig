@@ -19,32 +19,9 @@ pub const cat_regions = [_]Region{
     .{ .x = 326, .w = 107, .h = 50 },
     .{ .x = 434, .w = 107, .h = 51 },
 };
-pub fn catFrame(time: f64) Region {
-    return cat_regions[@as(usize, @intFromFloat(@mod(time * 3, cat_regions.len)))];
-}
-// Decode and premultiply once when uploading the sprite atlas.
-// Using standard formats like PNG means linking bulky C libraries like stb_image.
-// A custom RLE format lets us just @embedFile the raw pixels directly, keeping the binary small
-// and compile times fast.
+extern fn wallify_decode_sprite_rle(input: [*]const u8, length: usize, output: [*]u32, pixel_count: usize) callconv(.c) bool;
 pub fn decode(data: []const u8, output: []u32) !void {
-    var source: usize = 0;
-    var dest: usize = 0;
-    while (source < data.len and dest < output.len) {
-        const header = data[source];
-        source += 1;
-        const count: usize = header & 127;
-        const repeated = header & 128 != 0;
-        const bytes = if (repeated) 4 else count * 4;
-        if (count == 0 or count > output.len - dest or bytes > data.len - source) return error.InvalidSprite;
-        for (0..count) |i| {
-            const p = data[source + (if (repeated) 0 else i * 4) ..][0..4];
-            const a: u32 = p[3];
-            output[dest] = ((@as(u32, p[0]) * a + 127) / 255) | (((@as(u32, p[1]) * a + 127) / 255) << 8) | (((@as(u32, p[2]) * a + 127) / 255) << 16) | (a << 24);
-            dest += 1;
-        }
-        source += bytes;
-    }
-    if (dest != output.len or source != data.len) return error.InvalidSprite;
+    if (!wallify_decode_sprite_rle(data.ptr, data.len, output.ptr, output.len)) return error.InvalidSprite;
 }
 test "sprite decoder rejects truncated runs and premultiplies alpha" {
     var pixels: [2]u32 = undefined;
