@@ -20,20 +20,25 @@ private let widgetLayouts: [WallifyLayoutGeometry] = [
         title_y: 228, artist_y: 254, timestamp_y: 292, button_center: 180, button_y: 326, compact_mix: 0)
 ]
 
+// Pack the fixed endpoints once; resizing interpolates all 16 fields without key-path dispatch.
+private let layoutVectors = widgetLayouts.map {
+    SIMD16<Double>($0.art_x, $0.art_y, $0.art_size, $0.art_radius,
+                   $0.bar_x, $0.bar_y, $0.bar_w, $0.bar_h,
+                   $0.text_x, $0.text_width, $0.title_y, $0.artist_y,
+                   $0.timestamp_y, $0.button_center, $0.button_y, $0.compact_mix)
+}
+
 @_cdecl("wallify_layout_geometry")
 public func widgetLayoutGeometry(_ fromMode: Int32, _ toMode: Int32, _ mix: Double,
                                   _ output: UnsafeMutablePointer<WallifyLayoutGeometry>?) -> Bool {
     guard let output = output, (0..<5).contains(fromMode), (0..<5).contains(toMode), mix.isFinite else { return false }
-    let from = widgetLayouts[Int(fromMode)]
-    let to = widgetLayouts[Int(toMode)]
+    let from = layoutVectors[Int(fromMode)]
+    let to = layoutVectors[Int(toMode)]
     let t = min(1, max(0, mix))
-    let fields: [WritableKeyPath<WallifyLayoutGeometry, Double>] = [
-        \.art_x, \.art_y, \.art_size, \.art_radius, \.bar_x, \.bar_y, \.bar_w, \.bar_h,
-        \.text_x, \.text_width, \.title_y, \.artist_y, \.timestamp_y, \.button_center, \.button_y, \.compact_mix
-    ]
-    var result = from
-    for field in fields { result[keyPath: field] = from[keyPath: field] + (to[keyPath: field] - from[keyPath: field]) * t }
-    output.pointee = result
+    let v = from + (to - from) * SIMD16(repeating: t)
+    output.pointee = WallifyLayoutGeometry(art_x: v[0], art_y: v[1], art_size: v[2], art_radius: v[3],
+        bar_x: v[4], bar_y: v[5], bar_w: v[6], bar_h: v[7], text_x: v[8], text_width: v[9],
+        title_y: v[10], artist_y: v[11], timestamp_y: v[12], button_center: v[13], button_y: v[14], compact_mix: v[15])
     return true
 }
 

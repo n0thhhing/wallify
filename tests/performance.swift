@@ -1,6 +1,25 @@
 import Foundation
 
 func checkPerformanceSample() {
+    func fields(_ layout: WallifyLayoutGeometry) -> [Double] {
+        withUnsafeBytes(of: layout) { Array($0.bindMemory(to: Double.self)) }
+    }
+    for from in Int32(0)..<5 {
+        for to in Int32(0)..<5 {
+            var a = WallifyLayoutGeometry(), b = WallifyLayoutGeometry(), result = WallifyLayoutGeometry()
+            precondition(widgetLayoutGeometry(from, from, 0, &a) && widgetLayoutGeometry(to, to, 1, &b))
+            let start = fields(a), end = fields(b)
+            precondition(start.count == 16)
+            for mix in [-1.0, 0, 0.13, 0.5, 0.87, 1, 2] {
+                precondition(widgetLayoutGeometry(from, to, mix, &result))
+                let t = min(1, max(0, mix)), actual = fields(result)
+                for i in 0..<16 { precondition(abs(actual[i] - (start[i] + (end[i] - start[i]) * t)) < 1e-10) }
+            }
+        }
+    }
+    var layout = WallifyLayoutGeometry()
+    precondition(!widgetLayoutGeometry(-1, 0, 0, &layout) && !widgetLayoutGeometry(0, 5, 0, &layout))
+    precondition(!widgetLayoutGeometry(0, 1, .nan, &layout) && !widgetLayoutGeometry(0, 1, 0, nil))
     var sample = PerformanceSample()
     sample.update(now: 10, cpu: 2, frames: 100, gpu: 1_000_000)
     precondition(sample.cpuPercent == 0)
