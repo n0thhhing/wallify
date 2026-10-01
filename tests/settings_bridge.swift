@@ -63,6 +63,8 @@ func defaultsStub() {}
 func positionStub() {}
 @_cdecl("wallify_open_inspector")
 func inspectorStub() {}
+@_cdecl("widget_debug_window_show")
+func snapDebugStub() {}
 
 private let idleTestSurface = CAMetalLayer()
 
@@ -76,6 +78,7 @@ struct SettingsBridgeCheck {
         checkNowPlayingHelper()
         checkRasterGraphics()
         checkDesktopGlass()
+        checkDesktopSnap()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -170,6 +173,66 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    @MainActor static func checkDesktopSnap() {
+        var widget: [String: Any] = [kCGWindowOwnerName as String: "Wallify", kCGWindowName as String: "Wallify Settings",
+                                   kCGWindowLayer as String: 3]
+        precondition(!isWallifyWindow(widget, expectedID: 0))
+        for name in ["Wallify Debug Console", "Wallify Snap Outline", "Wallify Settings"] {
+            widget[kCGWindowName as String] = name
+            precondition(!isWallifyWindow(widget, expectedID: 0))
+        }
+        widget[kCGWindowName as String] = "wallify"
+        widget[kCGWindowLayer as String] = -1
+        precondition(isWallifyWindow(widget, expectedID: 0))
+        widget[kCGWindowNumber as String] = 123
+        precondition(isWallifyWindow(widget, expectedID: 123) && !isWallifyWindow(widget, expectedID: 124))
+        widget[kCGWindowName as String] = nil
+        precondition(isWallifyWindow(widget, expectedID: 0))
+        widget[kCGWindowOwnerName as String] = "Other app"
+        precondition(!isWallifyWindow(widget, expectedID: 0))
+        var candidate: [String: Any] = [kCGWindowOwnerName as String: "Notification Center",
+                                       kCGWindowLayer as String: -2147483601,
+                                       kCGWindowAlpha as String: 1,
+                                       kCGWindowBounds as String: ["X": 188, "Y": 221, "Width": 180, "Height": 180]]
+        let expected = CGRect(x: 188, y: 221, width: 180, height: 180)
+        precondition(desktopWidgetCandidate(candidate) == expected)
+        precondition(candidate[kCGWindowName as String] == nil)
+        candidate[kCGWindowOwnerName as String] = "NotificationCenter"
+        precondition(desktopWidgetCandidate(candidate) == expected)
+        candidate[kCGWindowAlpha as String] = 0.49
+        precondition(desktopWidgetCandidate(candidate) == nil)
+        candidate[kCGWindowAlpha as String] = 0.5
+        precondition(desktopWidgetCandidate(candidate) == expected)
+        for layer in [0, 3, -2147483602] {
+            candidate[kCGWindowLayer as String] = layer
+            precondition(desktopWidgetCandidate(candidate) == nil)
+        }
+        candidate[kCGWindowLayer as String] = -2147483601
+        for bounds: [String: Double] in [["X": -200, "Y": 221, "Width": 180, "Height": 180],
+                                         ["X": 188, "Y": 221, "Width": 79, "Height": 180],
+                                         ["X": 188, "Y": 221, "Width": 1401, "Height": 180],
+                                         ["X": 188, "Y": 221, "Width": 180, "Height": 801],
+                                         ["X": .nan, "Y": 221, "Width": 180, "Height": 180]] {
+            candidate[kCGWindowBounds as String] = bounds
+            precondition(desktopWidgetCandidate(candidate) == nil)
+        }
+        precondition(copyDesktopCandidates(nil, 64) == 0)
+        var slot = WallifyWindowRect(x: 1, y: 2, width: 3, height: 4)
+        precondition(copyDesktopCandidates(&slot, 0) == 0 && slot.x == 1)
+        precondition(snapPreviewFrame(expected, screenHeight: 1080) == NSRect(x: 188, y: 679, width: 180, height: 180))
+        let preview = SnapPreview()
+        preview.show(rect: expected, radius: 26, screenHeight: 1080, playerLayer: -1)
+        let panel = preview.panel!
+        precondition(panel.level.rawValue == -2 && panel.ignoresMouseEvents && !panel.hasShadow)
+        precondition(panel.frame == NSRect(x: 188, y: 679, width: 180, height: 180))
+        precondition(panel.contentView!.layer!.cornerRadius == 26 && panel.contentView!.layer!.borderWidth == 2.5)
+        preview.hide()
+        precondition(!panel.isVisible)
+        preview.show(rect: NSRect(x: 188, y: 221, width: 524, height: 164), radius: 26, screenHeight: 1080, playerLayer: nil)
+        precondition(preview.panel === panel && panel.frame.size == NSSize(width: 524, height: 164))
+        preview.hide()
     }
 
     static func checkMetalRenderer() {

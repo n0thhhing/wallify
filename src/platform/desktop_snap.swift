@@ -1,0 +1,122 @@
+import AppKit
+import QuartzCore
+
+func isWallifyWindow(_ info: [String: Any], expectedID: Int) -> Bool {
+    let name = info[kCGWindowName as String] as? String
+    func matches(_ value: String?, _ expected: String) -> Bool { value?.caseInsensitiveCompare(expected) == .orderedSame }
+    if ["Wallify Debug Console", "Wallify Snap Outline", "Wallify Settings"].contains(where: { matches(name, $0) }) { return false }
+    if expectedID > 0, let number = info[kCGWindowNumber as String] as? NSNumber { return number.intValue == expectedID }
+    let owner = info[kCGWindowOwnerName as String] as? String
+    guard matches(name, "Wallify") || matches(owner, "Wallify") else { return false }
+    if name != nil && !matches(name, "Wallify") { return false }
+    return (info[kCGWindowLayer as String] as? NSNumber)?.intValue == -1
+}
+
+func desktopWindowBounds(_ info: [String: Any]) -> CGRect? {
+    guard let bounds = info[kCGWindowBounds as String] as? [String: Any],
+          let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+          [rect.minX, rect.minY, rect.width, rect.height].allSatisfy({ $0.isFinite }) else { return nil }
+    return rect
+}
+
+func desktopWidgetCandidate(_ info: [String: Any]) -> CGRect? {
+    guard let owner = info[kCGWindowOwnerName as String] as? String,
+          ["Notification Center", "NotificationCenter"].contains(where: { owner.caseInsensitiveCompare($0) == .orderedSame }),
+          let bounds = desktopWindowBounds(info) else { return nil }
+    let alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
+    let layer = (info[kCGWindowLayer as String] as? NSNumber)?.int64Value ?? 0
+    guard alpha >= 0.5, layer < 0, layer != -2147483602, bounds.maxX > 0, bounds.maxY > 0,
+          (80...1400).contains(bounds.width), (80...800).contains(bounds.height) else { return nil }
+    return bounds
+}
+
+private func desktopWindows() -> [[String: Any]] {
+    CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+}
+
+@MainActor private func playerWindowInfo() -> WallifyWindowInfo {
+    let expectedID = WidgetPanel.current?.windowNumber ?? 0
+    for info in desktopWindows() where isWallifyWindow(info, expectedID: expectedID) {
+        guard let number = info[kCGWindowNumber as String] as? NSNumber, let frame = desktopWindowBounds(info) else { continue }
+        var result = WallifyWindowInfo()
+        result.number = number.int64Value
+        result.layer = (info[kCGWindowLayer as String] as? NSNumber)?.int64Value ?? 0
+        result.frame = WallifyWindowRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+        return result
+    }
+    return WallifyWindowInfo()
+}
+
+@_cdecl("wallify_query_player_window")
+@MainActor public func queryPlayerWindow(_ output: UnsafeMutablePointer<WallifyWindowInfo>?) { output?.pointee = playerWindowInfo() }
+
+@_cdecl("wallify_desktop_candidates")
+public func copyDesktopCandidates(_ output: UnsafeMutablePointer<WallifyWindowRect>?, _ capacity: UInt) -> UInt {
+    guard let output = output, capacity > 0 else { return 0 }
+    var count: UInt = 0
+    for info in desktopWindows() {
+        guard let bounds = desktopWidgetCandidate(info) else { continue }
+        output[Int(count)] = WallifyWindowRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: bounds.height)
+        count += 1
+        if count == capacity { break }
+    }
+    return count
+}
+
+func snapPreviewFrame(_ rect: NSRect, screenHeight: CGFloat) -> NSRect {
+    NSRect(x: rect.minX, y: screenHeight - rect.minY - rect.height, width: rect.width, height: rect.height)
+}
+
+@MainActor final class SnapPreview {
+    static let shared = SnapPreview()
+    private(set) var panel: NSPanel?
+    private var wasVisible = false
+
+    func show(rect: NSRect, radius: CGFloat, screenHeight: CGFloat, playerLayer: Int?) {
+        let frame = snapPreviewFrame(rect, screenHeight: screenHeight)
+        if panel == nil {
+            let panel = NSPanel(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+            panel.title = "Wallify Snap Outline"
+            panel.isOpaque = false; panel.backgroundColor = .clear
+            panel.alphaValue = 1; panel.ignoresMouseEvents = true; panel.hasShadow = false
+            panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+            let view = NSView(frame: NSRect(origin: .zero, size: frame.size))
+            view.wantsLayer = true; view.autoresizingMask = [.width, .height]
+            view.layer?.masksToBounds = true; view.layer?.cornerRadius = radius; view.layer?.borderWidth = 2.5
+            view.layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
+            view.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+            panel.contentView = view
+            self.panel = panel
+        }
+        let panel = panel!
+        panel.setFrame(frame, display: true)
+        panel.level = NSWindow.Level(rawValue: playerLayer.map { $0 - 1 } ?? -2)
+        panel.orderFrontRegardless()
+        if !wasVisible {
+            panel.alphaValue = 0
+            panel.animator().alphaValue = 1
+            wasVisible = true
+        }
+        panel.contentView?.frame = NSRect(origin: .zero, size: frame.size)
+        panel.contentView?.layer?.frame = NSRect(origin: .zero, size: frame.size)
+    }
+
+    func hide() { panel?.orderOut(nil); wasVisible = false }
+}
+
+@_cdecl("wallify_show_snap_preview")
+public func showSnapPreview(_ x: Double, _ y: Double, _ width: Double, _ height: Double, _ radius: Double) {
+    guard [x, y, width, height, radius].allSatisfy({ $0.isFinite }), width > 0, height > 0, radius >= 0 else { return }
+    let rect = NSRect(x: x, y: y, width: width, height: height)
+    DispatchQueue.main.async {
+        guard let screen = NSScreen.main else { return }
+        let player = playerWindowInfo()
+        SnapPreview.shared.show(rect: rect, radius: radius, screenHeight: screen.frame.height,
+                                playerLayer: player.number > 0 ? Int(player.layer) : nil)
+        widget_debug_window_show()
+    }
+}
+
+@_cdecl("wallify_hide_snap_preview")
+public func hideSnapPreview() { DispatchQueue.main.async { SnapPreview.shared.hide() } }

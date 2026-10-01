@@ -1,6 +1,8 @@
 #ifndef WALLIFY_DEBUG_STATS_H
 #define WALLIFY_DEBUG_STATS_H
 #include <stdint.h>
+typedef struct { double x, y, width, height; } WallifyWindowRect;
+typedef struct { int64_t number, layer; WallifyWindowRect frame; } WallifyWindowInfo;
 
 typedef struct {
     int32_t glow, aurora, animations, dim, native_glass;

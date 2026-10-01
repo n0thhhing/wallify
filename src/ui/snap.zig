@@ -17,11 +17,7 @@ const rect = macos.rect;
 // macOS Sequoia arranges small desktop widgets in 180×180pt tiles.
 const GRID_PITCH: f64 = state.Layout.grid_pitch;
 const SNAP_THRESHOLD: f64 = 1100.0 * 1100.0;
-const MAX_CANDIDATE_WIDTH: f64 = 1400.0;
-const MAX_CANDIDATE_HEIGHT: f64 = 800.0;
-const MIN_CANDIDATE_SIZE: f64 = 80.0;
 const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
-const OUTLINE_LEVEL_FALLBACK: isize = -2;
 
 pub const PanelSnap = extern struct {
     found: bool = false,
@@ -40,9 +36,7 @@ const PanelWindowInfo = struct {
     frame: Rect = rect(0, 0, 0, 0),
 };
 
-var snap_outline: Ref = null;
 var snap_outline_rect = Rect{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
-var snap_outline_was_visible = false;
 var snap_candidate_count: usize = 0;
 var snap_last_distance_sq: f64 = 0;
 var snap_last_visual: Point = .{ .x = 0, .y = 0 };
@@ -59,64 +53,15 @@ var cached_offset_x: f64 = 0;
 var cached_offset_y: f64 = 33;
 var has_cached_offsets: bool = false;
 
-fn stringEquals(value: Ref, expected: []const u8) bool {
-    if (value == null) return false;
-    var buffer: [128]u8 = undefined;
-    if (macos.CFStringGetCString(value, &buffer, buffer.len, 0x08000100) == 0) return false;
-    return std.ascii.eqlIgnoreCase(std.mem.sliceTo(&buffer, 0), expected);
-}
-
-fn isPlayerWindow(info: Ref) bool {
-    const name = macos.CFDictionaryGetValue(info, macos.kCGWindowName);
-    if (name) |n| {
-        if (stringEquals(n, "Wallify Debug Console") or
-            stringEquals(n, "Wallify Snap Outline") or
-            stringEquals(n, "Wallify Settings")) return false;
-    }
-
-    const expected_id = native.wallify_panel_window_number();
-    if (expected_id > 0) {
-        if (macos.CFDictionaryGetValue(info, macos.kCGWindowNumber)) |num_ref| {
-            var win_id: i64 = 0;
-            if (macos.CFNumberGetValue(num_ref, 4, @ptrCast(&win_id))) {
-                return win_id == @as(i64, @intCast(expected_id));
-            }
-        }
-    }
-
-    const owner = macos.CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
-    const matches = stringEquals(name, "Wallify") or stringEquals(owner, "Wallify");
-    if (!matches) return false;
-
-    if (name) |n| {
-        if (!stringEquals(n, "Wallify")) return false;
-    }
-
-    var layer: i64 = 0;
-    if (macos.CFDictionaryGetValue(info, macos.kCGWindowLayer)) |layer_ref| {
-        _ = macos.CFNumberGetValue(layer_ref, 4, @ptrCast(&layer));
-    }
-    return layer == -1;
-}
+extern "c" fn wallify_query_player_window(out: *native.gpu.WallifyWindowInfo) void;
+extern "c" fn wallify_desktop_candidates(out: [*]native.gpu.WallifyWindowRect, capacity: usize) usize;
+extern "c" fn wallify_show_snap_preview(x: f64, y: f64, width: f64, height: f64, radius: f64) void;
+extern "c" fn wallify_hide_snap_preview() void;
 
 fn playerWindowInfo() PanelWindowInfo {
-    const list = macos.CGWindowListCopyWindowInfo(1, 0) orelse return .{};
-    defer macos.CFRelease(list);
-    const count = macos.CFArrayGetCount(list);
-    var index: isize = 0;
-    while (index < count) : (index += 1) {
-        const info = macos.CFArrayGetValueAtIndex(list, index);
-        if (!isPlayerWindow(info)) continue;
-        const value = macos.CFDictionaryGetValue(info, macos.kCGWindowNumber) orelse continue;
-        var number: i64 = 0;
-        if (!macos.CFNumberGetValue(value, 4, @ptrCast(&number))) continue;
-        var layer: i64 = 0;
-        if (macos.CFDictionaryGetValue(info, macos.kCGWindowLayer)) |layer_value| _ = macos.CFNumberGetValue(layer_value, 4, @ptrCast(&layer));
-        var frame: Rect = rect(0, 0, 0, 0);
-        if (macos.CFDictionaryGetValue(info, macos.kCGWindowBounds)) |bounds| _ = macos.CGRectMakeWithDictionaryRepresentation(bounds, &frame);
-        return .{ .number = number, .layer = layer, .frame = frame };
-    }
-    return .{};
+    var info: native.gpu.WallifyWindowInfo = undefined;
+    wallify_query_player_window(&info);
+    return .{ .number = info.number, .layer = info.layer, .frame = rect(info.frame.x, info.frame.y, info.frame.width, info.frame.height) };
 }
 
 // One C definition keeps the Zig writer and inspector reader ABI in sync.
@@ -303,68 +248,6 @@ fn updateSnapDebug() void {
     debug_imgui.show();
 }
 
-fn updateSnapOutline(_: Ref) callconv(.c) void {
-    const screen = macos.send(Ref, macos.objc_getClass("NSScreen"), "mainScreen", .{}) orelse return;
-    const screen_frame = macos.send(Rect, screen, "frame", .{});
-    const preview_rect = snap_outline_rect;
-    // CGWindowList uses a top-left origin; AppKit windows use bottom-left.
-    const frame = Rect{ .origin = .{
-        .x = preview_rect.origin.x,
-        .y = screen_frame.size.height - preview_rect.origin.y - preview_rect.size.height,
-    }, .size = preview_rect.size };
-    if (snap_outline == null) {
-        const panel_cls = macos.objc_getClass("NSPanel");
-        const panel = macos.send(Ref, macos.send(Ref, panel_cls, "alloc", .{}), "initWithContentRect:styleMask:backing:defer:", .{ frame, @as(usize, 0), @as(usize, 2), false });
-        if (panel == null) return;
-        snap_outline = panel;
-        const title = macos.string("Wallify Snap Outline");
-        defer macos.CFRelease(title);
-        macos.send(void, panel, "setTitle:", .{title});
-        macos.send(void, panel, "setOpaque:", .{false});
-        macos.send(void, panel, "setBackgroundColor:", .{macos.send(Ref, macos.objc_getClass("NSColor"), "clearColor", .{})});
-        macos.send(void, panel, "setAlphaValue:", .{@as(f64, 1)});
-        macos.send(void, panel, "setIgnoresMouseEvents:", .{true});
-        macos.send(void, panel, "setHasShadow:", .{false});
-        macos.send(void, panel, "setHidesOnDeactivate:", .{false});
-        macos.send(void, panel, "setReleasedWhenClosed:", .{false});
-        macos.send(void, panel, "setLevel:", .{@as(isize, -2)});
-        macos.send(void, panel, "setCollectionBehavior:", .{@as(usize, 1 | 16 | 256)});
-
-        const view = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSView"), "alloc", .{}), "initWithFrame:", .{rect(0, 0, frame.size.width, frame.size.height)});
-        macos.send(void, panel, "setContentView:", .{view});
-        macos.send(void, view, "setWantsLayer:", .{true});
-        macos.send(void, view, "setAutoresizingMask:", .{@as(usize, 18)});
-        const layer = macos.send(Ref, view, "layer", .{});
-        macos.send(void, layer, "setMasksToBounds:", .{true});
-        macos.send(void, layer, "setCornerRadius:", .{@as(f64, OUTLINE_RADIUS)});
-        macos.send(void, layer, "setBorderWidth:", .{@as(f64, 2.5)});
-        const rim = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSColor"), "whiteColor", .{}), "colorWithAlphaComponent:", .{@as(f64, 0.45)});
-        macos.send(void, layer, "setBorderColor:", .{macos.send(Ref, rim, "CGColor", .{})});
-        const bg = macos.send(Ref, macos.send(Ref, macos.objc_getClass("NSColor"), "whiteColor", .{}), "colorWithAlphaComponent:", .{@as(f64, 0.08)});
-        macos.send(void, layer, "setBackgroundColor:", .{macos.send(Ref, bg, "CGColor", .{})});
-    }
-    macos.send(void, snap_outline, "setFrame:display:", .{ frame, true });
-    const panel_info = playerWindowInfo();
-    const target_level: isize = if (panel_info.number > 0) @as(isize, @intCast(panel_info.layer)) - 1 else OUTLINE_LEVEL_FALLBACK;
-    macos.send(void, snap_outline, "setLevel:", .{target_level});
-    macos.send(void, snap_outline, "orderFrontRegardless", .{});
-    if (!snap_outline_was_visible) {
-        macos.send(void, snap_outline, "setAlphaValue:", .{@as(f64, 0)});
-        macos.send(void, macos.send(Ref, snap_outline, "animator", .{}), "setAlphaValue:", .{@as(f64, 1)});
-        snap_outline_was_visible = true;
-    }
-    const content = macos.send(Ref, snap_outline, "contentView", .{});
-    macos.send(void, content, "setFrame:", .{rect(0, 0, frame.size.width, frame.size.height)});
-    const layer = macos.send(Ref, content, "layer", .{});
-    if (layer != null) macos.send(void, layer, "setFrame:", .{rect(0, 0, frame.size.width, frame.size.height)});
-    updateSnapDebug();
-}
-
-fn hideSnapOutline(_: Ref) callconv(.c) void {
-    if (snap_outline) |panel| macos.send(void, panel, "orderOut:", .{@as(Ref, null)});
-    snap_outline_was_visible = false;
-}
-
 pub export fn widget_debug_window_show() callconv(.c) void {
     updateSnapDebug();
 }
@@ -375,7 +258,7 @@ pub export fn widget_debug_window_hide() callconv(.c) void {
 
 pub export fn widget_show_snap_outline(x: f64, y: f64, width: f64, height: f64) callconv(.c) void {
     snap_outline_rect = rect(x, y, width, height);
-    macos.dispatch_async_f(macos.dispatch_get_main_queue(), null, updateSnapOutline);
+    wallify_show_snap_preview(x, y, width, height, OUTLINE_RADIUS);
 }
 
 pub export fn widget_set_snap_debug(mode_mix: f64, card_width: f64, card_height: f64, dragging: bool) callconv(.c) void {
@@ -391,7 +274,7 @@ pub export fn widget_set_snap_debug(mode_mix: f64, card_width: f64, card_height:
 }
 
 pub export fn widget_hide_snap_outline() callconv(.c) void {
-    macos.dispatch_async_f(macos.dispatch_get_main_queue(), null, hideSnapOutline);
+    wallify_hide_snap_preview();
 }
 
 pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width: f64) callconv(.c) void {
@@ -404,21 +287,11 @@ pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width:
         has_cached_offsets = true;
         return;
     }
-    const list = macos.CGWindowListCopyWindowInfo(1, 0) orelse return;
-    defer macos.CFRelease(list);
-    const count = macos.CFArrayGetCount(list);
-    var index: isize = 0;
-    while (index < count) : (index += 1) {
-        const info = macos.CFArrayGetValueAtIndex(list, index);
-        const bounds_dict = macos.CFDictionaryGetValue(info, macos.kCGWindowBounds) orelse continue;
-        var bounds: Rect = undefined;
-        if (!macos.CGRectMakeWithDictionaryRepresentation(bounds_dict, &bounds)) continue;
-        if (isPlayerWindow(info)) {
-            cached_offset_x = bounds.origin.x - @as(f64, @floatFromInt(margin_left));
-            cached_offset_y = bounds.origin.y - @as(f64, @floatFromInt(margin_top));
-            has_cached_offsets = true;
-            return;
-        }
+    const player = playerWindowInfo();
+    if (player.number > 0 and player.frame.size.width > 0 and player.frame.size.height > 0) {
+        cached_offset_x = player.frame.origin.x - @as(f64, @floatFromInt(margin_left));
+        cached_offset_y = player.frame.origin.y - @as(f64, @floatFromInt(margin_top));
+        has_cached_offsets = true;
     }
 }
 
@@ -433,40 +306,11 @@ pub export fn widget_start_drag(margin_left: i32, margin_top: i32, visual_width:
 /// 3. **Layer**: Live desktop widgets reside on the desktop layer (`-2147483601`).
 /// 4. **Dimensions**: Size must be within plausible widget ranges (80pt to 1400pt).
 pub export fn widget_nearby_panel_snap(margin_left: i32, margin_top: i32, visual_left: f64, visual_top: f64, visual_width: f64, visual_height: f64) callconv(.c) PanelSnap {
-    const list = macos.CGWindowListCopyWindowInfo(1, 0) orelse return .{};
-    defer macos.CFRelease(list);
-
+    var window_rects: [64]native.gpu.WallifyWindowRect = undefined;
+    const candidate_count = wallify_desktop_candidates(&window_rects, window_rects.len);
     var candidates: [64]Rect = undefined;
-    var candidate_count: usize = 0;
-    const count = macos.CFArrayGetCount(list);
-    var index: isize = 0;
-    while (index < count) : (index += 1) {
-        const info = macos.CFArrayGetValueAtIndex(list, index);
-        const bounds_dict = macos.CFDictionaryGetValue(info, macos.kCGWindowBounds) orelse continue;
-        var bounds: Rect = undefined;
-        if (!macos.CGRectMakeWithDictionaryRepresentation(bounds_dict, &bounds)) continue;
-        const owner = macos.CFDictionaryGetValue(info, macos.kCGWindowOwnerName);
-        if (!stringEquals(owner, "Notification Center") and !stringEquals(owner, "NotificationCenter")) continue;
-
-        if (macos.CFDictionaryGetValue(info, macos.kCGWindowAlpha)) |alpha_ref| {
-            var alpha: f64 = 1.0;
-            if (macos.CFNumberGetValue(alpha_ref, 13, @ptrCast(&alpha))) {
-                if (alpha < 0.5) continue;
-            }
-        }
-
-        var layer: i64 = 0;
-        if (macos.CFDictionaryGetValue(info, macos.kCGWindowLayer)) |layer_ref| {
-            _ = macos.CFNumberGetValue(layer_ref, 4, @ptrCast(&layer));
-        }
-        if (layer >= 0 or layer == -2147483602) continue;
-
-        if (bounds.origin.x + bounds.size.width <= 0 or bounds.origin.y + bounds.size.height <= 0) continue;
-        if (bounds.size.width < MIN_CANDIDATE_SIZE or bounds.size.height < MIN_CANDIDATE_SIZE or bounds.size.width > MAX_CANDIDATE_WIDTH or bounds.size.height > MAX_CANDIDATE_HEIGHT) continue;
-        if (candidate_count < candidates.len) {
-            candidates[candidate_count] = bounds;
-            candidate_count += 1;
-        }
+    for (window_rects[0..candidate_count], 0..) |bounds, i| {
+        candidates[i] = rect(bounds.x, bounds.y, bounds.width, bounds.height);
     }
 
     const offset_x = if (has_cached_offsets) cached_offset_x else 0;
@@ -659,38 +503,4 @@ test "panel snap rejects candidates beyond distance threshold" {
     const candidates = [_]Rect{neighbor};
     const snap = calculatePanelSnap(&candidates, 100, 100, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(!snap.found);
-}
-
-test "isPlayerWindow rejects settings and debug windows" {
-    // Construct mock CFDictionary for Wallify Settings
-    const name_key = macos.kCGWindowName;
-    const owner_key = macos.kCGWindowOwnerName;
-    const layer_key = macos.kCGWindowLayer;
-
-    // Create a dictionary for Wallify Settings (owner: Wallify, name: Wallify Settings, layer: 3)
-    const dict_cls = macos.objc_getClass("NSMutableDictionary");
-    const dict = macos.send(macos.Ref, macos.send(macos.Ref, dict_cls, "alloc", .{}), "init", .{});
-    defer macos.CFRelease(dict);
-
-    const owner_val = macos.string("Wallify");
-    defer macos.CFRelease(owner_val);
-    const name_settings = macos.string("Wallify Settings");
-    defer macos.CFRelease(name_settings);
-    const num_cls = macos.objc_getClass("NSNumber");
-    const layer_val = macos.send(macos.Ref, num_cls, "numberWithInt:", .{@as(c_int, 3)});
-
-    macos.send(void, dict, "setObject:forKey:", .{ owner_val, owner_key });
-    macos.send(void, dict, "setObject:forKey:", .{ name_settings, name_key });
-    macos.send(void, dict, "setObject:forKey:", .{ layer_val, layer_key });
-
-    try std.testing.expect(!isPlayerWindow(dict));
-
-    // Now change name to Wallify and layer to -1 (the actual widget panel)
-    const name_widget = macos.string("Wallify");
-    defer macos.CFRelease(name_widget);
-    const widget_layer = macos.send(macos.Ref, num_cls, "numberWithInt:", .{@as(c_int, -1)});
-    macos.send(void, dict, "setObject:forKey:", .{ name_widget, name_key });
-    macos.send(void, dict, "setObject:forKey:", .{ widget_layer, layer_key });
-
-    try std.testing.expect(isPlayerWindow(dict));
 }

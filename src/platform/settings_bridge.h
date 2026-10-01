@@ -14,3 +14,4 @@ extern void *wallify_copy_idle_texture(int texture_id);
 extern void *wallify_idle_surface(void);
 extern int wallify_width(void);
 extern int wallify_height(void);
+extern void widget_debug_window_show(void);

@@ -24,6 +24,8 @@ The intended steady-state path is a small dynamic pass over a cached scene. A ca
 
 `platform/desktop_glass.swift` owns native glass creation, clipping, and Metal-view reparenting. It coalesces unchanged geometry before scheduling AppKit work and restores the full-window Metal view when glass is disabled or unavailable. `platform/widget_window.swift` also owns panel movement and the coordinate offsets used for desktop snapping.
 
+`platform/desktop_snap.swift` queries WindowServer for the player and visible desktop-widget candidates, including when foreign window titles are redacted. It owns the reusable, click-through snap-preview panel. `ui/snap.zig` retains the tested grid solver and Inspector state, passing native window rectangles through shared C structs.
+
 ## Media Subsystem & Auto Source
 
 `media/controller.zig` coordinates playback state and metadata across multiple backends:
