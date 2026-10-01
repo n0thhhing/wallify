@@ -39,6 +39,10 @@ public func drawSwiftUIFrame() {
     catch { NSLog("Wallify: scene assets failed: %@", error.localizedDescription); return }
     sceneAssets.refreshArtwork()
     let state = widgetStatePointer().pointee
+    if state.idle_mix > 0 {
+        do { try sceneAssets.ensurePet(state.setting_idle_style) }
+        catch { NSLog("Wallify: pet sprite failed: %@", error.localizedDescription); return }
+    }
     sceneLayout.update(width: Double(metalWidgetWidth()), height: Double(metalWidgetHeight()), state: state)
     let layout = sceneLayout, card = layout.card
     idleCompositor.update(card: card, state: state)

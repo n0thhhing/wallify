@@ -14,6 +14,7 @@ final class SceneAssets {
     private var dirty = true
     private var clearPending = false
     private var initialized = false
+    private var loadedPets: UInt8 = 0
     private var artworkStamp: timespec?
     private(set) var hasArtwork = false
     private(set) var generation: UInt64 = 0
@@ -25,17 +26,6 @@ final class SceneAssets {
         guard !initialized else { return }
         var white: UInt32 = 0xffffffff
         loadMetalTexture(Texture.white.rawValue, &white, 1, 1)
-        for (name, texture, w, h) in [("cat_pixels.bin", Texture.cat, 541, 52),
-                                       ("banana_pixels.bin", .banana, 98, 114 * 45), ("raccoon_pixels.bin", .raccoon, 550, 68)] {
-            guard let url = assetURL(name) else { throw NSError(domain: "Wallify", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing sprite: \(name)"]) }
-            let bytes = Array(try Data(contentsOf: url))
-            var pixels = [UInt32](repeating: 0, count: w * h)
-            let valid = bytes.withUnsafeBufferPointer { input in pixels.withUnsafeMutableBufferPointer {
-                decodeSpriteRLE(input.baseAddress, UInt(input.count), $0.baseAddress, UInt($0.count))
-            } }
-            guard valid else { throw NSError(domain: "Wallify", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid sprite: \(name)"]) }
-            pixels.withUnsafeBufferPointer { loadMetalTexture(texture.rawValue, $0.baseAddress, UInt(w), UInt(h)) }
-        }
         var pixels = [UInt32](repeating: 0, count: 96 * 96)
         for (index, texture) in [Texture.play, .pause, .previous, .next].enumerated() {
             pixels = [UInt32](repeating: 0, count: pixels.count)
@@ -46,6 +36,23 @@ final class SceneAssets {
         pixels.withUnsafeMutableBufferPointer { _ = drawSpotifyRasterIcon($0.baseAddress, 384, 384, 0, 0, 384) }
         pixels.withUnsafeBufferPointer { loadMetalTexture(Texture.spotify.rawValue, $0.baseAddress, 384, 384) }
         initialized = true
+    }
+
+    func ensurePet(_ style: UInt8) throws {
+        guard (1...3).contains(style) else { return }
+        let bit = UInt8(1) << (style - 1)
+        guard loadedPets & bit == 0 else { return }
+        let (name, texture, w, h) = [("cat_pixels.bin", Texture.cat, 541, 52),
+                                  ("banana_pixels.bin", .banana, 98, 114 * 45), ("raccoon_pixels.bin", .raccoon, 550, 68)][Int(style - 1)]
+            guard let url = assetURL(name) else { throw NSError(domain: "Wallify", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing sprite: \(name)"]) }
+            let bytes = Array(try Data(contentsOf: url))
+            var pixels = [UInt32](repeating: 0, count: w * h)
+            let valid = bytes.withUnsafeBufferPointer { input in pixels.withUnsafeMutableBufferPointer {
+                decodeSpriteRLE(input.baseAddress, UInt(input.count), $0.baseAddress, UInt($0.count))
+            } }
+            guard valid else { throw NSError(domain: "Wallify", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid sprite: \(name)"]) }
+            pixels.withUnsafeBufferPointer { loadMetalTexture(texture.rawValue, $0.baseAddress, UInt(w), UInt(h)) }
+        loadedPets |= bit
     }
 
     func refreshArtwork() {

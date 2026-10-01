@@ -27,6 +27,10 @@ func checkSceneAssets() {
         precondition(canvas.commands.last!.kind == WALLIFY_CINEMATIC + Int32(style) - 1)
     }
     try! sceneAssets.initialize()
+    for style in UInt8(1)...3 { try! sceneAssets.ensurePet(style) }
+    let catTexture = metalRenderer.texture(Texture.cat.rawValue)!
+    try! sceneAssets.ensurePet(1)
+    precondition(metalRenderer.texture(Texture.cat.rawValue)! === catTexture)
     precondition(metalRenderer.texture(Texture.cat.rawValue)!.width == 541)
     precondition(metalRenderer.texture(Texture.banana.rawValue)!.height == 114 * 45)
     precondition(formatTimestamp(125.8) == "2:05" && formatTimestamp(.infinity) == "0:00")
