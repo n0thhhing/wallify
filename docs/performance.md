@@ -27,3 +27,13 @@ three pets; startup skips their decoding/upload until needed. Text scratch
 retains the largest rendered label, bounded by the existing 2048×96 limit.
 Tests cover rasterization, all three atlases, and repeated pet loading without
 replacement. Animation rates and rendering quality are unchanged.
+
+## Playback CPU improvement
+
+Replacing Foundation's general-purpose timestamp formatting with integer
+conversion reduced frame preparation from 1.719 µs (1.756, 1.696, 1.719)
+to 0.771 µs (0.799, 0.771, 0.765), a 55% reduction. These measurements use
+the same benchmark and ReleaseFast build as above; memory stayed unchanged.
+This measures frame preparation, not whole-app CPU utilization. No update
+rate or animation quality was reduced. Tests compare all 3,600 seconds of
+an hour against the previous formatter and check negative/nonfinite values.
