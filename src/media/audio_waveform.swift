@@ -7,7 +7,7 @@ func waveformPixels(_ samples: UnsafeBufferPointer<Float>) -> [UInt32] {
     guard !samples.isEmpty else { return pixels }
     let peak = samples.reduce(Float(0)) { $1.isFinite ? max($0, abs($1)) : $0 }
     // Bounded gain makes quiet playback readable without magnifying near-silence indefinitely.
-    let gain = min(12, 0.9 / max(peak, 0.001))
+    let gain = min(256, 0.9 / max(peak, 0.0001))
     for bin in 0..<64 {
         let start = bin * samples.count / 64, end = (bin + 1) * samples.count / 64
         var low: Float = 0, high: Float = 0
@@ -79,14 +79,6 @@ final class AudioWaveform: @unchecked Sendable {
         description.isPrivate = true
         description.muteBehavior = .unmuted // Observe playback without changing the output.
         try check(AudioHardwareCreateProcessTap(description, &tap), "tap")
-        var address = AudioObjectPropertyAddress(mSelector: kAudioTapPropertyFormat,
-            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-        var format = AudioStreamBasicDescription(), size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        try check(AudioObjectGetPropertyData(tap, &address, 0, nil, &size, &format), "format")
-        guard format.mFormatID == kAudioFormatLinearPCM, format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
-              format.mBitsPerChannel == 32, format.mChannelsPerFrame == 1 else {
-            throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unsupported system audio format."])
-        }
         let properties: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Wallify waveform",
             kAudioAggregateDeviceUIDKey: "Wallify.waveform.\(UUID().uuidString)",
@@ -95,6 +87,14 @@ final class AudioWaveform: @unchecked Sendable {
                                              kAudioSubTapDriftCompensationKey: true]]
         ]
         try check(AudioHardwareCreateAggregateDevice(properties as CFDictionary, &device), "device")
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreamFormat,
+            mScope: kAudioDevicePropertyScopeInput, mElement: kAudioObjectPropertyElementMain)
+        var format = AudioStreamBasicDescription(), size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        try check(AudioObjectGetPropertyData(device, &address, 0, nil, &size, &format), "format")
+        guard format.mFormatID == kAudioFormatLinearPCM, format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
+              format.mBitsPerChannel == 32, format.mChannelsPerFrame == 1 else {
+            throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unsupported system audio input format."])
+        }
         try check(AudioDeviceCreateIOProcIDWithBlock(&io, device, audio) { [weak self] _, input, _, _, _ in
             self?.consume(input)
         }, "callback")
