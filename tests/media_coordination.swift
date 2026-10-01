@@ -45,10 +45,28 @@ func checkMediaCoordination() {
     _ = media.apply([], source: 0, now: 23)
     precondition(widgetTitle().isEmpty && clears == 2 && cancellations >= 2)
     precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_clock.elapsed == 0)
+    _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: 24)
+    for t in 25...54 { _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: Double(t)) }
+    precondition(!state.pointee.artwork_refresh_pending)
     var replies = [String]()
     runNowPlayingHelper(script: #"$|=1; print "$$\n"; print "Title|||Artist|||0|||1|||0|||30\n"; sleep 10;"#) {
         replies.append(String(decoding: $0, as: UTF8.self))
         return false // source switch closes, terminates and reaps this exact child
     }
     precondition(replies == ["Title|||Artist|||0|||1|||0|||30"])
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wallify-artwork-\(UUID().uuidString)")
+    try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let incoming = directory.appendingPathComponent("incoming"), published = directory.appendingPathComponent("published")
+    var refreshes = 0
+    let artworkMedia = MediaCoordinator(clear: {}, extract: { refreshes += 1 }, download: { _ in }, cancel: {},
+                                        artworkSource: incoming, artworkDestination: published)
+    artworkMedia.select(0)
+    let paused = Array("Artwork|||Artist|||1|||0|||0|||30".utf8)
+    try! Data([1]).write(to: incoming)
+    _ = artworkMedia.apply(paused, source: 0, now: 100)
+    precondition(refreshes == 1 && !state.pointee.artwork_refresh_pending)
+    try! Data([2]).write(to: incoming)
+    _ = artworkMedia.apply(paused, source: 0, now: 101)
+    precondition(refreshes == 2 && (try! Data(contentsOf: published)) == Data([2]))
 }

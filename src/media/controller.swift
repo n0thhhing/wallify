@@ -130,13 +130,18 @@ final class MediaCoordinator {
     private let extractColor: () -> Void
     private let download: ([UInt8]) -> Void
     private let cancel: () -> Void
+    private let artworkSource: URL
+    private let artworkDestination: URL
 
     init(clear: @escaping () -> Void = { wallify_clear_artwork() },
          extract: @escaping () -> Void = { wallify_extract_color() },
          download: @escaping ([UInt8]) -> Void = { bytes in
              bytes.withUnsafeBufferPointer { downloadArtwork($0.baseAddress, UInt($0.count)) }
-         }, cancel: @escaping () -> Void = { cancelArtworkDownload() }) {
+         }, cancel: @escaping () -> Void = { cancelArtworkDownload() },
+         artworkSource: URL = URL(fileURLWithPath: "/tmp/mrc_artwork"),
+         artworkDestination: URL = URL(fileURLWithPath: "/tmp/art.raw")) {
         clearArtwork = clear; extractColor = extract; self.download = download; self.cancel = cancel
+        self.artworkSource = artworkSource; self.artworkDestination = artworkDestination
     }
 
     func select(_ next: UInt8) {
@@ -216,8 +221,10 @@ final class MediaCoordinator {
         let elapsedChanged = abs(item.elapsed - state.pointee.global_elapsed) > (source == 0 ? 0 : 1.5)
         let art = text(item.artwork)
         let artChanged = source != 0 && art != artworkURL
+        let incomingArtwork = source == 0 && item.has_artwork && FileManager.default.fileExists(atPath: artworkSource.path)
         guard titleChanged || artistChanged || item.rate != state.pointee.global_rate || elapsedChanged ||
-              item.duration != state.pointee.global_duration || artChanged || (state.pointee.artwork_refresh_pending && item.has_artwork) else { return nil }
+              item.duration != state.pointee.global_duration || artChanged || incomingArtwork ||
+              (state.pointee.artwork_refresh_pending && (source == 0 || item.has_artwork)) else { return nil }
         updateTrackText(title, artist, state: state)
         if accept && !state.pointee.global_is_dragging && (state.pointee.global_rate_lock == 0 || titleChanged) {
             synchronizePlayback(&state.pointee.playback_clock, item.elapsed, item.rate, now, item.duration, titleChanged)
@@ -230,12 +237,13 @@ final class MediaCoordinator {
             else if art.isEmpty && titleChanged { cancel(); artworkURL = []; state.pointee.global_has_artwork = false }
         } else {
             if titleChanged || artistChanged { state.pointee.artwork_refresh_pending = true; emptyArtPolls = 0 }
-            if item.has_artwork && state.pointee.artwork_refresh_pending {
+            if item.has_artwork && (state.pointee.artwork_refresh_pending || incomingArtwork) {
                 state.pointee.artwork_refresh_pending = false
                 // The helper deduplicates artwork writes; the current image can already be in art.raw.
-                _ = rename("/tmp/mrc_artwork", "/tmp/art.raw")
-                state.pointee.global_has_artwork = true
-                extractColor()
+                let available = incomingArtwork ? rename(artworkSource.path, artworkDestination.path) == 0 :
+                    FileManager.default.fileExists(atPath: artworkDestination.path)
+                state.pointee.global_has_artwork = available
+                if available { extractColor() } else { clearArtwork() }
             } else if !item.has_artwork && state.pointee.artwork_refresh_pending {
                 emptyArtPolls = min(30, emptyArtPolls + 1)
                 if emptyArtPolls >= 30 {

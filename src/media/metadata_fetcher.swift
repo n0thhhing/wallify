@@ -57,8 +57,6 @@ public func initializeMetadataNotifications() {
 public func waitForMetadataNotification() -> Int32 { metadataNotifications?.wait() ?? 0 }
 
 final class NowPlayingOutput {
-    private var lastTitle: String?
-    private var lastArtist: String?
     private var lastArtwork: Data?
     private var hasArtwork = false
     private let artworkURL: URL
@@ -86,25 +84,21 @@ final class NowPlayingOutput {
             if delta.isFinite && delta > 0 && rate > 0 { elapsed += delta * rate }
         }
         let duration = number("Duration")
-        if lastTitle != (title ?? "") || lastArtist != (artist ?? "") || !hasArtwork {
-            hasArtwork = false
-            if let artwork = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data, !artwork.isEmpty {
-                if artwork == lastArtwork {
+        hasArtwork = false
+        if let artwork = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data, !artwork.isEmpty {
+            if artwork == lastArtwork {
+                hasArtwork = true
+            } else {
+                do {
+                    try artwork.write(to: artworkURL, options: .atomic)
+                    lastArtwork = artwork
                     hasArtwork = true
-                } else {
-                    do {
-                        try artwork.write(to: artworkURL, options: .atomic)
-                        lastArtwork = artwork
-                        hasArtwork = true
-                    } catch {
-                        NSLog("metadata: artwork write failed: %@", error.localizedDescription)
-                    }
+                } catch {
+                    NSLog("metadata: artwork write failed: %@", error.localizedDescription)
                 }
-            } else { lastArtwork = nil }
-        }
+            }
+        } else { lastArtwork = nil }
         guard title != nil || artist != nil else { return "\n" }
-        lastTitle = title ?? ""
-        lastArtist = artist ?? ""
         return String(format: "%@|||%@|||%d|||%.2f|||%.2f|||%.2f\n",
                       locale: Locale(identifier: "en_US_POSIX"), title ?? "", artist ?? "",
                       hasArtwork ? 1 : 0, rate, elapsed, duration)
