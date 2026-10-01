@@ -15,20 +15,10 @@ const rect = macos.rect;
 
 // Grid metrics & snap tuning
 // macOS Sequoia arranges small desktop widgets in 180×180pt tiles.
-const GRID_PITCH: f64 = state.Layout.grid_pitch;
-const SNAP_THRESHOLD: f64 = 1100.0 * 1100.0;
 const OUTLINE_RADIUS: f64 = state.Layout.card_radius;
 
-pub const PanelSnap = extern struct {
-    found: bool = false,
-    margin_left: i32 = 0,
-    margin_top: i32 = 0,
-    outline_x: f64 = 0,
-    outline_y: f64 = 0,
-    outline_width: f64 = 0,
-    outline_height: f64 = 0,
-    distance_sq: f64 = 0,
-};
+pub const PanelSnap = native.gpu.WallifyPanelSnap;
+extern fn wallify_calculate_panel_snap(candidates: [*]const native.gpu.WallifyWindowRect, count: usize, visual_x: f64, visual_y: f64, width: f64, height: f64, offset_x: f64, offset_y: f64, inset_x: f64, inset_y: f64, output: *PanelSnap) callconv(.c) void;
 
 const PanelWindowInfo = struct {
     number: i64 = 0,
@@ -345,72 +335,13 @@ pub fn calculatePanelSnap(
     visual_left: f64,
     visual_top: f64,
 ) PanelSnap {
-    const grid_pitch: f64 = GRID_PITCH;
-    const threshold_sq: f64 = SNAP_THRESHOLD;
-    var best_dist = threshold_sq;
-    var result = PanelSnap{};
-    const player_columns: i32 = @max(1, @as(i32, @intFromFloat(@round(visual_width / grid_pitch))));
-
-    for (candidates) |neighbor| {
-        var col: i32 = 0;
-        const columns: i32 = @max(1, @as(i32, @intFromFloat(@round(neighbor.size.width / grid_pitch))));
-        const rows: i32 = @max(1, @as(i32, @intFromFloat(@round(neighbor.size.height / grid_pitch))));
-        while (col < columns) : (col += 1) {
-            const cell_x = neighbor.origin.x + @as(f64, @floatFromInt(col)) * grid_pitch;
-            var player_col: i32 = 0;
-            while (player_col < player_columns) : (player_col += 1) {
-                const aligned_left = cell_x - @as(f64, @floatFromInt(player_col)) * grid_pitch;
-                const targets = [_]Point{
-                    .{ .x = aligned_left, .y = neighbor.origin.y - visual_height },
-                    .{ .x = aligned_left, .y = neighbor.origin.y + neighbor.size.height },
-                };
-                for (targets) |target| {
-                    const dx = target.x - visual_x;
-                    const dy = target.y - visual_y;
-                    const dist_sq = dx * dx + dy * dy;
-                    if (dist_sq < best_dist) {
-                        best_dist = dist_sq;
-                        result = .{
-                            .found = true,
-                            .margin_left = @as(i32, @intFromFloat(@round(target.x - offset_x - visual_left))),
-                            .margin_top = @as(i32, @intFromFloat(@round(target.y - offset_y - visual_top))),
-                            .outline_x = target.x + 8.0,
-                            .outline_y = target.y + 8.0,
-                            .outline_width = visual_width - 16.0,
-                            .outline_height = visual_height - 16.0,
-                            .distance_sq = dist_sq,
-                        };
-                    }
-                }
-            }
-        }
-        var row: i32 = 0;
-        while (row < rows) : (row += 1) {
-            const aligned_top = neighbor.origin.y + @as(f64, @floatFromInt(row)) * grid_pitch;
-            const side_targets = [_]Point{
-                .{ .x = neighbor.origin.x - visual_width, .y = aligned_top },
-                .{ .x = neighbor.origin.x + neighbor.size.width, .y = aligned_top },
-            };
-            for (side_targets) |target| {
-                const dx = target.x - visual_x;
-                const dy = target.y - visual_y;
-                const distance = dx * dx + dy * dy;
-                if (distance < best_dist) {
-                    best_dist = distance;
-                    result = .{
-                        .found = true,
-                        .margin_left = @as(i32, @intFromFloat(@round(target.x - offset_x - visual_left))),
-                        .margin_top = @as(i32, @intFromFloat(@round(target.y - offset_y - visual_top))),
-                        .outline_x = target.x + 8.0,
-                        .outline_y = target.y + 8.0,
-                        .outline_width = visual_width - 16.0,
-                        .outline_height = visual_height - 16.0,
-                        .distance_sq = distance,
-                    };
-                }
-            }
-        }
+    var windows: [64]native.gpu.WallifyWindowRect = undefined;
+    const count = @min(candidates.len, windows.len);
+    for (candidates[0..count], 0..) |candidate, i| {
+        windows[i] = .{ .x = candidate.origin.x, .y = candidate.origin.y, .width = candidate.size.width, .height = candidate.size.height };
     }
+    var result: PanelSnap = undefined;
+    wallify_calculate_panel_snap(&windows, count, visual_x, visual_y, visual_width, visual_height, offset_x, offset_y, visual_left, visual_top, &result);
     return result;
 }
 
@@ -503,4 +434,17 @@ test "panel snap rejects candidates beyond distance threshold" {
     const candidates = [_]Rect{neighbor};
     const snap = calculatePanelSnap(&candidates, 100, 100, 180, 180, 0, 0, 0, 0);
     try std.testing.expect(!snap.found);
+}
+
+test "multi-column snapping preserves screen offsets and card inset" {
+    const candidates = [_]Rect{rect(400, 400, 360, 360)};
+    const result = calculatePanelSnap(&candidates, 225, 765, 540, 180, 10, 33, 8, 8);
+    try std.testing.expect(result.found);
+    try std.testing.expectEqual(@as(i32, 202), result.margin_left);
+    try std.testing.expectEqual(@as(i32, 719), result.margin_top);
+    try std.testing.expectEqual(@as(f64, 228), result.outline_x);
+    try std.testing.expectEqual(@as(f64, 768), result.outline_y);
+    try std.testing.expectEqual(@as(f64, 50), result.distance_sq);
+    const invalid = calculatePanelSnap(&candidates, std.math.nan(f64), 765, 540, 180, 0, 0, 0, 0);
+    try std.testing.expect(!invalid.found);
 }

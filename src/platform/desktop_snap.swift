@@ -1,6 +1,51 @@
 import AppKit
 import QuartzCore
 
+@_cdecl("wallify_calculate_panel_snap")
+public func calculatePanelSnap(_ candidates: UnsafePointer<WallifyWindowRect>?, _ count: UInt,
+                               _ visualX: Double, _ visualY: Double, _ width: Double, _ height: Double,
+                               _ offsetX: Double, _ offsetY: Double, _ insetX: Double, _ insetY: Double,
+                               _ output: UnsafeMutablePointer<WallifyPanelSnap>?) {
+    guard let output = output else { return }
+    output.pointee = WallifyPanelSnap()
+    guard let candidates = candidates, count <= 64,
+          [visualX, visualY, width, height, offsetX, offsetY, insetX, insetY].allSatisfy({ $0.isFinite }),
+          width >= 16, height >= 16, width <= 16384, height <= 16384 else { return }
+    let pitch = 180.0
+    let playerColumns = max(1, Int((width / pitch).rounded()))
+    var best = 1100.0 * 1100.0
+    func consider(_ x: Double, _ y: Double) {
+        let distance = (x - visualX) * (x - visualX) + (y - visualY) * (y - visualY)
+        let left = (x - offsetX - insetX).rounded()
+        let top = (y - offsetY - insetY).rounded()
+        guard distance < best, left >= Double(Int32.min), left <= Double(Int32.max),
+              top >= Double(Int32.min), top <= Double(Int32.max) else { return }
+        best = distance
+        output.pointee = WallifyPanelSnap(found: true, margin_left: Int32(left), margin_top: Int32(top),
+            outline_x: x + 8, outline_y: y + 8, outline_width: width - 16, outline_height: height - 16,
+            distance_sq: distance)
+    }
+    for neighbor in UnsafeBufferPointer(start: candidates, count: Int(count)) {
+        guard [neighbor.x, neighbor.y, neighbor.width, neighbor.height].allSatisfy({ $0.isFinite }),
+              neighbor.width > 0, neighbor.height > 0, neighbor.width <= 16384, neighbor.height <= 16384 else { continue }
+        let columns = max(1, Int((neighbor.width / pitch).rounded()))
+        let rows = max(1, Int((neighbor.height / pitch).rounded()))
+        for column in 0..<columns {
+            let cellX = neighbor.x + Double(column) * pitch
+            for playerColumn in 0..<playerColumns {
+                let left = cellX - Double(playerColumn) * pitch
+                consider(left, neighbor.y - height)
+                consider(left, neighbor.y + neighbor.height)
+            }
+        }
+        for row in 0..<rows {
+            let top = neighbor.y + Double(row) * pitch
+            consider(neighbor.x - width, top)
+            consider(neighbor.x + neighbor.width, top)
+        }
+    }
+}
+
 func isWallifyWindow(_ info: [String: Any], expectedID: Int) -> Bool {
     let name = info[kCGWindowName as String] as? String
     func matches(_ value: String?, _ expected: String) -> Bool { value?.caseInsensitiveCompare(expected) == .orderedSame }
