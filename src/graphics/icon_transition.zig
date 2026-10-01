@@ -1,31 +1,13 @@
 const std = @import("std");
 
-const SWAP_PROGRESS: f64 = 0.5;
-const SWAP_DURATION: f64 = 0.18;
-const EXPANSION_DURATION: f64 = 0.48;
+extern fn wallify_icon_scale(mix: f64, playing: bool) callconv(.c) f64;
+extern fn wallify_icon_advance(mix: f64, playing: bool, dt: f64) callconv(.c) f64;
 
-// Hardcoded piecewise curve for the play/pause icon morph based on the native widget:
-// 90ms fast quadratic scale down to 50%, instant swap, then 240ms cubic ease-out back up.
 pub fn scale(mix: f64, playing: bool) f64 {
-    const progress = if (playing) mix else 1 - mix;
-    if (progress < SWAP_PROGRESS) {
-        const t = progress / SWAP_PROGRESS;
-        return 1 - 0.5 * t * t;
-    }
-    const remaining = (1 - progress) / SWAP_PROGRESS;
-    return 1 - 0.5 * remaining * remaining * remaining;
+    return wallify_icon_scale(mix, playing);
 }
-
 pub fn advance(mix: f64, playing: bool, dt: f64) f64 {
-    var progress = if (playing) mix else 1 - mix;
-    var remaining = @max(0, dt);
-    if (progress < SWAP_PROGRESS) {
-        const used = @min(remaining, (SWAP_PROGRESS - progress) * SWAP_DURATION);
-        progress += used / SWAP_DURATION; // 90 ms to the swap
-        remaining -= used;
-    }
-    progress = @min(1, progress + remaining / EXPANSION_DURATION); // 240 ms expansion
-    return if (playing) progress else 1 - progress;
+    return wallify_icon_advance(mix, playing, dt);
 }
 
 test "both transitions stay visible and finish at full size" {

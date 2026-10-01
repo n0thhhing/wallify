@@ -94,6 +94,7 @@ struct SettingsBridgeCheck {
         checkMediaPayloads()
         checkMediaActions()
         checkSpriteCommands()
+        checkFrameWakeups()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -188,6 +189,25 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkFrameWakeups() {
+        let frames = FrameWakeups()
+        precondition(!frames.wait(until: .now()))
+        for _ in 0..<1000 { frames.wake() }
+        precondition(frames.wait(until: .now()))
+        precondition(!frames.wait(until: .now()))
+        frames.wake()
+        precondition(frames.wait(until: .now() + .milliseconds(1)))
+        precondition(!frames.wait(until: .now()))
+        let completed = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            precondition(frames.wait(until: .now() + .seconds(1)))
+            completed.signal()
+        }
+        frames.wake()
+        precondition(completed.wait(timeout: .now() + .seconds(2)) == .success)
+        precondition(!frames.wait(until: .now()))
     }
 
     static func checkSpriteCommands() {
