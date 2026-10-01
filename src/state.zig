@@ -106,8 +106,8 @@ pub fn shared() *SharedState {
 pub var layout = Layout{};
 pub const render_scale = 2;
 
-pub var spotify_closed = std.atomic.Value(bool).init(false);
-pub var spotify_has_track = std.atomic.Value(bool).init(false);
+pub const spotify_closed = StateFlag{ .index = 0 };
+pub const spotify_has_track = StateFlag{ .index = 1 };
 
 pub const HitTarget = enum(i32) {
     none,
@@ -255,16 +255,7 @@ pub fn isPlaceholderTitle(title: []const u8) bool {
 }
 
 pub fn spotifyIdle() bool {
-    if (shared().setting_source != .spotify) return false;
-    if (spotify_closed.load(.acquire)) return true;
-
-    // A live playback rate or real track metadata is authoritative even if
-    // the asynchronous presence flag is temporarily stale.
-    if (shared().global_rate > 0.0) return false;
-    if (spotify_has_track.load(.acquire)) return false;
-    if (shared().global_title_len > 0 and !isPlaceholderTitle(shared().global_title[0..shared().global_title_len])) return false;
-
-    return true;
+    return wallify_spotify_idle();
 }
 
 pub fn beginModeTransition(
@@ -273,66 +264,46 @@ pub fn beginModeTransition(
     current_height: f64,
     animate: bool,
 ) void {
-    const target = new_mode.dimensions();
-
-    std.log.info("layout: mode {s} -> {s}, {d:.0}x{d:.0} -> {d:.0}x{d:.0}, animate={}", .{
-        @tagName(shared().setting_mode),
-        @tagName(new_mode),
-        current_width,
-        current_height,
-        target.width,
-        target.height,
-        animate,
-    });
-    shared().mode_from = shared().setting_mode;
-    shared().setting_mode = new_mode;
-    shared().mode_start_width = current_width;
-    shared().mode_start_height = current_height;
-    shared().mode_target_width = target.width;
-    shared().mode_target_height = target.height;
-    shared().mode_mix = if (animate) 0.0 else 1.0;
-    shared().mode_transition_active = animate;
+    wallify_begin_mode_transition(@intFromEnum(new_mode), current_width, current_height, animate);
 }
 
 pub fn modeAnimationFinished() void {
-    std.log.info("layout: mode transition finished, mode={s}, size={d:.0}x{d:.0}", .{
-        @tagName(shared().setting_mode),
-        shared().mode_target_width,
-        shared().mode_target_height,
-    });
-    shared().mode_mix = 1.0;
-    shared().mode_transition_active = false;
-    shared().mode_from = shared().setting_mode;
-    shared().mode_start_width = shared().mode_target_width;
-    shared().mode_start_height = shared().mode_target_height;
+    wallify_finish_mode_transition();
 }
 
 // Desktop-widget grid position. A cell is one small widget plus its gap.
 
-const frame_wakeup = @import("frame_wakeup.zig");
+extern fn wallify_state_flag(index: c_int, operation: c_int, value: bool) callconv(.c) bool;
+extern fn wallify_spotify_idle() callconv(.c) bool;
+extern fn wallify_window_visible(visible: bool) callconv(.c) void;
+extern fn wallify_request_frame() callconv(.c) void;
+extern fn wallify_begin_mode_transition(mode: u8, width: f64, height: f64, animate: bool) callconv(.c) void;
+extern fn wallify_finish_mode_transition() callconv(.c) void;
+const StateFlag = struct {
+    index: c_int,
+    pub fn load(self: StateFlag, order: std.builtin.AtomicOrder) bool {
+        _ = order;
+        return wallify_state_flag(self.index, 0, false);
+    }
+    pub fn store(self: StateFlag, value: bool, order: std.builtin.AtomicOrder) void {
+        _ = order;
+        _ = wallify_state_flag(self.index, 1, value);
+    }
+    pub fn swap(self: StateFlag, value: bool, order: std.builtin.AtomicOrder) bool {
+        _ = order;
+        return wallify_state_flag(self.index, 1, value);
+    }
+};
 
-pub var frame_requested = std.atomic.Value(bool).init(true);
-pub var window_visible = std.atomic.Value(bool).init(true);
+pub const frame_requested = StateFlag{ .index = 2 };
+pub const window_visible = StateFlag{ .index = 3 };
 
 pub fn setWindowVisible(visible: bool) void {
-    if (window_visible.swap(visible, .acq_rel) != visible) {
-        std.log.info("power: window visibility -> {s}", .{if (visible) "visible" else "fully occluded"});
-        frame_requested.store(true, .release);
-        if (visible) frame_wakeup.wake();
-    }
+    wallify_window_visible(visible);
 }
 
 pub fn requestFrame() void {
-    if (!window_visible.load(.acquire)) {
-        // Keep the scene dirty while fully occluded, but do not wake the
-        // animation thread just to render pixels nobody can see.
-        frame_requested.store(true, .release);
-        return;
-    }
-
-    if (!frame_requested.swap(true, .acq_rel)) {
-        frame_wakeup.wake();
-    }
+    wallify_request_frame();
 }
 
 // Re-export configuration engine from settings.zig

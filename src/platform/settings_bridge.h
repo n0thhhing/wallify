@@ -23,3 +23,5 @@ extern void wallify_execute_media_command(unsigned int command);
 extern void wallify_execute_media_seek(double target);
 
 #include "widget_state.h"
+
+extern void widget_debug_window_hide(void);

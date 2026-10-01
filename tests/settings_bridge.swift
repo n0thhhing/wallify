@@ -75,6 +75,8 @@ func positionStub() {}
 func inspectorStub() {}
 @_cdecl("widget_debug_window_show")
 func snapDebugStub() {}
+@_cdecl("widget_debug_window_hide")
+func hideDebugStub() {}
 
 private let idleTestSurface = CAMetalLayer()
 
@@ -95,6 +97,7 @@ struct SettingsBridgeCheck {
         checkMediaActions()
         checkSpriteCommands()
         checkFrameWakeups()
+        checkConfigurationStorage()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3

@@ -96,3 +96,86 @@ public func sharedWidgetState() -> UnsafeMutableRawPointer { UnsafeMutableRawPoi
 public func widgetStateSize() -> Int { MemoryLayout<WallifyWidgetState>.size }
 
 func widgetStatePointer() -> UnsafeMutablePointer<WallifyWidgetState> { widgetState }
+
+private let flagLock = NSLock()
+private var flags = [false, false, true, true] // closed, track present, dirty, visible
+
+@_cdecl("wallify_state_flag")
+public func stateFlag(_ index: Int32, _ operation: Int32, _ value: Bool) -> Bool {
+    guard flags.indices.contains(Int(index)) else { return false }
+    flagLock.lock()
+    defer { flagLock.unlock() }
+    let old = flags[Int(index)]
+    if operation == 1 { flags[Int(index)] = value }
+    return old
+}
+
+@_cdecl("wallify_request_frame")
+public func requestWidgetFrame() {
+    flagLock.lock()
+    let shouldWake = flags[3] && !flags[2]
+    flags[2] = true
+    flagLock.unlock()
+    if shouldWake { wakeFrame() }
+}
+
+@_cdecl("wallify_window_visible")
+public func setWidgetVisible(_ visible: Bool) {
+    flagLock.lock()
+    let changed = flags[3] != visible
+    flags[3] = visible
+    if changed { flags[2] = true }
+    flagLock.unlock()
+    if changed && visible { wakeFrame() }
+}
+
+func widgetTitle() -> String {
+    withUnsafeBytes(of: widgetState.pointee.global_title) {
+        String(decoding: $0.prefix(widgetState.pointee.global_title_len), as: UTF8.self)
+    }
+}
+
+func placeholderTitle(_ title: String) -> Bool {
+    ["Not Playing", "Spotify is Closed", "Spotifast is Closed", "Spotify", "Spotifast", "No Track Playing"].contains(title)
+}
+
+@_cdecl("wallify_spotify_idle")
+public func spotifyIsIdle() -> Bool {
+    let value = widgetState.pointee
+    guard value.setting_source == 1 else { return false }
+    if stateFlag(0, 0, false) { return true }
+    return value.global_rate <= 0 && !stateFlag(1, 0, false) && (value.global_title_len == 0 || placeholderTitle(widgetTitle()))
+}
+
+func modeDimensions(_ mode: UInt8) -> (Double, Double) {
+    switch mode {
+    case 0: return (180, 180)
+    case 1: return (360, 180)
+    case 3: return (180, 360)
+    case 4: return (360, 360)
+    default: return (540, 180)
+    }
+}
+
+@_cdecl("wallify_begin_mode_transition")
+public func beginWidgetMode(_ mode: UInt8, _ width: Double, _ height: Double, _ animate: Bool) {
+    guard mode <= 4, width.isFinite, height.isFinite else { return }
+    let (w, h) = modeDimensions(mode)
+    widgetState.pointee.mode_from = widgetState.pointee.setting_mode
+    widgetState.pointee.setting_mode = mode
+    widgetState.pointee.mode_start_width = width
+    widgetState.pointee.mode_start_height = height
+    widgetState.pointee.mode_target_width = w
+    widgetState.pointee.mode_target_height = h
+    widgetState.pointee.mode_mix = animate ? 0 : 1
+    widgetState.pointee.mode_transition_active = animate
+}
+
+@_cdecl("wallify_finish_mode_transition")
+public func finishWidgetMode() {
+    widgetState.pointee.mode_mix = 1
+    widgetState.pointee.mode_transition_active = false
+    widgetState.pointee.mode_from = widgetState.pointee.setting_mode
+    widgetState.pointee.mode_start_width = widgetState.pointee.mode_target_width
+    widgetState.pointee.mode_start_height = widgetState.pointee.mode_target_height
+}

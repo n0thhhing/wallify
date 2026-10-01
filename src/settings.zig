@@ -1,6 +1,10 @@
 const std = @import("std");
 const state = @import("state.zig");
-const native = @import("platform/native.zig");
+extern fn wallify_parse_setting_enum(kind: c_int, bytes: [*]const u8, count: usize) callconv(.c) u8;
+extern fn wallify_parse_config(bytes: [*]const u8, count: usize) callconv(.c) void;
+extern fn wallify_load_config() callconv(.c) void;
+extern fn wallify_save_config() callconv(.c) void;
+extern fn wallify_render_config(bytes: [*]u8, capacity: usize) callconv(.c) isize;
 
 pub fn parseBool(raw: []const u8) ?bool {
     const s = std.mem.trim(u8, raw, " \t\r\n");
@@ -10,11 +14,7 @@ pub fn parseBool(raw: []const u8) ?bool {
 }
 
 pub fn parseFrameStrength(raw: []const u8) state.FrameStrength {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "off") or std.mem.eql(u8, s, "0")) return .off;
-    if (std.ascii.eqlIgnoreCase(s, "subtle") or std.mem.eql(u8, s, "1")) return .subtle;
-    if (std.ascii.eqlIgnoreCase(s, "strong") or std.mem.eql(u8, s, "2")) return .strong;
-    return .subtle;
+    return @enumFromInt(wallify_parse_setting_enum(0, raw.ptr, raw.len));
 }
 
 pub fn frameStrengthName(v: state.FrameStrength) []const u8 {
@@ -26,11 +26,7 @@ pub fn frameStrengthName(v: state.FrameStrength) []const u8 {
 }
 
 pub fn parseGlowIntensity(raw: []const u8) state.GlowIntensity {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "low") or std.mem.eql(u8, s, "0")) return .low;
-    if (std.ascii.eqlIgnoreCase(s, "normal") or std.mem.eql(u8, s, "1")) return .normal;
-    if (std.ascii.eqlIgnoreCase(s, "high") or std.mem.eql(u8, s, "2")) return .high;
-    return .normal;
+    return @enumFromInt(wallify_parse_setting_enum(1, raw.ptr, raw.len));
 }
 
 pub fn glowIntensityName(v: state.GlowIntensity) []const u8 {
@@ -42,11 +38,7 @@ pub fn glowIntensityName(v: state.GlowIntensity) []const u8 {
 }
 
 pub fn parseAnimationSpeed(raw: []const u8) state.AnimationSpeed {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "slow") or std.mem.eql(u8, s, "0")) return .slow;
-    if (std.ascii.eqlIgnoreCase(s, "normal") or std.mem.eql(u8, s, "1")) return .normal;
-    if (std.ascii.eqlIgnoreCase(s, "fast") or std.mem.eql(u8, s, "2")) return .fast;
-    return .normal;
+    return @enumFromInt(wallify_parse_setting_enum(2, raw.ptr, raw.len));
 }
 
 pub fn animationSpeedName(v: state.AnimationSpeed) []const u8 {
@@ -58,12 +50,7 @@ pub fn animationSpeedName(v: state.AnimationSpeed) []const u8 {
 }
 
 pub fn parseMediaSource(raw: []const u8) state.MediaSource {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "now_playing") or std.ascii.eqlIgnoreCase(s, "system") or std.mem.eql(u8, s, "0")) return .now_playing;
-    if (std.ascii.eqlIgnoreCase(s, "spotify") or std.mem.eql(u8, s, "1")) return .spotify;
-    if (std.ascii.eqlIgnoreCase(s, "spotifast") or std.ascii.eqlIgnoreCase(s, "fastpotify") or std.mem.eql(u8, s, "2")) return .spotifast;
-    if (std.ascii.eqlIgnoreCase(s, "auto") or std.mem.eql(u8, s, "3")) return .auto;
-    return .now_playing;
+    return @enumFromInt(wallify_parse_setting_enum(3, raw.ptr, raw.len));
 }
 
 pub fn mediaSourceName(v: state.MediaSource) []const u8 {
@@ -76,32 +63,7 @@ pub fn mediaSourceName(v: state.MediaSource) []const u8 {
 }
 
 pub fn parseWidgetMode(raw: []const u8) state.WidgetMode {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "compact") or
-        std.ascii.eqlIgnoreCase(s, "1x1") or
-        std.mem.eql(u8, s, "0")) return .compact;
-
-    // "expanded" was the old 3×1 default, so keep it and legacy numeric 1 working.
-    if (std.ascii.eqlIgnoreCase(s, "two_by_one") or
-        std.ascii.eqlIgnoreCase(s, "2x1") or
-        std.ascii.eqlIgnoreCase(s, "medium")) return .two_by_one;
-
-    if (std.ascii.eqlIgnoreCase(s, "expanded") or
-        std.ascii.eqlIgnoreCase(s, "three_by_one") or
-        std.ascii.eqlIgnoreCase(s, "3x1") or
-        std.ascii.eqlIgnoreCase(s, "wide") or
-        std.mem.eql(u8, s, "1") or
-        std.mem.eql(u8, s, "2")) return .expanded;
-
-    if (std.ascii.eqlIgnoreCase(s, "one_by_two") or
-        std.ascii.eqlIgnoreCase(s, "1x2") or
-        std.mem.eql(u8, s, "3")) return .one_by_two;
-
-    if (std.ascii.eqlIgnoreCase(s, "two_by_two") or
-        std.ascii.eqlIgnoreCase(s, "2x2") or
-        std.mem.eql(u8, s, "4")) return .two_by_two;
-
-    return .expanded;
+    return @enumFromInt(wallify_parse_setting_enum(4, raw.ptr, raw.len));
 }
 
 pub fn widgetModeName(v: state.WidgetMode) []const u8 {
@@ -115,12 +77,7 @@ pub fn widgetModeName(v: state.WidgetMode) []const u8 {
 }
 
 pub fn parseIdleStyle(raw: []const u8) state.IdleStyle {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "spotify") or std.mem.eql(u8, s, "0")) return .spotify;
-    if (std.ascii.eqlIgnoreCase(s, "cat") or std.ascii.eqlIgnoreCase(s, "pixel_cat") or std.mem.eql(u8, s, "1")) return .pixel_cat;
-    if (std.ascii.eqlIgnoreCase(s, "banana_cat") or std.ascii.eqlIgnoreCase(s, "banana") or std.mem.eql(u8, s, "2")) return .banana_cat;
-    if (std.ascii.eqlIgnoreCase(s, "raccoon") or std.mem.eql(u8, s, "3")) return .raccoon;
-    return .pixel_cat;
+    return @enumFromInt(wallify_parse_setting_enum(5, raw.ptr, raw.len));
 }
 
 pub fn idleStyleName(v: state.IdleStyle) []const u8 {
@@ -139,14 +96,7 @@ test "raccoon idle style parses and round trips" {
 }
 
 pub fn parseTransitionStyle(raw: []const u8) state.TransitionStyle {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
-    if (std.ascii.eqlIgnoreCase(s, "default") or std.mem.eql(u8, s, "0")) return .default;
-    if (std.ascii.eqlIgnoreCase(s, "cinematic") or std.mem.eql(u8, s, "1")) return .cinematic;
-    if (std.ascii.eqlIgnoreCase(s, "ripple") or std.ascii.eqlIgnoreCase(s, "liquid_ripple") or std.mem.eql(u8, s, "2")) return .ripple;
-    if (std.ascii.eqlIgnoreCase(s, "flip") or std.ascii.eqlIgnoreCase(s, "card_flip") or std.mem.eql(u8, s, "3")) return .flip;
-    if (std.ascii.eqlIgnoreCase(s, "vinyl") or std.ascii.eqlIgnoreCase(s, "vinyl_spin") or std.mem.eql(u8, s, "4")) return .vinyl;
-    if (std.ascii.eqlIgnoreCase(s, "glitch") or std.ascii.eqlIgnoreCase(s, "cyber_glitch") or std.mem.eql(u8, s, "5")) return .glitch;
-    return .cinematic;
+    return @enumFromInt(wallify_parse_setting_enum(6, raw.ptr, raw.len));
 }
 
 pub fn transitionStyleName(v: state.TransitionStyle) []const u8 {
@@ -162,267 +112,24 @@ pub fn transitionStyleName(v: state.TransitionStyle) []const u8 {
 
 /// Parses the contents of a configuration string into state variables.
 pub fn parseConfigContent(content: []const u8) void {
-    var lines = std.mem.splitScalar(u8, content, '\n');
-    var has_saved_margins = false;
-
-    while (lines.next()) |raw_line| {
-        // Strip comments starting with '#' or ';'
-        var line = raw_line;
-        if (std.mem.indexOfAny(u8, line, "#;")) |comment_idx| {
-            line = line[0..comment_idx];
-        }
-        const text = std.mem.trim(u8, line, " \t\r\n");
-        if (text.len == 0 or text[0] == '[') continue;
-
-        var pair = std.mem.splitScalar(u8, text, '=');
-        const raw_key = pair.next() orelse continue;
-        const raw_val = pair.next() orelse continue;
-
-        const key = std.mem.trim(u8, raw_key, " \t\r\n");
-        const val = std.mem.trim(u8, raw_val, " \t\r\n");
-
-        if (std.ascii.eqlIgnoreCase(key, "artwork_glow")) {
-            if (parseBool(val)) |b| state.shared().setting_glow = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "native_glass")) {
-            if (parseBool(val)) |b| state.shared().setting_native_glass = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "aurora")) {
-            if (parseBool(val)) |b| state.shared().setting_aurora = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "animations")) {
-            if (parseBool(val)) |b| state.shared().setting_animations = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "dim_paused_artwork")) {
-            if (parseBool(val)) |b| state.shared().setting_dim = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "widget_debug")) {
-            if (parseBool(val)) |b| state.shared().setting_debug = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "frame_strength")) {
-            state.shared().setting_frame = parseFrameStrength(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "glow_intensity")) {
-            state.shared().setting_intensity = parseGlowIntensity(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "animation_speed")) {
-            state.shared().setting_speed = parseAnimationSpeed(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "media_source")) {
-            state.shared().setting_source = parseMediaSource(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "widget_mode")) {
-            state.shared().setting_mode = parseWidgetMode(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "idle_style")) {
-            state.shared().setting_idle_style = parseIdleStyle(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "track_transition")) {
-            state.shared().setting_transition = parseTransitionStyle(val);
-        } else if (std.ascii.eqlIgnoreCase(key, "hide_text")) {
-            if (parseBool(val)) |b| state.shared().setting_hide_text = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "hide_progress")) {
-            if (parseBool(val)) |b| state.shared().setting_hide_progress = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "show_controls")) {
-            if (parseBool(val)) |b| state.shared().setting_show_controls = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "show_timestamps")) {
-            if (parseBool(val)) |b| state.shared().setting_show_timestamps = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "artwork_border")) {
-            if (parseBool(val)) |b| state.shared().setting_artwork_border = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "compact_gradient")) {
-            if (parseBool(val)) |b| state.shared().setting_compact_gradient = b;
-        } else if (std.ascii.eqlIgnoreCase(key, "font_scale")) {
-            state.shared().setting_font_scale = if (std.ascii.eqlIgnoreCase(val, "small"))
-                .small
-            else if (std.ascii.eqlIgnoreCase(val, "large"))
-                .large
-            else
-                .normal;
-        } else if (std.ascii.eqlIgnoreCase(key, "artwork_radius")) {
-            state.shared().setting_artwork_radius = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
-        } else if (std.ascii.eqlIgnoreCase(key, "progress_thickness")) {
-            state.shared().setting_progress_thickness = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
-        } else if (std.ascii.eqlIgnoreCase(key, "media_key_target")) {
-            state.shared().setting_media_key_target = if (std.ascii.eqlIgnoreCase(val, "active"))
-                .active
-            else if (std.ascii.eqlIgnoreCase(val, "spotify"))
-                .spotify
-            else if (std.ascii.eqlIgnoreCase(val, "spotifast"))
-                .spotifast
-            else
-                .off;
-        } else if (std.ascii.eqlIgnoreCase(key, "widget_grid_x")) {
-            if (std.fmt.parseInt(u8, val, 10)) |num| {
-                state.shared().widget_grid_x = @min(state.Layout.grid_max, num);
-            } else |_| {}
-        } else if (std.ascii.eqlIgnoreCase(key, "widget_grid_y")) {
-            if (std.fmt.parseInt(u8, val, 10)) |num| {
-                state.shared().widget_grid_y = @min(state.Layout.grid_max, num);
-            } else |_| {}
-        } else if (std.ascii.eqlIgnoreCase(key, "widget_margin_left")) {
-            if (std.fmt.parseInt(i32, val, 10)) |num| {
-                state.shared().widget_margin_left = @max(0, num);
-                has_saved_margins = true;
-            } else |_| {}
-        } else if (std.ascii.eqlIgnoreCase(key, "widget_margin_top")) {
-            if (std.fmt.parseInt(i32, val, 10)) |num| {
-                state.shared().widget_margin_top = @max(state.Layout.margin_top_min, num);
-                has_saved_margins = true;
-            } else |_| {}
-        }
-    }
-
-    if (!has_saved_margins) {
-        state.shared().widget_margin_left = state.Layout.margin_left_default + @as(i32, state.shared().widget_grid_x) * @as(i32, @intFromFloat(state.Layout.grid_pitch));
-        state.shared().widget_margin_top = state.Layout.margin_top_default + @as(i32, state.shared().widget_grid_y) * @as(i32, @intFromFloat(state.Layout.grid_pitch));
-    }
+    wallify_parse_config(content.ptr, content.len);
 }
 
 /// Hydrates persistent user preferences from disk into active runtime state.
 pub fn loadWidgetSettings() void {
-    const path = native.wallify_settings_path();
-    const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0) catch return;
-    defer _ = std.posix.system.close(fd);
-
-    var buffer: [4096]u8 = undefined;
-    const n = std.posix.read(fd, &buffer) catch return;
-    if (n == 0) return;
-
-    parseConfigContent(buffer[0..n]);
-    std.log.info("settings: loaded {d} bytes from {s}", .{ n, path });
+    wallify_load_config();
 }
 
 /// Formats the active configuration into an expressive, self-documenting configuration file.
 pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
-    return std.fmt.bufPrint(
-        buffer,
-        \\# ==============================================================================
-        \\# Wallify Configuration
-        \\#
-        \\# Preferences take effect immediately on reload or when Wallify launches.
-        \\# Settings can also be adjusted via the right-click desktop context menu.
-        \\# ==============================================================================
-        \\
-        \\[Appearance]
-        \\# Ambient glow radiating from album artwork colors [true, false]
-        \\artwork_glow = {s}
-        \\native_glass = {s}
-        \\
-        \\# Multi-stop dynamic aurora gradient behind the widget [true, false]
-        \\aurora = {s}
-        \\
-        \\# Fluid UI animations for transitions and controls [true, false]
-        \\animations = {s}
-        \\
-        \\# Dim album artwork when playback is paused [true, false]
-        \\dim_paused_artwork = {s}
-        \\
-        \\# Inner border bezel accentuation [off, subtle, strong]
-        \\frame_strength = {s}
-        \\
-        \\# Ambient glow radiance [low, normal, high]
-        \\glow_intensity = {s}
-        \\
-        \\# Animation pacing and interpolation speed [slow, normal, fast]
-        \\animation_speed = {s}
-        \\
-        \\[Behavior]
-        \\# Form factor [1x1, 2x1, 3x1, 1x2, 2x2]
-        \\widget_mode = {s}
-        \\
-        \\# Metadata telemetry source [now_playing, spotify, spotifast]
-        \\media_source = {s}
-        \\
-        \\# Mascot shown when player is inactive [cat, banana_cat, raccoon, spotify]
-        \\idle_style = {s}
-        \\
-        \\# Artwork transition on track changes [cinematic, ripple, flip, vinyl, glitch, default]
-        \\track_transition = {s}
-        \\
-        \\# Hide track title and artist text [true, false]
-        \\hide_text = {s}
-        \\
-        \\# Hide progress/scrubber bar [true, false]
-        \\hide_progress = {s}
-        \\
-        \\# Show playback controls [true, false]
-        \\show_controls = {s}
-        \\
-        \\# Show elapsed and duration timestamps [true, false]
-        \\show_timestamps = {s}
-        \\
-        \\# Show a subtle border around artwork [true, false]
-        \\artwork_border = {s}
-        \\
-        \\# Show compact-mode gradient underlay [true, false]
-        \\compact_gradient = {s}
-        \\
-        \\# Artwork corner radius [0, 1, 2]
-        \\artwork_radius = {d}
-        \\
-        \\# Progress bar thickness [0, 1, 2]
-        \\progress_thickness = {d}
-        \\
-        \\# Font size scale [small, normal, large]
-        \\font_scale = {s}
-        \\
-        \\# Hardware media key redirect [off, active, spotify, spotifast]
-        \\media_key_target = {s}
-        \\
-        \\[Position]
-        \\# Screen coordinates in points (from top-left of display below menu bar)
-        \\widget_margin_left = {d}
-        \\widget_margin_top = {d}
-        \\
-        \\# Snap tile coordinates on the 180pt macOS desktop widget grid
-        \\widget_grid_x = {d}
-        \\widget_grid_y = {d}
-        \\
-        \\[Debug]
-        \\# Show developer diagnostics overlay window [true, false]
-        \\widget_debug = {s}
-        \\
-    ,
-        .{
-            if (state.shared().setting_glow) "true" else "false",
-            if (state.shared().setting_native_glass) "true" else "false",
-            if (state.shared().setting_aurora) "true" else "false",
-            if (state.shared().setting_animations) "true" else "false",
-            if (state.shared().setting_dim) "true" else "false",
-            frameStrengthName(state.shared().setting_frame),
-            glowIntensityName(state.shared().setting_intensity),
-            animationSpeedName(state.shared().setting_speed),
-            widgetModeName(state.shared().setting_mode),
-            mediaSourceName(state.shared().setting_source),
-            idleStyleName(state.shared().setting_idle_style),
-            transitionStyleName(state.shared().setting_transition),
-            if (state.shared().setting_hide_text) "true" else "false",
-            if (state.shared().setting_hide_progress) "true" else "false",
-            if (state.shared().setting_show_controls) "true" else "false",
-            if (state.shared().setting_show_timestamps) "true" else "false",
-            if (state.shared().setting_artwork_border) "true" else "false",
-            if (state.shared().setting_compact_gradient) "true" else "false",
-            @intFromEnum(state.shared().setting_artwork_radius),
-            @intFromEnum(state.shared().setting_progress_thickness),
-            switch (state.shared().setting_font_scale) {
-                .small => "small",
-                .normal => "normal",
-                .large => "large",
-            },
-            switch (state.shared().setting_media_key_target) {
-                .off => "off",
-                .active => "active",
-                .spotify => "spotify",
-                .spotifast => "spotifast",
-            },
-            state.shared().widget_margin_left,
-            state.shared().widget_margin_top,
-            state.shared().widget_grid_x,
-            state.shared().widget_grid_y,
-            if (state.shared().setting_debug) "true" else "false",
-        },
-    ) catch null;
+    const count = wallify_render_config(buffer.ptr, buffer.len);
+    if (count < 0) return null;
+    return buffer[0..@intCast(count)];
 }
 
 /// Atomically flushes active widget geometry, themes, and feature toggles to disk.
 pub fn saveWidgetSettings() void {
-    var buffer: [4096]u8 = undefined;
-    const text = renderConfigContent(&buffer) orelse return;
-
-    const path = native.wallify_settings_path();
-    const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
-    defer _ = std.posix.system.close(fd);
-    _ = std.posix.system.write(fd, text.ptr, text.len);
-    std.log.info("settings: saved {d} bytes to {s}", .{ text.len, path });
-    native.wallify_refresh_settings_ui();
+    wallify_save_config();
 }
 
 test "parseConfigContent handles human-readable names, comments, and sections" {
