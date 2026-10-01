@@ -57,6 +57,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/media/spotifast.swift"));
     swift_settings.addFileArg(b.path("src/media/artwork_download.swift"));
     swift_settings.addFileArg(b.path("src/media/playback.swift"));
+    swift_settings.addFileArg(b.path("src/media/payload.swift"));
     swift_settings.addFileArg(b.path("src/graphics/raster.swift"));
     swift_settings.addArg("-o");
     const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
@@ -205,6 +206,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/media/spotifast.swift"));
     swift_check.addFileArg(b.path("src/media/artwork_download.swift"));
     swift_check.addFileArg(b.path("src/media/playback.swift"));
+    swift_check.addFileArg(b.path("src/media/payload.swift"));
     swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
     swift_check.addFileArg(b.path("src/graphics/raster.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));

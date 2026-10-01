@@ -295,14 +295,8 @@ pub fn utf8Prefix(text: []const u8, max_len: usize) []const u8 {
     return text[0..len];
 }
 
-pub const SpotifyPayload = struct {
-    title: []const u8,
-    artist: []const u8,
-    playing: bool,
-    elapsed: f64,
-    duration: f64,
-    artwork_url: []const u8,
-};
+const payload = @import("payload.zig");
+pub const SpotifyPayload = payload.Payload;
 
 extern fn wallify_download_artwork(bytes: [*]const u8, count: usize) callconv(.c) void;
 extern fn wallify_cancel_artwork_download() callconv(.c) void;
@@ -315,22 +309,7 @@ pub export fn wallify_artwork_downloaded(available: bool) callconv(.c) void {
 }
 
 pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
-    var spl = std.mem.splitSequence(u8, raw, "|||");
-    const title = spl.next() orelse return null;
-    const artist = spl.next() orelse return null;
-    const pstate = spl.next() orelse return null;
-    const pos_raw = spl.next() orelse "0.0";
-    const dur_raw = spl.next() orelse "0.0";
-    const art = spl.next() orelse "";
-
-    return .{
-        .title = title,
-        .artist = artist,
-        .playing = std.mem.eql(u8, pstate, "playing"),
-        .elapsed = std.fmt.parseFloat(f64, pos_raw) catch 0.0,
-        .duration = std.fmt.parseFloat(f64, dur_raw) catch 0.0,
-        .artwork_url = art,
-    };
+    return payload.parse(raw, .spotify);
 }
 
 pub fn metadataLoop(_: std.Io) void {
@@ -467,19 +446,7 @@ pub fn metadataLoop(_: std.Io) void {
                 continue;
             }
 
-            const maybe_payload: ?SpotifyPayload = if (active_source == .spotifast) blk: {
-                if (spotifast.parseSpotifastPayload(res_buf[0..res_len])) |p| {
-                    break :blk SpotifyPayload{
-                        .title = p.title,
-                        .artist = p.artist,
-                        .playing = p.playing,
-                        .elapsed = p.elapsed,
-                        .duration = p.duration,
-                        .artwork_url = p.artwork_url,
-                    };
-                }
-                break :blk null;
-            } else parseSpotifyPayload(res_buf[0..res_len]);
+            const maybe_payload = payload.parse(res_buf[0..res_len], if (active_source == .spotifast) .spotifast else .spotify);
 
             if (maybe_payload) |item| {
                 // Keep the idle presentation tied to an explicit Spotify track
@@ -603,20 +570,12 @@ pub fn metadataLoop(_: std.Io) void {
                 }
                 empty_polls = 0;
 
-                var spl = std.mem.splitSequence(u8, raw, "|||");
-
-                const title_raw = spl.next() orelse "";
-                const artist_raw = spl.next() orelse "";
-                const title_span = utf8Prefix(title_raw, state.global_title.len);
-                const artist_span = utf8Prefix(artist_raw, state.global_artist.len);
-                const has_artwork_span = spl.next() orelse "0";
-                const rate_span = spl.next() orelse "0.0";
-                const elapsed_span = spl.next() orelse "0.0";
-                const duration_span = spl.next() orelse "0.0";
-
-                const rate = std.fmt.parseFloat(f64, rate_span) catch 0.0;
-                const elapsed = std.fmt.parseFloat(f64, elapsed_span) catch 0.0;
-                const duration = std.fmt.parseFloat(f64, duration_span) catch 0.0;
+                const item = payload.parse(raw, .now_playing) orelse continue;
+                const title_span = utf8Prefix(item.title, state.global_title.len);
+                const artist_span = utf8Prefix(item.artist, state.global_artist.len);
+                const rate = item.rate;
+                const elapsed = item.elapsed;
+                const duration = item.duration;
 
                 if (title_span.len == 0) continue;
                 const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
@@ -630,7 +589,7 @@ pub fn metadataLoop(_: std.Io) void {
                 const rate_changed = rate != state.global_rate;
                 const elapsed_changed = elapsed != state.global_elapsed;
 
-                if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.artwork_refresh_pending and std.mem.eql(u8, has_artwork_span, "1"))) {
+                if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.artwork_refresh_pending and item.has_artwork)) {
                     if (title_changed) {
                         @memcpy(state.global_title[0..title_span.len], title_span);
                         state.global_title_len = title_span.len;
@@ -652,7 +611,7 @@ pub fn metadataLoop(_: std.Io) void {
                         state.artwork_refresh_pending = true;
                         empty_art_polls = 0;
                     }
-                    const artwork_available = std.mem.eql(u8, has_artwork_span, "1");
+                    const artwork_available = item.has_artwork;
                     if (artwork_available and state.artwork_refresh_pending) {
                         state.artwork_refresh_pending = false;
                         if (std.posix.system.rename("/tmp/mrc_artwork", "/tmp/art.raw") == 0) {
@@ -695,8 +654,8 @@ test "utf8Prefix preserves short strings and chops safely on boundaries" {
 }
 
 test "parseSpotifyPayload parses full format correctly" {
-    const payload = "Track Title|||Artist Name|||playing|||45.5|||200.0|||https://example.com/art.jpg";
-    const res = parseSpotifyPayload(payload).?;
+    const raw = "Track Title|||Artist Name|||playing|||45.5|||200.0|||https://example.com/art.jpg";
+    const res = parseSpotifyPayload(raw).?;
     try std.testing.expectEqualStrings("Track Title", res.title);
     try std.testing.expectEqualStrings("Artist Name", res.artist);
     try std.testing.expect(res.playing);

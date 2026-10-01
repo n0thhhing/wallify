@@ -87,6 +87,7 @@ struct SettingsBridgeCheck {
         checkDesktopSnap()
         checkContextMenu()
         checkArtworkDownload()
+        checkMediaPayloads()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -181,6 +182,34 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkMediaPayloads() {
+        let raw = Array("fastpotify:now paused\tCafé 🐱\t歌手\tAlbum\t1200\t90000\t70\toff\toff\thttps://example.com/art\tno\tDevice\n".utf8)
+        let fast = parseMediaPayload(raw, format: 1)!
+        func text(_ span: WallifyMediaSpan, in bytes: [UInt8]) -> String {
+            String(decoding: bytes[Int(span.offset)..<Int(span.offset + span.count)], as: UTF8.self)
+        }
+        precondition(text(fast.title, in: raw) == "Café 🐱" && text(fast.artist, in: raw) == "歌手")
+        precondition(fast.rate == 0 && fast.elapsed == 1.2 && fast.duration == 90)
+        precondition(text(fast.artwork, in: raw) == "https://example.com/art")
+        let now = parseMediaPayload(Array("Track|||Artist|||1|||0|||25.5|||180".utf8), format: 2)!
+        precondition(now.has_artwork && now.rate == 0 && now.elapsed == 25.5 && now.duration == 180)
+        let invalidNumbers = parseMediaPayload(Array("Track|||Artist|||playing|||nan|||inf|||".utf8), format: 0)!
+        precondition(invalidNumbers.rate == 1 && invalidNumbers.elapsed == 0 && invalidNumbers.duration == 0)
+        let negative = parseMediaPayload(Array("Track|||Artist|||playing|||-1|||-50".utf8), format: 0)!
+        precondition(negative.elapsed == 0 && negative.duration == 0)
+        precondition(parseMediaPayload(Array("Title|||Artist|||paused".utf8), format: 0)!.artwork.count == 0)
+        precondition(parseMediaPayload(Array("fastpotify:now stopped\n".utf8), format: 1) == nil)
+        precondition(parseMediaPayload(Array("Only Title".utf8), format: 0) == nil)
+        precondition(parseMediaPayload([0xff, 124, 124, 124], format: 0) == nil)
+        precondition(parseMediaPayload(Array("T|||A|||playing|||0|||0|||\(String(repeating: "x", count: 513))".utf8), format: 0) == nil)
+        var output = WallifyMediaPayload()
+        precondition(!parseMediaPayloadBridge(nil, 10, 0, &output))
+        raw.withUnsafeBufferPointer {
+            precondition(parseMediaPayloadBridge($0.baseAddress, UInt($0.count), 1, &output))
+        }
+        precondition(output.title.count == fast.title.count && output.elapsed == fast.elapsed)
     }
 
     static func checkArtworkDownload() {
