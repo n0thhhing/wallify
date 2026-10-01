@@ -82,7 +82,8 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
 
 func formatTimestamp(_ seconds: Double) -> String {
     let value = seconds.isFinite ? Int(min(Double(Int32.max), max(0, seconds))) : 0
-    return "\(value / 60):" + String(format: "%02d", value % 60)
+    let remainder = value % 60
+    return "\(value / 60):" + (remainder < 10 ? "0" : "") + String(remainder)
 }
 
 func drawIdleScene(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayout, state: WallifyWidgetState) {

@@ -34,6 +34,10 @@ func checkSceneAssets() {
     precondition(metalRenderer.texture(Texture.cat.rawValue)!.width == 541)
     precondition(metalRenderer.texture(Texture.banana.rawValue)!.height == 114 * 45)
     precondition(formatTimestamp(125.8) == "2:05" && formatTimestamp(.infinity) == "0:00")
+    for seconds in 0..<3600 {
+        precondition(formatTimestamp(Double(seconds)) == "\(seconds / 60):" + String(format: "%02d", seconds % 60))
+    }
+    precondition(formatTimestamp(-1) == "0:00" && formatTimestamp(.nan) == "0:00")
     var state = widgetStatePointer().pointee
     state.setting_show_controls = true; state.setting_hide_progress = false; state.setting_hide_text = false
     state.global_duration = 200; state.global_anim_art_t = 1; state.global_rate = 1
