@@ -88,7 +88,7 @@ pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
 }
 
 fn getActiveSource() state.MediaSource {
-    const s = state.setting_source;
+    const s = state.shared().setting_source;
     if (s != .auto) return s;
 
     const now_us = @as(u64, @intFromFloat(window.widget_monotonic_time() * 1_000_000.0));
@@ -138,18 +138,18 @@ pub export fn wallify_menu_next() callconv(.c) void {
 pub fn togglePlayback() void {
     const now = window.widget_monotonic_time();
     std.log.info("media: toggle playback at position={d:.2}s, current_rate={d:.2}", .{
-        state.playback_clock.position(now, state.global_duration),
-        state.global_rate,
+        state.shared().playback_clock.position(now, state.shared().global_duration),
+        state.shared().global_rate,
     });
-    const target_rate: f64 = if (state.global_rate > 0) RATE_STOPPED else RATE_PLAYING;
-    const position = state.playback_clock.position(now, state.global_duration);
-    state.playback_state.request(target_rate > 0, now);
-    state.global_rate = target_rate;
-    state.global_elapsed = position;
-    state.playback_clock.sync(position, target_rate, now, state.global_duration, true);
+    const target_rate: f64 = if (state.shared().global_rate > 0) RATE_STOPPED else RATE_PLAYING;
+    const position = state.shared().playback_clock.position(now, state.shared().global_duration);
+    state.shared().playback_state.request(target_rate > 0, now);
+    state.shared().global_rate = target_rate;
+    state.shared().global_elapsed = position;
+    state.shared().playback_clock.sync(position, target_rate, now, state.shared().global_duration, true);
     triggerCommand(if (target_rate > 0) .play else .pause);
-    state.global_rate_lock = RATE_LOCKED;
-    state.global_rate_lock_until = now + RATE_LOCK_DURATION;
+    state.shared().global_rate_lock = RATE_LOCKED;
+    state.shared().global_rate_lock_until = now + RATE_LOCK_DURATION;
     state.requestFrame();
 }
 
@@ -161,10 +161,10 @@ pub export fn wallify_media_key_event(keyCode: c_int) callconv(.c) void {
     // Play/pause and track controls honor the same explicit target selection.
     // The event tap should normally be absent while .off, but keep this safe
     // if a stale event arrives during teardown.
-    if (state.setting_media_key_target == .off) return;
+    if (state.shared().setting_media_key_target == .off) return;
 
     if (keyCode == 16) {
-        switch (state.setting_media_key_target) {
+        switch (state.shared().setting_media_key_target) {
             .active => togglePlayback(),
             .spotify => spotify.widget_spotify_control(.play_pause),
             .spotifast => spotifast.widget_spotifast_control(.play_pause),
@@ -179,7 +179,7 @@ pub export fn wallify_media_key_event(keyCode: c_int) callconv(.c) void {
         else => return,
     };
 
-    switch (state.setting_media_key_target) {
+    switch (state.shared().setting_media_key_target) {
         .off => {}, // tap shouldn't be installed when off, but be safe
         .active => triggerCommand(cmd),
         .spotify => switch (cmd) {
@@ -210,8 +210,8 @@ extern fn wallify_download_artwork(bytes: [*]const u8, count: usize) callconv(.c
 extern fn wallify_cancel_artwork_download() callconv(.c) void;
 
 pub export fn wallify_artwork_downloaded(available: bool) callconv(.c) void {
-    state.global_has_artwork = available;
-    state.artwork_refresh_pending = available;
+    state.shared().global_has_artwork = available;
+    state.shared().artwork_refresh_pending = available;
     if (available) render.extractColor();
     state.requestFrame();
 }
@@ -264,8 +264,8 @@ pub fn metadataLoop(_: std.Io) void {
             state.spotify_has_track.store(false, .release);
             spotify_no_track_misses = 0;
             last_art_url_len = 0; // Force Spotify art re-download
-            state.artwork_refresh_pending = true; // Force Now Playing art reload
-            state.global_title_len = 0; // Force title change to trigger updates
+            state.shared().artwork_refresh_pending = true; // Force Now Playing art reload
+            state.shared().global_title_len = 0; // Force title change to trigger updates
         }
 
         if (active_source == .spotify or active_source == .spotifast) {
@@ -311,15 +311,15 @@ pub fn metadataLoop(_: std.Io) void {
                 spotify_no_track_misses = 0;
                 const title_span = if (active_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
                 const artist_span = "Click to Launch";
-                if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
-                    @memcpy(state.global_title[0..title_span.len], title_span);
-                    state.global_title_len = title_span.len;
-                    @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                    state.global_artist_len = artist_span.len;
-                    state.global_rate = 0.0;
-                    state.global_elapsed = 0.0;
-                    state.global_duration = 0.0;
-                    state.global_has_artwork = false;
+                if (!std.mem.eql(u8, state.shared().global_title[0..state.shared().global_title_len], title_span)) {
+                    @memcpy(state.shared().global_title[0..title_span.len], title_span);
+                    state.shared().global_title_len = title_span.len;
+                    @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
+                    state.shared().global_artist_len = artist_span.len;
+                    state.shared().global_rate = 0.0;
+                    state.shared().global_elapsed = 0.0;
+                    state.shared().global_duration = 0.0;
+                    state.shared().global_has_artwork = false;
                     render.clearArtwork();
                     state.requestFrame();
                 }
@@ -338,15 +338,15 @@ pub fn metadataLoop(_: std.Io) void {
                 state.spotify_has_track.store(false, .release);
                 const title_span = if (active_source == .spotifast) "Spotifast" else "Spotify";
                 const artist_span = "No Track Playing";
-                if (!std.mem.eql(u8, state.global_title[0..state.global_title_len], title_span)) {
-                    @memcpy(state.global_title[0..title_span.len], title_span);
-                    state.global_title_len = title_span.len;
-                    @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                    state.global_artist_len = artist_span.len;
-                    state.global_rate = 0.0;
-                    state.global_elapsed = 0.0;
-                    state.global_duration = 0.0;
-                    state.global_has_artwork = false;
+                if (!std.mem.eql(u8, state.shared().global_title[0..state.shared().global_title_len], title_span)) {
+                    @memcpy(state.shared().global_title[0..title_span.len], title_span);
+                    state.shared().global_title_len = title_span.len;
+                    @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
+                    state.shared().global_artist_len = artist_span.len;
+                    state.shared().global_rate = 0.0;
+                    state.shared().global_elapsed = 0.0;
+                    state.shared().global_duration = 0.0;
+                    state.shared().global_has_artwork = false;
                     render.clearArtwork();
                     state.requestFrame();
                 }
@@ -364,17 +364,17 @@ pub fn metadataLoop(_: std.Io) void {
                 if (active_source == .spotify and item.title.len > 0) {
                     state.spotify_has_track.store(true, .release);
                 }
-                const title_changed = item.title.len != state.global_title_len or !std.mem.eql(u8, item.title, state.global_title[0..state.global_title_len]);
-                const artist_changed = item.artist.len != state.global_artist_len or !std.mem.eql(u8, item.artist, state.global_artist[0..state.global_artist_len]);
+                const title_changed = item.title.len != state.shared().global_title_len or !std.mem.eql(u8, item.title, state.shared().global_title[0..state.shared().global_title_len]);
+                const artist_changed = item.artist.len != state.shared().global_artist_len or !std.mem.eql(u8, item.artist, state.shared().global_artist[0..state.shared().global_artist_len]);
                 const now = window.widget_monotonic_time();
-                const accept_state = state.playback_state.accept(item.playing, state.global_rate > 0, now, title_changed);
-                if (now >= state.global_rate_lock_until or title_changed) {
-                    state.global_rate_lock = 0;
-                    state.global_rate_lock_until = 0;
+                const accept_state = state.shared().playback_state.accept(item.playing, state.shared().global_rate > 0, now, title_changed);
+                if (now >= state.shared().global_rate_lock_until or title_changed) {
+                    state.shared().global_rate_lock = 0;
+                    state.shared().global_rate_lock_until = 0;
                 }
                 const rate = if (item.playing) RATE_PLAYING else RATE_STOPPED;
-                const rate_changed = rate != state.global_rate;
-                const elapsed_changed = @abs(item.elapsed - state.global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
+                const rate_changed = rate != state.shared().global_rate;
+                const elapsed_changed = @abs(item.elapsed - state.shared().global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
 
                 if (title_changed or artist_changed or rate_changed or elapsed_changed) {
                     if (title_changed or artist_changed or rate_changed) {
@@ -387,23 +387,23 @@ pub fn metadataLoop(_: std.Io) void {
                         });
                     }
                     if (title_changed) {
-                        const title_span = utf8Prefix(item.title, state.global_title.len);
-                        @memcpy(state.global_title[0..title_span.len], title_span);
-                        state.global_title_len = title_span.len;
+                        const title_span = utf8Prefix(item.title, state.shared().global_title.len);
+                        @memcpy(state.shared().global_title[0..title_span.len], title_span);
+                        state.shared().global_title_len = title_span.len;
                     }
 
                     if (artist_changed) {
-                        const artist_span = utf8Prefix(item.artist, state.global_artist.len);
-                        @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                        state.global_artist_len = artist_span.len;
+                        const artist_span = utf8Prefix(item.artist, state.shared().global_artist.len);
+                        @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
+                        state.shared().global_artist_len = artist_span.len;
                     }
 
-                    if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
-                        state.playback_clock.sync(item.elapsed, rate, window.widget_monotonic_time(), item.duration, title_changed);
-                        state.global_rate = rate;
-                        state.global_elapsed = item.elapsed;
+                    if (accept_state and !state.shared().global_is_dragging and (state.shared().global_rate_lock == 0 or title_changed)) {
+                        state.shared().playback_clock.sync(item.elapsed, rate, window.widget_monotonic_time(), item.duration, title_changed);
+                        state.shared().global_rate = rate;
+                        state.shared().global_elapsed = item.elapsed;
                     }
-                    state.global_duration = item.duration;
+                    state.shared().global_duration = item.duration;
 
                     if (item.artwork_url.len > 0) {
                         const art_changed = item.artwork_url.len != last_art_url_len or !std.mem.eql(u8, item.artwork_url, last_art_url[0..last_art_url_len]);
@@ -416,7 +416,7 @@ pub fn metadataLoop(_: std.Io) void {
                         }
                     } else if (title_changed) {
                         wallify_cancel_artwork_download();
-                        state.global_has_artwork = false;
+                        state.shared().global_has_artwork = false;
                         last_art_url_len = 0;
                     }
 
@@ -463,13 +463,13 @@ pub fn metadataLoop(_: std.Io) void {
                 if (raw.len == 0) {
                     empty_polls += 1;
                     if (empty_polls >= 3) {
-                        if (state.global_title_len > 0 or state.global_rate > 0 or state.global_has_artwork) {
-                            state.global_title_len = 0;
-                            state.global_artist_len = 0;
-                            state.global_rate = 0.0;
-                            state.global_elapsed = 0.0;
-                            state.global_duration = 0.0;
-                            state.global_has_artwork = false;
+                        if (state.shared().global_title_len > 0 or state.shared().global_rate > 0 or state.shared().global_has_artwork) {
+                            state.shared().global_title_len = 0;
+                            state.shared().global_artist_len = 0;
+                            state.shared().global_rate = 0.0;
+                            state.shared().global_elapsed = 0.0;
+                            state.shared().global_duration = 0.0;
+                            state.shared().global_has_artwork = false;
                             render.clearArtwork();
                             state.requestFrame();
                         }
@@ -479,63 +479,63 @@ pub fn metadataLoop(_: std.Io) void {
                 empty_polls = 0;
 
                 const item = payload.parse(raw, .now_playing) orelse continue;
-                const title_span = utf8Prefix(item.title, state.global_title.len);
-                const artist_span = utf8Prefix(item.artist, state.global_artist.len);
+                const title_span = utf8Prefix(item.title, state.shared().global_title.len);
+                const artist_span = utf8Prefix(item.artist, state.shared().global_artist.len);
                 const rate = item.rate;
                 const elapsed = item.elapsed;
                 const duration = item.duration;
 
                 if (title_span.len == 0) continue;
-                const title_changed = title_span.len != state.global_title_len or !std.mem.eql(u8, title_span, state.global_title[0..state.global_title_len]);
-                const artist_changed = artist_span.len != state.global_artist_len or !std.mem.eql(u8, artist_span, state.global_artist[0..state.global_artist_len]);
+                const title_changed = title_span.len != state.shared().global_title_len or !std.mem.eql(u8, title_span, state.shared().global_title[0..state.shared().global_title_len]);
+                const artist_changed = artist_span.len != state.shared().global_artist_len or !std.mem.eql(u8, artist_span, state.shared().global_artist[0..state.shared().global_artist_len]);
                 const now = window.widget_monotonic_time();
-                const accept_state = state.playback_state.accept(rate > 0, state.global_rate > 0, now, title_changed);
-                if (now >= state.global_rate_lock_until or title_changed) {
-                    state.global_rate_lock = 0;
-                    state.global_rate_lock_until = 0;
+                const accept_state = state.shared().playback_state.accept(rate > 0, state.shared().global_rate > 0, now, title_changed);
+                if (now >= state.shared().global_rate_lock_until or title_changed) {
+                    state.shared().global_rate_lock = 0;
+                    state.shared().global_rate_lock_until = 0;
                 }
-                const rate_changed = rate != state.global_rate;
-                const elapsed_changed = elapsed != state.global_elapsed;
+                const rate_changed = rate != state.shared().global_rate;
+                const elapsed_changed = elapsed != state.shared().global_elapsed;
 
-                if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.artwork_refresh_pending and item.has_artwork)) {
+                if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.shared().artwork_refresh_pending and item.has_artwork)) {
                     if (title_changed) {
-                        @memcpy(state.global_title[0..title_span.len], title_span);
-                        state.global_title_len = title_span.len;
+                        @memcpy(state.shared().global_title[0..title_span.len], title_span);
+                        state.shared().global_title_len = title_span.len;
                     }
 
                     if (artist_changed) {
-                        @memcpy(state.global_artist[0..artist_span.len], artist_span);
-                        state.global_artist_len = artist_span.len;
+                        @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
+                        state.shared().global_artist_len = artist_span.len;
                     }
 
-                    if (accept_state and !state.global_is_dragging and (state.global_rate_lock == 0 or title_changed)) {
-                        state.playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
-                        state.global_rate = rate;
-                        state.global_elapsed = elapsed;
+                    if (accept_state and !state.shared().global_is_dragging and (state.shared().global_rate_lock == 0 or title_changed)) {
+                        state.shared().playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
+                        state.shared().global_rate = rate;
+                        state.shared().global_elapsed = elapsed;
                     }
-                    state.global_duration = duration;
+                    state.shared().global_duration = duration;
 
                     if (title_changed or artist_changed) {
-                        state.artwork_refresh_pending = true;
+                        state.shared().artwork_refresh_pending = true;
                         empty_art_polls = 0;
                     }
                     const artwork_available = item.has_artwork;
-                    if (artwork_available and state.artwork_refresh_pending) {
-                        state.artwork_refresh_pending = false;
+                    if (artwork_available and state.shared().artwork_refresh_pending) {
+                        state.shared().artwork_refresh_pending = false;
                         if (std.posix.system.rename("/tmp/mrc_artwork", "/tmp/art.raw") == 0) {
-                            state.global_has_artwork = true;
+                            state.shared().global_has_artwork = true;
                             render.extractColor();
                         } else {
                             // rename fails if metadata_fetcher bypassed writing (e.g. same album art hash)
                             // In this case, /tmp/art.raw already has the correct image!
-                            state.global_has_artwork = true;
+                            state.shared().global_has_artwork = true;
                             render.extractColor();
                         }
-                    } else if (!artwork_available and state.artwork_refresh_pending) {
+                    } else if (!artwork_available and state.shared().artwork_refresh_pending) {
                         empty_art_polls += 1;
                         if (empty_art_polls >= 30) {
-                            state.artwork_refresh_pending = false;
-                            state.global_has_artwork = false;
+                            state.shared().artwork_refresh_pending = false;
+                            state.shared().global_has_artwork = false;
                             render.clearArtwork();
                         }
                     }

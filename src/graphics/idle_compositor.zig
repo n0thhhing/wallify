@@ -30,13 +30,13 @@ const Conditions = struct {
 
 pub fn update(card: gpu.Rect) void {
     const conditions = Conditions{
-        .idle_mix = state.idle_mix,
-        .animations = state.setting_animations,
-        .style = state.setting_idle_style,
-        .resizing = state.mode_transition_active,
-        .snapping = state.panel_snap_active,
-        .dragging = state.global_panel_dragging,
-        .petted = state.animation_time < state.cat_pet_until,
+        .idle_mix = state.shared().idle_mix,
+        .animations = state.shared().setting_animations,
+        .style = state.shared().setting_idle_style,
+        .resizing = state.shared().mode_transition_active,
+        .snapping = state.shared().panel_snap_active,
+        .dragging = state.shared().global_panel_dragging,
+        .petted = state.shared().animation_time < state.shared().cat_pet_until,
     };
     if (!conditions.eligible()) {
         if (active) native.wallify_idle_animation_stop();
@@ -44,19 +44,19 @@ pub fn update(card: gpu.Rect) void {
         return;
     }
     if (active and std.meta.eql(previous_card, card) and
-        previous_style == state.setting_idle_style and previous_speed == state.setting_speed) return;
+        previous_style == state.shared().setting_idle_style and previous_speed == state.shared().setting_speed) return;
 
-    const style: c_int = switch (state.setting_idle_style) {
+    const style: c_int = switch (state.shared().setting_idle_style) {
         .pixel_cat => 0,
         .banana_cat => 1,
         .raccoon => 2,
         .spotify => unreachable,
     };
-    active = wallify_start_pet_animation(style, &card, state.cat_time, state.setting_speed.multiplier());
+    active = wallify_start_pet_animation(style, &card, state.shared().cat_time, state.shared().setting_speed.multiplier());
     if (active) {
         previous_card = card;
-        previous_style = state.setting_idle_style;
-        previous_speed = state.setting_speed;
+        previous_style = state.shared().setting_idle_style;
+        previous_speed = state.shared().setting_speed;
     }
 }
 

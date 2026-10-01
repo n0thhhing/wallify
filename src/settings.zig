@@ -182,56 +182,56 @@ pub fn parseConfigContent(content: []const u8) void {
         const val = std.mem.trim(u8, raw_val, " \t\r\n");
 
         if (std.ascii.eqlIgnoreCase(key, "artwork_glow")) {
-            if (parseBool(val)) |b| state.setting_glow = b;
+            if (parseBool(val)) |b| state.shared().setting_glow = b;
         } else if (std.ascii.eqlIgnoreCase(key, "native_glass")) {
-            if (parseBool(val)) |b| state.setting_native_glass = b;
+            if (parseBool(val)) |b| state.shared().setting_native_glass = b;
         } else if (std.ascii.eqlIgnoreCase(key, "aurora")) {
-            if (parseBool(val)) |b| state.setting_aurora = b;
+            if (parseBool(val)) |b| state.shared().setting_aurora = b;
         } else if (std.ascii.eqlIgnoreCase(key, "animations")) {
-            if (parseBool(val)) |b| state.setting_animations = b;
+            if (parseBool(val)) |b| state.shared().setting_animations = b;
         } else if (std.ascii.eqlIgnoreCase(key, "dim_paused_artwork")) {
-            if (parseBool(val)) |b| state.setting_dim = b;
+            if (parseBool(val)) |b| state.shared().setting_dim = b;
         } else if (std.ascii.eqlIgnoreCase(key, "widget_debug")) {
-            if (parseBool(val)) |b| state.setting_debug = b;
+            if (parseBool(val)) |b| state.shared().setting_debug = b;
         } else if (std.ascii.eqlIgnoreCase(key, "frame_strength")) {
-            state.setting_frame = parseFrameStrength(val);
+            state.shared().setting_frame = parseFrameStrength(val);
         } else if (std.ascii.eqlIgnoreCase(key, "glow_intensity")) {
-            state.setting_intensity = parseGlowIntensity(val);
+            state.shared().setting_intensity = parseGlowIntensity(val);
         } else if (std.ascii.eqlIgnoreCase(key, "animation_speed")) {
-            state.setting_speed = parseAnimationSpeed(val);
+            state.shared().setting_speed = parseAnimationSpeed(val);
         } else if (std.ascii.eqlIgnoreCase(key, "media_source")) {
-            state.setting_source = parseMediaSource(val);
+            state.shared().setting_source = parseMediaSource(val);
         } else if (std.ascii.eqlIgnoreCase(key, "widget_mode")) {
-            state.setting_mode = parseWidgetMode(val);
+            state.shared().setting_mode = parseWidgetMode(val);
         } else if (std.ascii.eqlIgnoreCase(key, "idle_style")) {
-            state.setting_idle_style = parseIdleStyle(val);
+            state.shared().setting_idle_style = parseIdleStyle(val);
         } else if (std.ascii.eqlIgnoreCase(key, "track_transition")) {
-            state.setting_transition = parseTransitionStyle(val);
+            state.shared().setting_transition = parseTransitionStyle(val);
         } else if (std.ascii.eqlIgnoreCase(key, "hide_text")) {
-            if (parseBool(val)) |b| state.setting_hide_text = b;
+            if (parseBool(val)) |b| state.shared().setting_hide_text = b;
         } else if (std.ascii.eqlIgnoreCase(key, "hide_progress")) {
-            if (parseBool(val)) |b| state.setting_hide_progress = b;
+            if (parseBool(val)) |b| state.shared().setting_hide_progress = b;
         } else if (std.ascii.eqlIgnoreCase(key, "show_controls")) {
-            if (parseBool(val)) |b| state.setting_show_controls = b;
+            if (parseBool(val)) |b| state.shared().setting_show_controls = b;
         } else if (std.ascii.eqlIgnoreCase(key, "show_timestamps")) {
-            if (parseBool(val)) |b| state.setting_show_timestamps = b;
+            if (parseBool(val)) |b| state.shared().setting_show_timestamps = b;
         } else if (std.ascii.eqlIgnoreCase(key, "artwork_border")) {
-            if (parseBool(val)) |b| state.setting_artwork_border = b;
+            if (parseBool(val)) |b| state.shared().setting_artwork_border = b;
         } else if (std.ascii.eqlIgnoreCase(key, "compact_gradient")) {
-            if (parseBool(val)) |b| state.setting_compact_gradient = b;
+            if (parseBool(val)) |b| state.shared().setting_compact_gradient = b;
         } else if (std.ascii.eqlIgnoreCase(key, "font_scale")) {
-            state.setting_font_scale = if (std.ascii.eqlIgnoreCase(val, "small"))
+            state.shared().setting_font_scale = if (std.ascii.eqlIgnoreCase(val, "small"))
                 .small
             else if (std.ascii.eqlIgnoreCase(val, "large"))
                 .large
             else
                 .normal;
         } else if (std.ascii.eqlIgnoreCase(key, "artwork_radius")) {
-            state.setting_artwork_radius = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
+            state.shared().setting_artwork_radius = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
         } else if (std.ascii.eqlIgnoreCase(key, "progress_thickness")) {
-            state.setting_progress_thickness = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
+            state.shared().setting_progress_thickness = @enumFromInt(@min(2, std.fmt.parseInt(u8, val, 10) catch 1));
         } else if (std.ascii.eqlIgnoreCase(key, "media_key_target")) {
-            state.setting_media_key_target = if (std.ascii.eqlIgnoreCase(val, "active"))
+            state.shared().setting_media_key_target = if (std.ascii.eqlIgnoreCase(val, "active"))
                 .active
             else if (std.ascii.eqlIgnoreCase(val, "spotify"))
                 .spotify
@@ -241,28 +241,28 @@ pub fn parseConfigContent(content: []const u8) void {
                 .off;
         } else if (std.ascii.eqlIgnoreCase(key, "widget_grid_x")) {
             if (std.fmt.parseInt(u8, val, 10)) |num| {
-                state.widget_grid_x = @min(state.Layout.grid_max, num);
+                state.shared().widget_grid_x = @min(state.Layout.grid_max, num);
             } else |_| {}
         } else if (std.ascii.eqlIgnoreCase(key, "widget_grid_y")) {
             if (std.fmt.parseInt(u8, val, 10)) |num| {
-                state.widget_grid_y = @min(state.Layout.grid_max, num);
+                state.shared().widget_grid_y = @min(state.Layout.grid_max, num);
             } else |_| {}
         } else if (std.ascii.eqlIgnoreCase(key, "widget_margin_left")) {
             if (std.fmt.parseInt(i32, val, 10)) |num| {
-                state.widget_margin_left = @max(0, num);
+                state.shared().widget_margin_left = @max(0, num);
                 has_saved_margins = true;
             } else |_| {}
         } else if (std.ascii.eqlIgnoreCase(key, "widget_margin_top")) {
             if (std.fmt.parseInt(i32, val, 10)) |num| {
-                state.widget_margin_top = @max(state.Layout.margin_top_min, num);
+                state.shared().widget_margin_top = @max(state.Layout.margin_top_min, num);
                 has_saved_margins = true;
             } else |_| {}
         }
     }
 
     if (!has_saved_margins) {
-        state.widget_margin_left = state.Layout.margin_left_default + @as(i32, state.widget_grid_x) * @as(i32, @intFromFloat(state.Layout.grid_pitch));
-        state.widget_margin_top = state.Layout.margin_top_default + @as(i32, state.widget_grid_y) * @as(i32, @intFromFloat(state.Layout.grid_pitch));
+        state.shared().widget_margin_left = state.Layout.margin_left_default + @as(i32, state.shared().widget_grid_x) * @as(i32, @intFromFloat(state.Layout.grid_pitch));
+        state.shared().widget_margin_top = state.Layout.margin_top_default + @as(i32, state.shared().widget_grid_y) * @as(i32, @intFromFloat(state.Layout.grid_pitch));
     }
 }
 
@@ -372,42 +372,42 @@ pub fn renderConfigContent(buffer: []u8) ?[]const u8 {
         \\
     ,
         .{
-            if (state.setting_glow) "true" else "false",
-            if (state.setting_native_glass) "true" else "false",
-            if (state.setting_aurora) "true" else "false",
-            if (state.setting_animations) "true" else "false",
-            if (state.setting_dim) "true" else "false",
-            frameStrengthName(state.setting_frame),
-            glowIntensityName(state.setting_intensity),
-            animationSpeedName(state.setting_speed),
-            widgetModeName(state.setting_mode),
-            mediaSourceName(state.setting_source),
-            idleStyleName(state.setting_idle_style),
-            transitionStyleName(state.setting_transition),
-            if (state.setting_hide_text) "true" else "false",
-            if (state.setting_hide_progress) "true" else "false",
-            if (state.setting_show_controls) "true" else "false",
-            if (state.setting_show_timestamps) "true" else "false",
-            if (state.setting_artwork_border) "true" else "false",
-            if (state.setting_compact_gradient) "true" else "false",
-            @intFromEnum(state.setting_artwork_radius),
-            @intFromEnum(state.setting_progress_thickness),
-            switch (state.setting_font_scale) {
+            if (state.shared().setting_glow) "true" else "false",
+            if (state.shared().setting_native_glass) "true" else "false",
+            if (state.shared().setting_aurora) "true" else "false",
+            if (state.shared().setting_animations) "true" else "false",
+            if (state.shared().setting_dim) "true" else "false",
+            frameStrengthName(state.shared().setting_frame),
+            glowIntensityName(state.shared().setting_intensity),
+            animationSpeedName(state.shared().setting_speed),
+            widgetModeName(state.shared().setting_mode),
+            mediaSourceName(state.shared().setting_source),
+            idleStyleName(state.shared().setting_idle_style),
+            transitionStyleName(state.shared().setting_transition),
+            if (state.shared().setting_hide_text) "true" else "false",
+            if (state.shared().setting_hide_progress) "true" else "false",
+            if (state.shared().setting_show_controls) "true" else "false",
+            if (state.shared().setting_show_timestamps) "true" else "false",
+            if (state.shared().setting_artwork_border) "true" else "false",
+            if (state.shared().setting_compact_gradient) "true" else "false",
+            @intFromEnum(state.shared().setting_artwork_radius),
+            @intFromEnum(state.shared().setting_progress_thickness),
+            switch (state.shared().setting_font_scale) {
                 .small => "small",
                 .normal => "normal",
                 .large => "large",
             },
-            switch (state.setting_media_key_target) {
+            switch (state.shared().setting_media_key_target) {
                 .off => "off",
                 .active => "active",
                 .spotify => "spotify",
                 .spotifast => "spotifast",
             },
-            state.widget_margin_left,
-            state.widget_margin_top,
-            state.widget_grid_x,
-            state.widget_grid_y,
-            if (state.setting_debug) "true" else "false",
+            state.shared().widget_margin_left,
+            state.shared().widget_margin_top,
+            state.shared().widget_grid_x,
+            state.shared().widget_grid_y,
+            if (state.shared().setting_debug) "true" else "false",
         },
     ) catch null;
 }
@@ -448,17 +448,17 @@ test "parseConfigContent handles human-readable names, comments, and sections" {
 
     parseConfigContent(sample);
 
-    try std.testing.expectEqual(false, state.setting_glow);
-    try std.testing.expectEqual(true, state.setting_aurora);
-    try std.testing.expectEqual(state.FrameStrength.strong, state.setting_frame);
-    try std.testing.expectEqual(state.GlowIntensity.high, state.setting_intensity);
-    try std.testing.expectEqual(state.AnimationSpeed.fast, state.setting_speed);
-    try std.testing.expectEqual(state.WidgetMode.compact, state.setting_mode);
-    try std.testing.expectEqual(state.MediaSource.spotify, state.setting_source);
-    try std.testing.expectEqual(state.IdleStyle.banana_cat, state.setting_idle_style);
-    try std.testing.expectEqual(state.TransitionStyle.ripple, state.setting_transition);
-    try std.testing.expectEqual(@as(i32, 120), state.widget_margin_left);
-    try std.testing.expectEqual(@as(i32, 45), state.widget_margin_top);
+    try std.testing.expectEqual(false, state.shared().setting_glow);
+    try std.testing.expectEqual(true, state.shared().setting_aurora);
+    try std.testing.expectEqual(state.FrameStrength.strong, state.shared().setting_frame);
+    try std.testing.expectEqual(state.GlowIntensity.high, state.shared().setting_intensity);
+    try std.testing.expectEqual(state.AnimationSpeed.fast, state.shared().setting_speed);
+    try std.testing.expectEqual(state.WidgetMode.compact, state.shared().setting_mode);
+    try std.testing.expectEqual(state.MediaSource.spotify, state.shared().setting_source);
+    try std.testing.expectEqual(state.IdleStyle.banana_cat, state.shared().setting_idle_style);
+    try std.testing.expectEqual(state.TransitionStyle.ripple, state.shared().setting_transition);
+    try std.testing.expectEqual(@as(i32, 120), state.shared().widget_margin_left);
+    try std.testing.expectEqual(@as(i32, 45), state.shared().widget_margin_top);
 }
 
 test "parseConfigContent preserves backward compatibility with integer values" {
@@ -475,14 +475,14 @@ test "parseConfigContent preserves backward compatibility with integer values" {
 
     parseConfigContent(legacy);
 
-    try std.testing.expectEqual(true, state.setting_glow);
-    try std.testing.expectEqual(state.FrameStrength.subtle, state.setting_frame);
-    try std.testing.expectEqual(state.GlowIntensity.low, state.setting_intensity);
-    try std.testing.expectEqual(state.AnimationSpeed.slow, state.setting_speed);
-    try std.testing.expectEqual(state.MediaSource.now_playing, state.setting_source);
-    try std.testing.expectEqual(state.WidgetMode.expanded, state.setting_mode);
-    try std.testing.expectEqual(state.IdleStyle.pixel_cat, state.setting_idle_style);
-    try std.testing.expectEqual(state.TransitionStyle.vinyl, state.setting_transition);
+    try std.testing.expectEqual(true, state.shared().setting_glow);
+    try std.testing.expectEqual(state.FrameStrength.subtle, state.shared().setting_frame);
+    try std.testing.expectEqual(state.GlowIntensity.low, state.shared().setting_intensity);
+    try std.testing.expectEqual(state.AnimationSpeed.slow, state.shared().setting_speed);
+    try std.testing.expectEqual(state.MediaSource.now_playing, state.shared().setting_source);
+    try std.testing.expectEqual(state.WidgetMode.expanded, state.shared().setting_mode);
+    try std.testing.expectEqual(state.IdleStyle.pixel_cat, state.shared().setting_idle_style);
+    try std.testing.expectEqual(state.TransitionStyle.vinyl, state.shared().setting_transition);
 }
 
 test "parseWidgetMode supports all five form factors" {

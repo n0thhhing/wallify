@@ -11,16 +11,16 @@ pub fn drawIdle(canvas: *gpu.Canvas, card: gpu.Rect) void {
     // Native macOS Liquid Glass lives behind the Metal content view. Keep
     // the idle shell transparent in that mode so the native material remains
     // visible instead of being covered by an opaque GPU fill.
-    if (!state.setting_native_glass) {
-        canvas.opacity = @floatCast(state.idle_mix);
+    if (!state.shared().setting_native_glass) {
+        canvas.opacity = @floatCast(state.shared().idle_mix);
         canvas.fill(card, idle_card_bg);
     }
 
     if (@import("../idle_compositor.zig").active) return;
-    switch (state.setting_idle_style) {
-        .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.cat_time, state.animation_time < state.cat_pet_until),
-        .banana_cat => @import("../pets/banana_cat.zig").draw(canvas, card, state.cat_time),
-        .raccoon => @import("../pets/idle_raccoon.zig").draw(canvas, card, state.cat_time, state.animation_time < state.cat_pet_until),
+    switch (state.shared().setting_idle_style) {
+        .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.shared().cat_time, state.shared().animation_time < state.shared().cat_pet_until),
+        .banana_cat => @import("../pets/banana_cat.zig").draw(canvas, card, state.shared().cat_time),
+        .raccoon => @import("../pets/idle_raccoon.zig").draw(canvas, card, state.shared().cat_time, state.shared().animation_time < state.shared().cat_pet_until),
         .spotify => drawSpotifyLauncher(canvas, card),
     }
 }

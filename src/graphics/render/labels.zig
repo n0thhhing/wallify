@@ -10,23 +10,23 @@ fn lerp(a: f64, b: f64, t: f64) f64 {
 }
 
 pub fn drawLabels(canvas: *gpu.Canvas, elapsed: f64) void {
-    if (state.setting_hide_text) return;
+    if (state.shared().setting_hide_text) return;
 
     const compact_mix = std.math.clamp(state.layout.compact_mix, 0.0, 1.0);
     const expanded_mix = 1.0 - compact_mix;
-    const scale: f64 = switch (state.setting_font_scale) {
+    const scale: f64 = switch (state.shared().setting_font_scale) {
         .small => 0.85,
         .normal => 1.0,
         .large => 1.15,
     };
 
-    const title = if (state.global_title_len > 0) state.global_title[0..state.global_title_len] else "Not Playing";
-    const artist = if (state.global_artist_len > 0) state.global_artist[0..state.global_artist_len] else "";
+    const title = if (state.shared().global_title_len > 0) state.shared().global_title[0..state.shared().global_title_len] else "Not Playing";
+    const artist = if (state.shared().global_artist_len > 0) state.shared().global_artist[0..state.shared().global_artist_len] else "";
 
     const secondary_color: gpu.Color = .{
-        @as(f32, @floatFromInt(@max(145, state.extracted_r))) / 255.0,
-        @as(f32, @floatFromInt(@max(145, state.extracted_g))) / 255.0,
-        @as(f32, @floatFromInt(@max(145, state.extracted_b))) / 255.0,
+        @as(f32, @floatFromInt(@max(145, state.shared().extracted_r))) / 255.0,
+        @as(f32, @floatFromInt(@max(145, state.shared().extracted_g))) / 255.0,
+        @as(f32, @floatFromInt(@max(145, state.shared().extracted_b))) / 255.0,
         1.0,
     };
 
@@ -41,7 +41,7 @@ pub fn drawLabels(canvas: *gpu.Canvas, elapsed: f64) void {
             1.0,
             true,
             primary_color,
-            state.marquee_offset,
+            state.shared().marquee_offset,
             false,
             false,
         );
@@ -95,11 +95,11 @@ pub fn drawLabels(canvas: *gpu.Canvas, elapsed: f64) void {
         true,
     );
 
-    if (expanded_mix < 0.88 or !state.setting_show_timestamps) return;
+    if (expanded_mix < 0.88 or !state.shared().setting_show_timestamps) return;
 
     var buffer: [32]u8 = undefined;
     const e: u32 = @intFromFloat(@max(0, elapsed));
-    const d: u32 = @intFromFloat(@max(0, state.global_duration));
+    const d: u32 = @intFromFloat(@max(0, state.shared().global_duration));
 
     const e_text = std.fmt.bufPrint(&buffer, "{d}:{d:0>2}", .{ e / 60, e % 60 }) catch return;
     text.draw(

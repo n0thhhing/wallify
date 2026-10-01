@@ -59,17 +59,17 @@ pub const DebugSnapshot = native.gpu.WallifyDebugSnapshot;
 
 fn debugApplyBool(key: isize, value: bool) void {
     switch (key) {
-        0 => state.setting_glow = value,
-        1 => state.setting_aurora = value,
-        2 => state.setting_animations = value,
-        3 => state.setting_dim = value,
-        5 => state.setting_native_glass = value,
-        6 => state.setting_hide_text = value,
-        7 => state.setting_hide_progress = value,
-        8 => state.setting_show_controls = value,
-        9 => state.setting_show_timestamps = value,
-        19 => state.setting_artwork_border = value,
-        20 => state.setting_compact_gradient = value,
+        0 => state.shared().setting_glow = value,
+        1 => state.shared().setting_aurora = value,
+        2 => state.shared().setting_animations = value,
+        3 => state.shared().setting_dim = value,
+        5 => state.shared().setting_native_glass = value,
+        6 => state.shared().setting_hide_text = value,
+        7 => state.shared().setting_hide_progress = value,
+        8 => state.shared().setting_show_controls = value,
+        9 => state.shared().setting_show_timestamps = value,
+        19 => state.shared().setting_artwork_border = value,
+        20 => state.shared().setting_compact_gradient = value,
         else => {},
     }
     state.saveWidgetSettings();
@@ -78,25 +78,25 @@ fn debugApplyBool(key: isize, value: bool) void {
 
 fn debugApplyInt(key: isize, value: isize) void {
     switch (key) {
-        10 => state.setting_frame = @enumFromInt(std.math.clamp(value, 0, 2)),
-        11 => state.setting_intensity = @enumFromInt(std.math.clamp(value, 0, 2)),
-        12 => state.setting_speed = @enumFromInt(std.math.clamp(value, 0, 2)),
-        13 => state.setting_source = @enumFromInt(std.math.clamp(value, 0, 3)),
+        10 => state.shared().setting_frame = @enumFromInt(std.math.clamp(value, 0, 2)),
+        11 => state.shared().setting_intensity = @enumFromInt(std.math.clamp(value, 0, 2)),
+        12 => state.shared().setting_speed = @enumFromInt(std.math.clamp(value, 0, 2)),
+        13 => state.shared().setting_source = @enumFromInt(std.math.clamp(value, 0, 3)),
         14 => {
             const mode: state.WidgetMode = @enumFromInt(std.math.clamp(value, 0, 4));
             const width: f64 = @floatFromInt(native.wallify_width());
             const height: f64 = @floatFromInt(native.wallify_height());
-            state.beginModeTransition(mode, width, height, state.setting_animations);
-            if (!state.mode_transition_active) native.resizeForMode(mode);
+            state.beginModeTransition(mode, width, height, state.shared().setting_animations);
+            if (!state.shared().mode_transition_active) native.resizeForMode(mode);
         },
-        16 => state.setting_transition = @enumFromInt(std.math.clamp(value, 0, 5)),
-        17 => state.setting_font_scale = @enumFromInt(std.math.clamp(value, 0, 2)),
+        16 => state.shared().setting_transition = @enumFromInt(std.math.clamp(value, 0, 5)),
+        17 => state.shared().setting_font_scale = @enumFromInt(std.math.clamp(value, 0, 2)),
         18 => {
-            state.setting_media_key_target = @enumFromInt(std.math.clamp(value, 0, 3));
+            state.shared().setting_media_key_target = @enumFromInt(std.math.clamp(value, 0, 3));
             native.wallify_update_media_key_tap(@intCast(value));
         },
-        21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(value, 0, 2)),
-        22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(value, 0, 2)),
+        21 => state.shared().setting_artwork_radius = @enumFromInt(std.math.clamp(value, 0, 2)),
+        22 => state.shared().setting_progress_thickness = @enumFromInt(std.math.clamp(value, 0, 2)),
         1000 => snap_debug_mode_mix = std.math.clamp(@as(f64, @floatFromInt(value)) / 100.0, 0.0, 1.0),
         1001 => {
             snap_debug_card_width = @max(1.0, @as(f64, @floatFromInt(value)));
@@ -107,14 +107,14 @@ fn debugApplyInt(key: isize, value: isize) void {
             native.resizeTo(@floatFromInt(native.wallify_width()), snap_debug_card_height);
         },
         1003 => {
-            state.widget_margin_left = @intCast(value);
-            state.panel_position_dirty = true;
-            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
+            state.shared().widget_margin_left = @intCast(value);
+            state.shared().panel_position_dirty = true;
+            native.wallify_move(state.shared().widget_margin_left, state.shared().widget_margin_top);
         },
         1004 => {
-            state.widget_margin_top = @intCast(value);
-            state.panel_position_dirty = true;
-            native.wallify_move(state.widget_margin_left, state.widget_margin_top);
+            state.shared().widget_margin_top = @intCast(value);
+            state.shared().panel_position_dirty = true;
+            native.wallify_move(state.shared().widget_margin_left, state.shared().widget_margin_top);
         },
         1005 => snap_outline_rect.origin.x = @floatFromInt(value),
         1006 => snap_outline_rect.origin.y = @floatFromInt(value),
@@ -134,35 +134,35 @@ pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void 
     window.widget_render_lock();
     defer window.widget_render_unlock();
     const layout = state.layout;
-    const card = layout.card(state.mode_mix);
-    const controls_visible: u32 = @intFromBool(layout.controlsVisible(state.setting_show_controls) and !state.spotifyIdle());
-    const progress_visible: u32 = @intFromBool(layout.progressVisible(state.setting_hide_progress) and !state.spotifyIdle());
+    const card = layout.card(state.shared().mode_mix);
+    const controls_visible: u32 = @intFromBool(layout.controlsVisible(state.shared().setting_show_controls) and !state.spotifyIdle());
+    const progress_visible: u32 = @intFromBool(layout.progressVisible(state.shared().setting_hide_progress) and !state.spotifyIdle());
     out.* = .{
-        .glow = @intFromBool(state.setting_glow),
-        .aurora = @intFromBool(state.setting_aurora),
-        .animations = @intFromBool(state.setting_animations),
-        .dim = @intFromBool(state.setting_dim),
-        .native_glass = @intFromBool(state.setting_native_glass),
-        .hide_text = @intFromBool(state.setting_hide_text),
-        .hide_progress = @intFromBool(state.setting_hide_progress),
-        .show_controls = @intFromBool(state.setting_show_controls),
-        .timestamps = @intFromBool(state.setting_show_timestamps),
-        .artwork_border = @intFromBool(state.setting_artwork_border),
-        .compact_gradient = @intFromBool(state.setting_compact_gradient),
-        .frame = @intFromEnum(state.setting_frame),
-        .intensity = @intFromEnum(state.setting_intensity),
-        .speed = @intFromEnum(state.setting_speed),
-        .source = @intFromEnum(state.setting_source),
-        .mode = @intFromEnum(state.setting_mode),
-        .transition = @intFromEnum(state.setting_transition),
-        .font_scale = @intFromEnum(state.setting_font_scale),
-        .media_key_target = @intFromEnum(state.setting_media_key_target),
-        .artwork_radius = @intFromEnum(state.setting_artwork_radius),
-        .progress_thickness = @intFromEnum(state.setting_progress_thickness),
+        .glow = @intFromBool(state.shared().setting_glow),
+        .aurora = @intFromBool(state.shared().setting_aurora),
+        .animations = @intFromBool(state.shared().setting_animations),
+        .dim = @intFromBool(state.shared().setting_dim),
+        .native_glass = @intFromBool(state.shared().setting_native_glass),
+        .hide_text = @intFromBool(state.shared().setting_hide_text),
+        .hide_progress = @intFromBool(state.shared().setting_hide_progress),
+        .show_controls = @intFromBool(state.shared().setting_show_controls),
+        .timestamps = @intFromBool(state.shared().setting_show_timestamps),
+        .artwork_border = @intFromBool(state.shared().setting_artwork_border),
+        .compact_gradient = @intFromBool(state.shared().setting_compact_gradient),
+        .frame = @intFromEnum(state.shared().setting_frame),
+        .intensity = @intFromEnum(state.shared().setting_intensity),
+        .speed = @intFromEnum(state.shared().setting_speed),
+        .source = @intFromEnum(state.shared().setting_source),
+        .mode = @intFromEnum(state.shared().setting_mode),
+        .transition = @intFromEnum(state.shared().setting_transition),
+        .font_scale = @intFromEnum(state.shared().setting_font_scale),
+        .media_key_target = @intFromEnum(state.shared().setting_media_key_target),
+        .artwork_radius = @intFromEnum(state.shared().setting_artwork_radius),
+        .progress_thickness = @intFromEnum(state.shared().setting_progress_thickness),
         .width = native.wallify_width(),
         .height = native.wallify_height(),
-        .margin_left = state.widget_margin_left,
-        .margin_top = state.widget_margin_top,
+        .margin_left = state.shared().widget_margin_left,
+        .margin_top = state.shared().widget_margin_top,
         .dragging = @intFromBool(snap_debug_dragging),
         .window_number = player.number,
         .window_layer = player.layer,
@@ -177,31 +177,31 @@ pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void 
         .candidate_count = @intCast(snap_candidate_count),
         .snap_distance_sq = snap_last_distance_sq,
         .mode_mix = @floatCast(snap_debug_mode_mix),
-        .title_len = @intCast(@min(state.global_title_len, 255)),
-        .artist_len = @intCast(@min(state.global_artist_len, 255)),
+        .title_len = @intCast(@min(state.shared().global_title_len, 255)),
+        .artist_len = @intCast(@min(state.shared().global_artist_len, 255)),
         .title = [_]u8{0} ** 256,
         .artist = [_]u8{0} ** 256,
-        .pointer_x = state.pointer_x,
-        .pointer_y = state.pointer_y,
-        .hover_target = @intFromEnum(state.global_hover_target),
-        .click_target = @intFromEnum(state.global_click_target),
-        .seeking = @intFromBool(state.global_is_dragging),
-        .panel_dragging = @intFromBool(state.global_panel_dragging),
-        .transition_active = @intFromBool(state.mode_transition_active),
+        .pointer_x = state.shared().pointer_x,
+        .pointer_y = state.shared().pointer_y,
+        .hover_target = @intFromEnum(state.shared().global_hover_target),
+        .click_target = @intFromEnum(state.shared().global_click_target),
+        .seeking = @intFromBool(state.shared().global_is_dragging),
+        .panel_dragging = @intFromBool(state.shared().global_panel_dragging),
+        .transition_active = @intFromBool(state.shared().mode_transition_active),
         .frame_requested = @intFromBool(state.frame_requested.load(.acquire)),
-        .has_artwork = @intFromBool(state.global_has_artwork),
-        .snap_active = @intFromBool(state.panel_snap_active),
+        .has_artwork = @intFromBool(state.shared().global_has_artwork),
+        .snap_active = @intFromBool(state.shared().panel_snap_active),
         .layout_width = layout.width,
         .layout_height = layout.height,
         .compact_mix = layout.compact_mix,
-        .transition_mix = state.mode_mix,
-        .idle_mix = state.idle_mix,
-        .aurora_mix = state.aurora_mix,
-        .artwork_mix = state.global_art_crossfade_alpha,
-        .play_pause_mix = state.play_pause_mix,
-        .position = state.global_position,
-        .duration = state.global_duration,
-        .rate = state.global_rate,
+        .transition_mix = state.shared().mode_mix,
+        .idle_mix = state.shared().idle_mix,
+        .aurora_mix = state.shared().aurora_mix,
+        .artwork_mix = state.shared().global_art_crossfade_alpha,
+        .play_pause_mix = state.shared().play_pause_mix,
+        .position = state.shared().global_position,
+        .duration = state.shared().global_duration,
+        .rate = state.shared().global_rate,
         .geometry = .{
             .{ card.x, card.y, card.w, card.h, card.radius },
             .{ layout.art_x, layout.art_y, layout.art_size, layout.art_size, layout.art_radius },
@@ -217,8 +217,8 @@ pub export fn wallify_debug_get_snapshot(out: *DebugSnapshot) callconv(.c) void 
         const bounds = button.bounds();
         out.geometry[i] = .{ bounds.x, bounds.y, bounds.w, bounds.h, bounds.radius };
     }
-    std.mem.copyForwards(u8, out.title[0..out.title_len], state.global_title[0..out.title_len]);
-    std.mem.copyForwards(u8, out.artist[0..out.artist_len], state.global_artist[0..out.artist_len]);
+    std.mem.copyForwards(u8, out.title[0..out.title_len], state.shared().global_title[0..out.title_len]);
+    std.mem.copyForwards(u8, out.artist[0..out.artist_len], state.shared().global_artist[0..out.artist_len]);
 }
 
 pub export fn wallify_debug_set_bool(key: c_int, value: c_int) callconv(.c) void {
@@ -231,7 +231,7 @@ pub export fn wallify_debug_set_int(key: c_int, value: c_int) callconv(.c) void 
 }
 
 fn updateSnapDebug() void {
-    if (!state.setting_debug) {
+    if (!state.shared().setting_debug) {
         debug_imgui.hide();
         return;
     }

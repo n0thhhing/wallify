@@ -11,20 +11,20 @@ var cached_glow_extent: f64 = -1.0;
 
 pub fn drawPlayer(canvas: *gpu.Canvas, card: gpu.Rect) void {
     drawPlayerStatic(canvas, card);
-    const elapsed = if (state.global_rate == 0.0 or state.global_is_dragging)
-        state.global_elapsed
+    const elapsed = if (state.shared().global_rate == 0.0 or state.shared().global_is_dragging)
+        state.shared().global_elapsed
     else
-        state.playback_clock.position(window.widget_monotonic_time(), state.global_duration);
+        state.shared().playback_clock.position(window.widget_monotonic_time(), state.shared().global_duration);
     drawPlayerDynamic(canvas, elapsed);
 }
 
 // Static content is intentionally isolated here because the native renderer can cache this whole pass.
 // Avoid putting progress, hover, timestamps, or other frame-to-frame state in this function.
 pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
-    const inverse_art_mix = 1.0 - state.global_anim_art_t;
+    const inverse_art_mix = 1.0 - state.shared().global_anim_art_t;
     const ease = 1.0 - inverse_art_mix * inverse_art_mix * inverse_art_mix;
     const inset = 10.0 * (1.0 - ease);
-    const radius_delta: f64 = switch (state.setting_artwork_radius) {
+    const radius_delta: f64 = switch (state.shared().setting_artwork_radius) {
         .soft => -8.0,
         .rounded => 0.0,
         .large => 8.0,
@@ -39,7 +39,7 @@ pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
     };
 
     const transition = std.math.clamp(
-        1.0 - (state.art_transition_until - state.animation_time) / assets.transition_duration,
+        1.0 - (state.shared().art_transition_until - state.shared().animation_time) / assets.transition_duration,
         0.0,
         1.0,
     );
@@ -49,7 +49,7 @@ pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
     drawArtworkImage(canvas, art, mix);
 
     if (state.layout.compact_mix > 0.5) {
-        if (state.setting_compact_gradient) {
+        if (state.shared().setting_compact_gradient) {
             _ = canvas.add(native.gpu.WALLIFY_GRADIENT, 0, .{
                 .x = card.x,
                 .y = card.y + 84.0,
@@ -59,7 +59,7 @@ pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
         }
     }
 
-    if (state.layout.compact_mix <= 0.5 and state.layout.controlsVisible(state.setting_show_controls)) {
+    if (state.layout.compact_mix <= 0.5 and state.layout.controlsVisible(state.shared().setting_show_controls)) {
         drawButtonsStatic(canvas);
     }
 }
@@ -67,10 +67,10 @@ pub fn drawPlayerStatic(canvas: *gpu.Canvas, card: gpu.Rect) void {
 // Dynamic content is deliberately small: it is composited over the cached scene on playback ticks.
 pub fn drawPlayerDynamic(canvas: *gpu.Canvas, elapsed: f64) void {
     if (state.layout.compact_mix <= 0.5) {
-        if (state.layout.progressVisible(state.setting_hide_progress)) {
+        if (state.layout.progressVisible(state.shared().setting_hide_progress)) {
             drawProgressBar(canvas, elapsed);
         }
-        if (state.layout.controlsVisible(state.setting_show_controls)) {
+        if (state.layout.controlsVisible(state.shared().setting_show_controls)) {
             drawButtonHoverStates(canvas);
         }
     }
@@ -83,11 +83,11 @@ fn drawButtonsStatic(canvas: *gpu.Canvas) void {
         const texture: gpu.Texture = switch (button.id) {
             .Prev => .previous,
             .Next => .next,
-            .PlayPause => if (state.play_pause_mix < 0.5) .play else .pause,
+            .PlayPause => if (state.shared().play_pause_mix < 0.5) .play else .pause,
         };
 
         const scale = if (button.id == .PlayPause)
-            icon_transition.scale(state.play_pause_mix, state.global_rate > 0.0)
+            icon_transition.scale(state.shared().play_pause_mix, state.shared().global_rate > 0.0)
         else
             1.0;
 
@@ -103,15 +103,14 @@ fn drawButtonsStatic(canvas: *gpu.Canvas) void {
 
 fn drawButtonHoverStates(canvas: *gpu.Canvas) void {
     for (state.layout.buttons, 0..) |button, i| {
-        if (state.hover_amount[i] > 0.001) {
-            canvas.fill(button.bounds(), .{ 1.0, 1.0, 1.0, @floatCast(state.hover_amount[i] * 31.0 / 255.0) });
+        if (state.shared().hover_amount[i] > 0.001) {
+            canvas.fill(button.bounds(), .{ 1.0, 1.0, 1.0, @floatCast(state.shared().hover_amount[i] * 31.0 / 255.0) });
         }
     }
 }
 
-
 fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
-    if (!state.setting_glow or !state.global_has_artwork or !assets.has_art) return;
+    if (!state.shared().setting_glow or !state.shared().global_has_artwork or !assets.has_art) return;
 
     const glow_base_size: f64 = 132.0;
     // Glow extent depends only on the fixed bake size, so recomputing the FFI value per frame is wasteful.
@@ -128,11 +127,11 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
     };
     // Keep artwork glow visible with native Liquid Glass, but reduce it enough
     // that it complements the system material instead of overpowering the rim.
-    const glass_factor: f32 = if (state.setting_native_glass) 0.45 else 1.0;
-    var alpha: f32 = @floatCast(0.5 * ease * state.setting_intensity.multiplier() * glass_factor);
+    const glass_factor: f32 = if (state.shared().setting_native_glass) 0.45 else 1.0;
+    var alpha: f32 = @floatCast(0.5 * ease * state.shared().setting_intensity.multiplier() * glass_factor);
 
     // In animated transition modes, pulse the ambient glow slightly during the transition
-    if (state.setting_transition != .default and mix < 1.0) {
+    if (state.shared().setting_transition != .default and mix < 1.0) {
         const pulse = @as(f32, @floatCast(std.math.sin(mix * std.math.pi)));
         alpha *= (1.0 + 0.35 * pulse);
     }
@@ -144,26 +143,26 @@ fn drawArtworkGlow(canvas: *gpu.Canvas, ease: f64, mix: f64) void {
 }
 
 fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, mix: f64) void {
-    if (state.global_has_artwork and assets.has_art) {
-        if (state.setting_transition != .default and mix < 1.0) {
+    if (state.shared().global_has_artwork and assets.has_art) {
+        if (state.shared().setting_transition != .default and mix < 1.0) {
             canvas.transition(
-                state.setting_transition,
+                state.shared().setting_transition,
                 .artwork,
                 .previous_artwork,
                 art,
                 @floatCast(mix),
-                @floatCast(state.animation_time),
-                @as(f32, @floatFromInt(state.extracted_r)) / 255.0,
-                @as(f32, @floatFromInt(state.extracted_g)) / 255.0,
-                @as(f32, @floatFromInt(state.extracted_b)) / 255.0,
+                @floatCast(state.shared().animation_time),
+                @as(f32, @floatFromInt(state.shared().extracted_r)) / 255.0,
+                @as(f32, @floatFromInt(state.shared().extracted_g)) / 255.0,
+                @as(f32, @floatFromInt(state.shared().extracted_b)) / 255.0,
             );
         } else {
-            const dim = if (state.setting_dim) @as(f32, 0.6) else @as(f32, 1.0);
+            const dim = if (state.shared().setting_dim) @as(f32, 0.6) else @as(f32, 1.0);
             if (mix < 1.0) canvas.imageTint(.previous_artwork, art, .{ dim, dim, dim, 1.0 });
             canvas.imageTint(.artwork, art, .{ dim, dim, dim, @floatCast(mix) });
         }
 
-        if (state.layout.compact_mix < 0.5 and state.setting_artwork_border) {
+        if (state.layout.compact_mix < 0.5 and state.shared().setting_artwork_border) {
             canvas.stroke(art, 0.5, .{ 1.0, 1.0, 1.0, 0.11 });
         }
     } else {
@@ -172,12 +171,12 @@ fn drawArtworkImage(canvas: *gpu.Canvas, art: gpu.Rect, mix: f64) void {
 }
 
 fn drawProgressBar(canvas: *gpu.Canvas, elapsed: f64) void {
-    const base_height: f64 = switch (state.setting_progress_thickness) {
+    const base_height: f64 = switch (state.shared().setting_progress_thickness) {
         .thin => 3.0,
         .standard => 5.0,
         .thick => 8.0,
     };
-    const height = base_height + 4.0 * state.seek_expansion;
+    const height = base_height + 4.0 * state.shared().seek_expansion;
     const bar = gpu.Rect{
         .x = state.layout.bar_x,
         .y = state.layout.bar_y - (height - state.layout.bar_h) / 2.0,
@@ -187,9 +186,9 @@ fn drawProgressBar(canvas: *gpu.Canvas, elapsed: f64) void {
     };
     canvas.fill(bar, .{ 0.176, 0.176, 0.176, 1.0 });
 
-    if (state.global_duration > 0.0) {
+    if (state.shared().global_duration > 0.0) {
         var progress = bar;
-        progress.w *= std.math.clamp(elapsed / state.global_duration, 0.0, 1.0);
+        progress.w *= std.math.clamp(elapsed / state.shared().global_duration, 0.0, 1.0);
         if (progress.w > 0.0) canvas.fill(progress, .{ 1.0, 1.0, 1.0, 1.0 });
     }
 }

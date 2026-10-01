@@ -72,7 +72,7 @@ pub fn refreshArtwork() void {
     // we bypass the disk entirely and instantly verify the inode's nanosecond modification timestamp (`mtime`) using `fstat`.
     const fd = std.posix.openatZ(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0) catch {
         clearArtwork();
-        state.global_has_artwork = false;
+        state.shared().global_has_artwork = false;
         return;
     };
 
@@ -80,7 +80,7 @@ pub fn refreshArtwork() void {
     if (std.posix.system.fstat(fd, &stat) != 0 or stat.size == 0 or stat.size > 64 * 1024 * 1024) {
         _ = std.posix.system.close(fd);
         clearArtwork();
-        state.global_has_artwork = false;
+        state.shared().global_has_artwork = false;
         return;
     }
 
@@ -95,7 +95,7 @@ pub fn refreshArtwork() void {
     // CPU artwork pixels are intentionally short-lived; the Metal texture becomes the long-lived copy.
     const pixels = std.heap.page_allocator.alloc(u32, w * h) catch {
         clearArtwork();
-        state.global_has_artwork = false;
+        state.shared().global_has_artwork = false;
         return;
     };
     defer std.heap.page_allocator.free(pixels);
@@ -103,7 +103,7 @@ pub fn refreshArtwork() void {
 
     if (!widget_artwork_pixels(pixels.ptr, w, h, path.ptr, path.len)) {
         clearArtwork();
-        state.global_has_artwork = false;
+        state.shared().global_has_artwork = false;
         return;
     }
 
@@ -118,12 +118,12 @@ pub fn refreshArtwork() void {
     upload(.artwork, pixels, w, h);
     native.wallify_blur_texture(@intFromEnum(Texture.artwork), @intFromEnum(Texture.glow), 132.0);
     artwork_generation +%= 1;
-    state.art_transition_until = if (has_art and state.setting_animations) state.animation_time + transition_duration else 0;
+    state.shared().art_transition_until = if (has_art and state.shared().setting_animations) state.shared().animation_time + transition_duration else 0;
     has_art = true;
     art_hash = hash;
     const max_c = @max(sums[0], @max(sums[1], sums[2]));
     const boost = if (max_c > 0) @max(1.0, 160.0 * @as(f64, @floatFromInt(pixels.len)) / @as(f64, @floatFromInt(max_c))) else 1;
-    state.extracted_r = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[0])) / @as(f64, @floatFromInt(pixels.len)) * boost));
-    state.extracted_g = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[1])) / @as(f64, @floatFromInt(pixels.len)) * boost));
-    state.extracted_b = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[2])) / @as(f64, @floatFromInt(pixels.len)) * boost));
+    state.shared().extracted_r = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[0])) / @as(f64, @floatFromInt(pixels.len)) * boost));
+    state.shared().extracted_g = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[1])) / @as(f64, @floatFromInt(pixels.len)) * boost));
+    state.shared().extracted_b = @intFromFloat(@min(255, @as(f64, @floatFromInt(sums[2])) / @as(f64, @floatFromInt(pixels.len)) * boost));
 }

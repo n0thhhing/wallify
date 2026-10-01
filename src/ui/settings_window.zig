@@ -55,67 +55,67 @@ pub fn notify_position_changed() void {
 pub export fn wallify_settings_get_snapshot(out: ?*WallifySettingsSnapshot) callconv(.c) void {
     if (out) |ptr| {
         ptr.* = .{
-            .native_glass = state.setting_native_glass,
-            .glow = state.setting_glow,
-            .aurora = state.setting_aurora,
-            .animations = state.setting_animations,
-            .dim_paused = state.setting_dim,
-            .debug_hud = state.setting_debug,
-            .frame_strength = @intFromEnum(state.setting_frame),
-            .glow_intensity = @intFromEnum(state.setting_intensity),
-            .animation_speed = @intFromEnum(state.setting_speed),
-            .media_source = @intFromEnum(state.setting_source),
-            .widget_mode = @intFromEnum(state.setting_mode),
-            .idle_style = switch (state.setting_idle_style) {
+            .native_glass = state.shared().setting_native_glass,
+            .glow = state.shared().setting_glow,
+            .aurora = state.shared().setting_aurora,
+            .animations = state.shared().setting_animations,
+            .dim_paused = state.shared().setting_dim,
+            .debug_hud = state.shared().setting_debug,
+            .frame_strength = @intFromEnum(state.shared().setting_frame),
+            .glow_intensity = @intFromEnum(state.shared().setting_intensity),
+            .animation_speed = @intFromEnum(state.shared().setting_speed),
+            .media_source = @intFromEnum(state.shared().setting_source),
+            .widget_mode = @intFromEnum(state.shared().setting_mode),
+            .idle_style = switch (state.shared().setting_idle_style) {
                 .pixel_cat => 0,
                 .banana_cat => 1,
                 .spotify => 2,
                 .raccoon => 3,
             },
-            .track_transition = @intFromEnum(state.setting_transition),
-            .margin_left = state.widget_margin_left,
-            .margin_top = state.widget_margin_top,
-            .grid_x = state.widget_grid_x,
-            .grid_y = state.widget_grid_y,
-            .hide_text = state.setting_hide_text,
-            .hide_progress = state.setting_hide_progress,
-            .show_controls = state.setting_show_controls,
-            .show_timestamps = state.setting_show_timestamps,
-            .artwork_border = state.setting_artwork_border,
-            .compact_gradient = state.setting_compact_gradient,
-            .artwork_radius = @intFromEnum(state.setting_artwork_radius),
-            .progress_thickness = @intFromEnum(state.setting_progress_thickness),
-            .font_scale = @intFromEnum(state.setting_font_scale),
-            .media_key_target = @intFromEnum(state.setting_media_key_target),
-            .playing = state.global_rate > 0.0,
+            .track_transition = @intFromEnum(state.shared().setting_transition),
+            .margin_left = state.shared().widget_margin_left,
+            .margin_top = state.shared().widget_margin_top,
+            .grid_x = state.shared().widget_grid_x,
+            .grid_y = state.shared().widget_grid_y,
+            .hide_text = state.shared().setting_hide_text,
+            .hide_progress = state.shared().setting_hide_progress,
+            .show_controls = state.shared().setting_show_controls,
+            .show_timestamps = state.shared().setting_show_timestamps,
+            .artwork_border = state.shared().setting_artwork_border,
+            .compact_gradient = state.shared().setting_compact_gradient,
+            .artwork_radius = @intFromEnum(state.shared().setting_artwork_radius),
+            .progress_thickness = @intFromEnum(state.shared().setting_progress_thickness),
+            .font_scale = @intFromEnum(state.shared().setting_font_scale),
+            .media_key_target = @intFromEnum(state.shared().setting_media_key_target),
+            .playing = state.shared().global_rate > 0.0,
             .title = @splat(0),
             .artist = @splat(0),
         };
-        const title_len = @min(state.global_title_len, ptr.title.len - 1);
-        const artist_len = @min(state.global_artist_len, ptr.artist.len - 1);
-        @memcpy(ptr.title[0..title_len], state.global_title[0..title_len]);
-        @memcpy(ptr.artist[0..artist_len], state.global_artist[0..artist_len]);
+        const title_len = @min(state.shared().global_title_len, ptr.title.len - 1);
+        const artist_len = @min(state.shared().global_artist_len, ptr.artist.len - 1);
+        @memcpy(ptr.title[0..title_len], state.shared().global_title[0..title_len]);
+        @memcpy(ptr.artist[0..artist_len], state.shared().global_artist[0..artist_len]);
     }
 }
 
 pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) void {
     std.log.info("settings: bool key={d} value={}", .{ key, val });
     switch (key) {
-        0 => state.setting_glow = val,
-        1 => state.setting_aurora = val,
-        2 => state.setting_animations = val,
-        3 => state.setting_dim = val,
+        0 => state.shared().setting_glow = val,
+        1 => state.shared().setting_aurora = val,
+        2 => state.shared().setting_animations = val,
+        3 => state.shared().setting_dim = val,
         4 => {
-            state.setting_debug = val;
+            state.shared().setting_debug = val;
             if (val) window.widget_debug_window_show() else window.widget_debug_window_hide();
         },
-        5 => state.setting_native_glass = val,
-        6 => state.setting_hide_text = val,
-        7 => state.setting_hide_progress = val,
-        8 => state.setting_show_controls = val,
-        9 => state.setting_show_timestamps = val,
-        19 => state.setting_artwork_border = val,
-        20 => state.setting_compact_gradient = val,
+        5 => state.shared().setting_native_glass = val,
+        6 => state.shared().setting_hide_text = val,
+        7 => state.shared().setting_hide_progress = val,
+        8 => state.shared().setting_show_controls = val,
+        9 => state.shared().setting_show_timestamps = val,
+        19 => state.shared().setting_artwork_border = val,
+        20 => state.shared().setting_compact_gradient = val,
         else => {},
     }
     state.saveWidgetSettings();
@@ -125,41 +125,41 @@ pub export fn wallify_settings_apply_bool(key: c_int, val: bool) callconv(.c) vo
 pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) void {
     std.log.info("settings: int key={d} value={d}", .{ key, val });
     switch (key) {
-        10 => state.setting_frame = @enumFromInt(std.math.clamp(val, 0, 2)),
-        11 => state.setting_intensity = @enumFromInt(std.math.clamp(val, 0, 2)),
-        12 => state.setting_speed = @enumFromInt(std.math.clamp(val, 0, 2)),
-        13 => state.setting_source = @enumFromInt(std.math.clamp(val, 0, 3)),
+        10 => state.shared().setting_frame = @enumFromInt(std.math.clamp(val, 0, 2)),
+        11 => state.shared().setting_intensity = @enumFromInt(std.math.clamp(val, 0, 2)),
+        12 => state.shared().setting_speed = @enumFromInt(std.math.clamp(val, 0, 2)),
+        13 => state.shared().setting_source = @enumFromInt(std.math.clamp(val, 0, 3)),
         14 => {
             const new_mode: state.WidgetMode = @enumFromInt(std.math.clamp(val, 0, 4));
-            if (state.setting_mode != new_mode) {
+            if (state.shared().setting_mode != new_mode) {
                 const current_width: f64 = @floatFromInt(native.wallify_width());
                 const current_height: f64 = @floatFromInt(native.wallify_height());
                 state.beginModeTransition(
                     new_mode,
                     current_width,
                     current_height,
-                    state.setting_animations,
+                    state.shared().setting_animations,
                 );
-                if (!state.mode_transition_active) {
+                if (!state.shared().mode_transition_active) {
                     native.resizeForMode(new_mode);
                 }
             }
         },
-        15 => state.setting_idle_style = switch (val) {
+        15 => state.shared().setting_idle_style = switch (val) {
             0 => .pixel_cat,
             1 => .banana_cat,
             3 => .raccoon,
             else => .spotify,
         },
-        16 => state.setting_transition = @enumFromInt(std.math.clamp(val, 0, 5)),
-        17 => state.setting_font_scale = @enumFromInt(std.math.clamp(val, 0, 2)),
+        16 => state.shared().setting_transition = @enumFromInt(std.math.clamp(val, 0, 5)),
+        17 => state.shared().setting_font_scale = @enumFromInt(std.math.clamp(val, 0, 2)),
         18 => {
-            state.setting_media_key_target = @enumFromInt(std.math.clamp(val, 0, 3));
+            state.shared().setting_media_key_target = @enumFromInt(std.math.clamp(val, 0, 3));
             // Notify native layer to install/remove the CGEventTap accordingly
-            native.wallify_update_media_key_tap(@intFromEnum(state.setting_media_key_target));
+            native.wallify_update_media_key_tap(@intFromEnum(state.shared().setting_media_key_target));
         },
-        21 => state.setting_artwork_radius = @enumFromInt(std.math.clamp(val, 0, 2)),
-        22 => state.setting_progress_thickness = @enumFromInt(std.math.clamp(val, 0, 2)),
+        21 => state.shared().setting_artwork_radius = @enumFromInt(std.math.clamp(val, 0, 2)),
+        22 => state.shared().setting_progress_thickness = @enumFromInt(std.math.clamp(val, 0, 2)),
         else => {},
     }
     state.saveWidgetSettings();
@@ -168,38 +168,38 @@ pub export fn wallify_settings_apply_int(key: c_int, val: c_int) callconv(.c) vo
 
 pub export fn wallify_settings_restore_defaults() callconv(.c) void {
     std.log.info("settings: restoring defaults", .{});
-    state.setting_idle_style = .pixel_cat;
-    state.setting_transition = .cinematic;
-    state.setting_glow = true;
-    state.setting_native_glass = false;
-    state.setting_aurora = true;
-    state.setting_animations = true;
-    state.setting_dim = true;
-    state.setting_debug = false;
+    state.shared().setting_idle_style = .pixel_cat;
+    state.shared().setting_transition = .cinematic;
+    state.shared().setting_glow = true;
+    state.shared().setting_native_glass = false;
+    state.shared().setting_aurora = true;
+    state.shared().setting_animations = true;
+    state.shared().setting_dim = true;
+    state.shared().setting_debug = false;
     window.widget_debug_window_hide();
-    state.setting_frame = .subtle;
-    state.setting_intensity = .normal;
-    state.setting_speed = .normal;
-    state.setting_source = .now_playing;
+    state.shared().setting_frame = .subtle;
+    state.shared().setting_intensity = .normal;
+    state.shared().setting_speed = .normal;
+    state.shared().setting_source = .now_playing;
     state.beginModeTransition(
         .expanded,
         @floatFromInt(native.wallify_width()),
         @floatFromInt(native.wallify_height()),
-        state.setting_animations,
+        state.shared().setting_animations,
     );
-    if (!state.mode_transition_active) {
+    if (!state.shared().mode_transition_active) {
         native.resizeForMode(.expanded);
     }
-    state.setting_hide_text = false;
-    state.setting_hide_progress = false;
-    state.setting_show_controls = true;
-    state.setting_show_timestamps = true;
-    state.setting_artwork_border = true;
-    state.setting_compact_gradient = true;
-    state.setting_artwork_radius = .rounded;
-    state.setting_progress_thickness = .standard;
-    state.setting_font_scale = .normal;
-    state.setting_media_key_target = .off;
+    state.shared().setting_hide_text = false;
+    state.shared().setting_hide_progress = false;
+    state.shared().setting_show_controls = true;
+    state.shared().setting_show_timestamps = true;
+    state.shared().setting_artwork_border = true;
+    state.shared().setting_compact_gradient = true;
+    state.shared().setting_artwork_radius = .rounded;
+    state.shared().setting_progress_thickness = .standard;
+    state.shared().setting_font_scale = .normal;
+    state.shared().setting_media_key_target = .off;
     native.wallify_update_media_key_tap(0);
 
     state.saveWidgetSettings();
@@ -207,9 +207,9 @@ pub export fn wallify_settings_restore_defaults() callconv(.c) void {
 }
 
 pub export fn wallify_settings_reset_position() callconv(.c) void {
-    state.widget_margin_left = state.Layout.margin_left_default;
-    state.widget_margin_top = state.Layout.margin_top_default;
-    state.panel_position_dirty = true;
+    state.shared().widget_margin_left = state.Layout.margin_left_default;
+    state.shared().widget_margin_top = state.Layout.margin_top_default;
+    state.shared().panel_position_dirty = true;
     state.saveWidgetSettings();
     state.requestFrame();
 }
@@ -217,34 +217,34 @@ pub export fn wallify_settings_reset_position() callconv(.c) void {
 test "settings snapshot matches active state" {
     var snapshot: WallifySettingsSnapshot = undefined;
     wallify_settings_get_snapshot(&snapshot);
-    try std.testing.expectEqual(state.setting_glow, snapshot.glow);
-    try std.testing.expectEqual(state.setting_aurora, snapshot.aurora);
-    try std.testing.expectEqual(state.setting_animations, snapshot.animations);
+    try std.testing.expectEqual(state.shared().setting_glow, snapshot.glow);
+    try std.testing.expectEqual(state.shared().setting_aurora, snapshot.aurora);
+    try std.testing.expectEqual(state.shared().setting_animations, snapshot.animations);
 
     // Test media source mapping synchronization
     wallify_settings_apply_int(13, 2);
-    try std.testing.expectEqual(state.MediaSource.spotifast, state.setting_source);
+    try std.testing.expectEqual(state.MediaSource.spotifast, state.shared().setting_source);
     wallify_settings_get_snapshot(&snapshot);
     try std.testing.expectEqual(@as(c_int, 2), snapshot.media_source);
 
     // Test idle style mapping synchronization
     wallify_settings_apply_int(15, 0);
-    try std.testing.expectEqual(state.IdleStyle.pixel_cat, state.setting_idle_style);
+    try std.testing.expectEqual(state.IdleStyle.pixel_cat, state.shared().setting_idle_style);
     wallify_settings_get_snapshot(&snapshot);
     try std.testing.expectEqual(@as(c_int, 0), snapshot.idle_style);
 
     wallify_settings_apply_int(15, 1);
-    try std.testing.expectEqual(state.IdleStyle.banana_cat, state.setting_idle_style);
+    try std.testing.expectEqual(state.IdleStyle.banana_cat, state.shared().setting_idle_style);
     wallify_settings_get_snapshot(&snapshot);
     try std.testing.expectEqual(@as(c_int, 1), snapshot.idle_style);
 
     wallify_settings_apply_int(15, 2);
-    try std.testing.expectEqual(state.IdleStyle.spotify, state.setting_idle_style);
+    try std.testing.expectEqual(state.IdleStyle.spotify, state.shared().setting_idle_style);
     wallify_settings_get_snapshot(&snapshot);
     try std.testing.expectEqual(@as(c_int, 2), snapshot.idle_style);
 
     wallify_settings_apply_int(15, 3);
-    try std.testing.expectEqual(state.IdleStyle.raccoon, state.setting_idle_style);
+    try std.testing.expectEqual(state.IdleStyle.raccoon, state.shared().setting_idle_style);
     wallify_settings_get_snapshot(&snapshot);
     try std.testing.expectEqual(@as(c_int, 3), snapshot.idle_style);
 }

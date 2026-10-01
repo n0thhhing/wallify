@@ -7,42 +7,109 @@ pub const ActionId = layout_mod.ActionId;
 pub const ButtonDef = layout_mod.ButtonDef;
 pub const Layout = layout_mod.Layout;
 
+pub const SharedState = extern struct {
+    global_title: [256]u8,
+    global_title_len: usize,
+    global_artist: [256]u8,
+    global_artist_len: usize,
+    global_has_artwork: bool,
+    global_rate_lock: u32,
+    global_rate_lock_until: f64,
+    playback_state: @import("media/playback_state.zig").PlaybackState,
+    extracted_r: u8,
+    extracted_g: u8,
+    extracted_b: u8,
+    global_is_dragging: bool,
+    global_rate: f64,
+    global_duration: f64,
+    global_position: f64,
+    global_elapsed: f64,
+    playback_clock: PlaybackClock,
+    global_track_id: [256]u8,
+    global_track_id_len: usize,
+    previous_track_id: [256]u8,
+    previous_track_id_len: usize,
+    global_art_crossfade_alpha: f32,
+    global_anim_art_t: f64,
+    play_pause_mix: f64,
+    seek_expansion: f64,
+    seek_velocity: f64,
+    aurora_mix: f64,
+    hover_amount: [3]f64,
+    clock: PlaybackClock,
+    setting_hide_text: bool,
+    setting_hide_progress: bool,
+    setting_show_controls: bool,
+    setting_show_timestamps: bool,
+    setting_artwork_border: bool,
+    setting_compact_gradient: bool,
+    setting_font_scale: FontScale,
+    setting_artwork_radius: ArtworkRadius,
+    setting_progress_thickness: ProgressThickness,
+    setting_media_key_target: MediaKeyTarget,
+    setting_glow: bool,
+    setting_native_glass: bool,
+    setting_aurora: bool,
+    setting_animations: bool,
+    setting_dim: bool,
+    setting_frame: FrameStrength,
+    setting_intensity: GlowIntensity,
+    setting_speed: AnimationSpeed,
+    setting_idle_style: IdleStyle,
+    setting_transition: TransitionStyle,
+    setting_source: MediaSource,
+    setting_debug: bool,
+    idle_mix: f64,
+    cat_pet_until: f64,
+    cat_time: f64,
+    pointer_x: f64,
+    pointer_y: f64,
+    setting_mode: WidgetMode,
+    mode_from: WidgetMode,
+    mode_mix: f64,
+    mode_transition_active: bool,
+    mode_start_width: f64,
+    mode_start_height: f64,
+    mode_target_width: f64,
+    mode_target_height: f64,
+    animation_time: f64,
+    marquee_offset: f64,
+    marquee_direction: f64,
+    widget_grid_x: u8,
+    widget_grid_y: u8,
+    global_panel_dragging: bool,
+    widget_drag_start_mouse_x: f64,
+    widget_drag_start_mouse_y: f64,
+    widget_drag_start_margin_left: i32,
+    widget_drag_start_margin_top: i32,
+    widget_margin_left: i32,
+    widget_margin_top: i32,
+    panel_position_dirty: bool,
+    panel_snap_active: bool,
+    panel_snap_elapsed: f64,
+    panel_snap_start_left: i32,
+    panel_snap_start_top: i32,
+    panel_snap_target_left: i32,
+    panel_snap_target_top: i32,
+    panel_save_after_snap: bool,
+    global_hover_target: HitTarget,
+    global_click_target: HitTarget,
+    artwork_refresh_pending: bool,
+    art_transition_until: f64,
+};
+extern fn wallify_widget_state() callconv(.c) *SharedState;
+extern fn wallify_widget_state_size() callconv(.c) usize;
+pub fn shared() *SharedState {
+    return wallify_widget_state();
+}
+
 pub var layout = Layout{};
 pub const render_scale = 2;
 
-pub var global_title: [256]u8 = undefined;
-pub var global_title_len: usize = 0;
-pub var global_artist: [256]u8 = undefined;
-pub var global_artist_len: usize = 0;
-pub var global_has_artwork: bool = false;
-pub var global_rate_lock: u32 = 0;
-pub var global_rate_lock_until: f64 = 0;
-pub var playback_state = @import("media/playback_state.zig").PlaybackState{};
-pub var extracted_r: u8 = 180;
-pub var extracted_g: u8 = 180;
-pub var extracted_b: u8 = 180;
-pub var global_is_dragging: bool = false;
-pub var global_rate: f64 = 0.0;
-pub var global_duration: f64 = 0.0;
-pub var global_position: f64 = 0.0;
-pub var global_elapsed: f64 = 0.0;
-pub var playback_clock = PlaybackClock{};
-pub var global_track_id: [256]u8 = undefined;
-pub var global_track_id_len: usize = 0;
-pub var previous_track_id: [256]u8 = undefined;
-pub var previous_track_id_len: usize = 0;
-pub var global_art_crossfade_alpha: f32 = 1.0;
-pub var global_anim_art_t: f64 = 0.0;
-pub var play_pause_mix: f64 = 0.0;
-pub var seek_expansion: f64 = 0.0;
-pub var seek_velocity: f64 = 0.0;
-pub var aurora_mix: f64 = 0.0;
-pub var hover_amount = [_]f64{ 0, 0, 0 };
 pub var spotify_closed = std.atomic.Value(bool).init(false);
 pub var spotify_has_track = std.atomic.Value(bool).init(false);
-pub var clock = PlaybackClock{};
 
-pub const HitTarget = enum {
+pub const HitTarget = enum(i32) {
     none,
     grid_background,
     frame_bounds,
@@ -178,35 +245,6 @@ pub const ProgressThickness = enum(u8) {
     thick = 2,
 };
 
-pub var setting_hide_text: bool = false;
-pub var setting_hide_progress: bool = false;
-pub var setting_show_controls: bool = true;
-pub var setting_show_timestamps: bool = true;
-pub var setting_artwork_border: bool = true;
-pub var setting_compact_gradient: bool = true;
-pub var setting_font_scale: FontScale = .normal;
-pub var setting_artwork_radius: ArtworkRadius = .rounded;
-pub var setting_progress_thickness: ProgressThickness = .standard;
-pub var setting_media_key_target: MediaKeyTarget = .off;
-
-pub var setting_glow: bool = true;
-pub var setting_native_glass: bool = false;
-pub var setting_aurora: bool = true;
-pub var setting_animations: bool = true;
-pub var setting_dim: bool = true;
-pub var setting_frame: FrameStrength = .subtle;
-pub var setting_intensity: GlowIntensity = .normal;
-pub var setting_speed: AnimationSpeed = .normal;
-pub var setting_idle_style: IdleStyle = .pixel_cat;
-pub var setting_transition: TransitionStyle = .cinematic;
-pub var setting_source: MediaSource = .now_playing;
-pub var setting_debug: bool = false;
-pub var idle_mix: f64 = 0.0;
-pub var cat_pet_until: f64 = 0.0;
-pub var cat_time: f64 = 0.0;
-pub var pointer_x: f64 = Layout.compact_panel_width / 2.0;
-pub var pointer_y: f64 = Layout.compact_panel_height / 2.0;
-
 pub fn isPlaceholderTitle(title: []const u8) bool {
     return std.mem.eql(u8, title, "Not Playing") or
         std.mem.eql(u8, title, "Spotify is Closed") or
@@ -217,26 +255,17 @@ pub fn isPlaceholderTitle(title: []const u8) bool {
 }
 
 pub fn spotifyIdle() bool {
-    if (setting_source != .spotify) return false;
+    if (shared().setting_source != .spotify) return false;
     if (spotify_closed.load(.acquire)) return true;
 
     // A live playback rate or real track metadata is authoritative even if
     // the asynchronous presence flag is temporarily stale.
-    if (global_rate > 0.0) return false;
+    if (shared().global_rate > 0.0) return false;
     if (spotify_has_track.load(.acquire)) return false;
-    if (global_title_len > 0 and !isPlaceholderTitle(global_title[0..global_title_len])) return false;
+    if (shared().global_title_len > 0 and !isPlaceholderTitle(shared().global_title[0..shared().global_title_len])) return false;
 
     return true;
 }
-
-pub var setting_mode: WidgetMode = .expanded;
-pub var mode_from: WidgetMode = .expanded;
-pub var mode_mix: f64 = 1.0;
-pub var mode_transition_active: bool = false;
-pub var mode_start_width: f64 = Layout.expanded_panel_width;
-pub var mode_start_height: f64 = Layout.expanded_panel_height;
-pub var mode_target_width: f64 = Layout.expanded_panel_width;
-pub var mode_target_height: f64 = Layout.expanded_panel_height;
 
 pub fn beginModeTransition(
     new_mode: WidgetMode,
@@ -247,7 +276,7 @@ pub fn beginModeTransition(
     const target = new_mode.dimensions();
 
     std.log.info("layout: mode {s} -> {s}, {d:.0}x{d:.0} -> {d:.0}x{d:.0}, animate={}", .{
-        @tagName(setting_mode),
+        @tagName(shared().setting_mode),
         @tagName(new_mode),
         current_width,
         current_height,
@@ -255,53 +284,30 @@ pub fn beginModeTransition(
         target.height,
         animate,
     });
-    mode_from = setting_mode;
-    setting_mode = new_mode;
-    mode_start_width = current_width;
-    mode_start_height = current_height;
-    mode_target_width = target.width;
-    mode_target_height = target.height;
-    mode_mix = if (animate) 0.0 else 1.0;
-    mode_transition_active = animate;
+    shared().mode_from = shared().setting_mode;
+    shared().setting_mode = new_mode;
+    shared().mode_start_width = current_width;
+    shared().mode_start_height = current_height;
+    shared().mode_target_width = target.width;
+    shared().mode_target_height = target.height;
+    shared().mode_mix = if (animate) 0.0 else 1.0;
+    shared().mode_transition_active = animate;
 }
 
 pub fn modeAnimationFinished() void {
     std.log.info("layout: mode transition finished, mode={s}, size={d:.0}x{d:.0}", .{
-        @tagName(setting_mode),
-        mode_target_width,
-        mode_target_height,
+        @tagName(shared().setting_mode),
+        shared().mode_target_width,
+        shared().mode_target_height,
     });
-    mode_mix = 1.0;
-    mode_transition_active = false;
-    mode_from = setting_mode;
-    mode_start_width = mode_target_width;
-    mode_start_height = mode_target_height;
+    shared().mode_mix = 1.0;
+    shared().mode_transition_active = false;
+    shared().mode_from = shared().setting_mode;
+    shared().mode_start_width = shared().mode_target_width;
+    shared().mode_start_height = shared().mode_target_height;
 }
 
-pub var animation_time: f64 = 0;
-pub var marquee_offset: f64 = 0;
-pub var marquee_direction: f64 = 1;
 // Desktop-widget grid position. A cell is one small widget plus its gap.
-pub var widget_grid_x: u8 = 0;
-pub var widget_grid_y: u8 = 0;
-pub var global_panel_dragging = false;
-pub var widget_drag_start_mouse_x: f64 = 0;
-pub var widget_drag_start_mouse_y: f64 = 0;
-pub var widget_drag_start_margin_left: i32 = Layout.margin_left_default;
-pub var widget_drag_start_margin_top: i32 = Layout.margin_top_default;
-pub var widget_margin_left: i32 = Layout.margin_left_default;
-pub var widget_margin_top: i32 = Layout.margin_top_default;
-pub var panel_position_dirty = false;
-pub var panel_snap_active = false;
-pub var panel_snap_elapsed: f64 = 0;
-pub var panel_snap_start_left: i32 = 0;
-pub var panel_snap_start_top: i32 = 0;
-pub var panel_snap_target_left: i32 = 0;
-pub var panel_snap_target_top: i32 = 0;
-pub var panel_save_after_snap = false;
-
-pub var global_hover_target: HitTarget = .none;
-pub var global_click_target: HitTarget = .none;
 
 const frame_wakeup = @import("frame_wakeup.zig");
 
@@ -329,9 +335,6 @@ pub fn requestFrame() void {
     }
 }
 
-pub var artwork_refresh_pending = true;
-pub var art_transition_until: f64 = 0;
-
 // Re-export configuration engine from settings.zig
 pub const settings = @import("settings.zig");
 pub const loadWidgetSettings = settings.loadWidgetSettings;
@@ -356,37 +359,37 @@ test "AnimationSpeed multiplier paces framerate transitions" {
 }
 
 test "spotifyIdle follows explicit Spotify track presence" {
-    const old_source = setting_source;
+    const old_source = shared().setting_source;
     const old_closed = spotify_closed.load(.acquire);
     const old_has_track = spotify_has_track.load(.acquire);
     defer {
-        setting_source = old_source;
+        shared().setting_source = old_source;
         spotify_closed.store(old_closed, .release);
         spotify_has_track.store(old_has_track, .release);
-        global_title_len = 0;
-        global_rate = 0.0;
+        shared().global_title_len = 0;
+        shared().global_rate = 0.0;
     }
 
-    setting_source = .spotify;
+    shared().setting_source = .spotify;
     spotify_closed.store(false, .release);
     spotify_has_track.store(false, .release);
     try std.testing.expect(spotifyIdle());
 
     // A real track stays active even before artwork arrives and while paused.
     spotify_has_track.store(true, .release);
-    global_rate = 0.0;
-    global_has_artwork = false;
+    shared().global_rate = 0.0;
+    shared().global_has_artwork = false;
     try std.testing.expect(!spotifyIdle());
 
     // Live playback and real metadata are authoritative even if the async
     // presence flag has not caught up yet.
     spotify_has_track.store(false, .release);
-    global_rate = 1.0;
+    shared().global_rate = 1.0;
     try std.testing.expect(!spotifyIdle());
-    global_rate = 0.0;
+    shared().global_rate = 0.0;
     const real_title = "Starboy";
-    @memcpy(global_title[0..real_title.len], real_title);
-    global_title_len = real_title.len;
+    @memcpy(shared().global_title[0..real_title.len], real_title);
+    shared().global_title_len = real_title.len;
     try std.testing.expect(!spotifyIdle());
 
     spotify_closed.store(true, .release);
@@ -395,6 +398,16 @@ test "spotifyIdle follows explicit Spotify track presence" {
     // Idle is a Spotify-only presentation state.
     spotify_closed.store(false, .release);
     spotify_has_track.store(false, .release);
-    setting_source = .now_playing;
+    shared().setting_source = .now_playing;
     try std.testing.expect(!spotifyIdle());
+}
+
+test "Swift shared widget state has the same ABI" {
+    try std.testing.expectEqual(@sizeOf(SharedState), wallify_widget_state_size());
+    const c = @cImport({
+        @cInclude("widget_state.h");
+    });
+    inline for (std.meta.fields(SharedState)) |field| {
+        try std.testing.expectEqual(@offsetOf(c.WallifyWidgetState, field.name), @offsetOf(SharedState, field.name));
+    }
 }

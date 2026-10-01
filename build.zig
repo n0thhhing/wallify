@@ -44,6 +44,8 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileInput(b.path("src/platform/gpu.h"));
     swift_settings.addFileInput(b.path("src/platform/media_core.h"));
     swift_settings.addFileInput(b.path("src/platform/layout.h"));
+    swift_settings.addFileInput(b.path("src/platform/widget_state.h"));
+    swift_settings.addFileArg(b.path("src/widget_state.swift"));
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
@@ -200,6 +202,8 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileInput(b.path("src/platform/gpu.h"));
     swift_check.addFileInput(b.path("src/platform/media_core.h"));
     swift_check.addFileInput(b.path("src/platform/layout.h"));
+    swift_check.addFileInput(b.path("src/platform/widget_state.h"));
+    swift_check.addFileArg(b.path("src/widget_state.swift"));
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));

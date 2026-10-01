@@ -21,3 +21,5 @@ extern void wallify_context_menu_selected(int tag);
 extern void wallify_artwork_downloaded(bool available);
 extern void wallify_execute_media_command(unsigned int command);
 extern void wallify_execute_media_seek(double target);
+
+#include "widget_state.h"

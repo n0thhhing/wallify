@@ -24,7 +24,7 @@ fn isContextMenuKind(kind: c_int) bool {
 }
 
 fn openIdlePlayer() void {
-    if (state.setting_source == .spotifast) {
+    if (state.shared().setting_source == .spotifast) {
         spotifast.widget_open_spotifast();
     } else {
         spotify.widget_open_spotify();
@@ -40,16 +40,16 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     const px = x;
     const py = y_top_down;
-    state.pointer_x = px;
-    state.pointer_y = py;
+    state.shared().pointer_x = px;
+    state.shared().pointer_y = py;
     const point = hitbox.Point{ .x = px, .y = py };
 
     if (is_right) {
         std.log.info("input: context menu at {d:.1},{d:.1}", .{ px, py });
-        state.global_is_dragging = false;
-        state.global_panel_dragging = false;
+        state.shared().global_is_dragging = false;
+        state.shared().global_panel_dragging = false;
         window.widget_hide_snap_outline();
-        state.global_hover_target = .none;
+        state.shared().global_hover_target = .none;
         menu.widget_context_menu();
         state.requestFrame();
         return;
@@ -57,8 +57,8 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     var new_hover_target: state.HitTarget = .grid_background;
     var pressed: ?state.ActionId = null;
-    const controls_visible = state.layout.controlsVisible(state.setting_show_controls) and !state.spotifyIdle();
-    const progress_visible = state.layout.progressVisible(state.setting_hide_progress) and !state.spotifyIdle();
+    const controls_visible = state.layout.controlsVisible(state.shared().setting_show_controls) and !state.spotifyIdle();
+    const progress_visible = state.layout.progressVisible(state.shared().setting_hide_progress) and !state.spotifyIdle();
 
     for (state.layout.buttons) |button| {
         if (controls_visible and button.bounds().contains(point)) {
@@ -68,7 +68,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     } else {
         const seek_bounds = hitbox.Rect{ .x = state.layout.bar_x, .y = state.layout.bar_y - state.layout.bar_hit_pad_y, .w = state.layout.bar_w, .h = state.layout.bar_h + 2 * state.layout.bar_hit_pad_y, .radius = SEEK_HIT_RADIUS };
         const art_bounds = hitbox.Rect{ .x = state.layout.art_x, .y = state.layout.art_y, .w = state.layout.art_size, .h = state.layout.art_size, .radius = ART_HIT_RADIUS };
-        const frame_bounds = state.layout.card(state.mode_mix);
+        const frame_bounds = state.layout.card(state.shared().mode_mix);
         if (progress_visible and seek_bounds.contains(point)) {
             new_hover_target = .bar;
         } else if (art_bounds.contains(point)) {
@@ -81,8 +81,8 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
     // Track only interaction state that affects presentation; redundant pointer samples should not
     // wake the renderer when the visible hit target has not changed.
     var state_changed = false;
-    if (state.global_hover_target != new_hover_target) {
-        state.global_hover_target = new_hover_target;
+    if (state.shared().global_hover_target != new_hover_target) {
+        state.shared().global_hover_target = new_hover_target;
         state_changed = true;
     }
 
@@ -90,41 +90,41 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         for (state.layout.buttons) |button| {
             if (controls_visible and button.bounds().contains(point)) pressed = button.id;
         }
-        if (state.global_click_target != new_hover_target) {
-            state.global_click_target = new_hover_target;
+        if (state.shared().global_click_target != new_hover_target) {
+            state.shared().global_click_target = new_hover_target;
             state_changed = true;
         }
 
-        if (state.global_duration > 0 and new_hover_target == .bar) {
-            std.log.info("input: seek start at {d:.2}s", .{state.global_elapsed});
-            state.global_is_dragging = true;
+        if (state.shared().global_duration > 0 and new_hover_target == .bar) {
+            std.log.info("input: seek start at {d:.2}s", .{state.shared().global_elapsed});
+            state.shared().global_is_dragging = true;
             state_changed = true;
         }
 
-        const card_bounds = state.layout.card(state.mode_mix);
-        if (card_bounds.contains(point) and pressed == null and !state.global_is_dragging) {
+        const card_bounds = state.layout.card(state.shared().mode_mix);
+        if (card_bounds.contains(point) and pressed == null and !state.shared().global_is_dragging) {
             std.log.info("input: panel drag start at {d:.1},{d:.1}", .{ px, py });
             const mouse = window.widget_mouse_location();
-            state.global_panel_dragging = true;
-            state.widget_drag_start_mouse_x = mouse.x;
-            state.widget_drag_start_mouse_y = mouse.y;
-            state.widget_drag_start_margin_left = state.widget_margin_left;
-            state.widget_drag_start_margin_top = state.widget_margin_top;
+            state.shared().global_panel_dragging = true;
+            state.shared().widget_drag_start_mouse_x = mouse.x;
+            state.shared().widget_drag_start_mouse_y = mouse.y;
+            state.shared().widget_drag_start_margin_left = state.shared().widget_margin_left;
+            state.shared().widget_drag_start_margin_top = state.shared().widget_margin_top;
             const visual_width: f64 = @floatFromInt(@import("../platform/native.zig").wallify_width());
-            window.widget_start_drag(state.widget_margin_left, state.widget_margin_top, visual_width);
+            window.widget_start_drag(state.shared().widget_margin_left, state.shared().widget_margin_top, visual_width);
             state_changed = true;
         }
     }
 
-    if (state.global_panel_dragging) {
+    if (state.shared().global_panel_dragging) {
         if (!is_click and !is_release) {
             const mouse = window.widget_mouse_location();
-            const next_left: i32 = @max(0, state.widget_drag_start_margin_left + @as(i32, @intFromFloat(@round(mouse.x - state.widget_drag_start_mouse_x))));
-            const next_top: i32 = @max(PANEL_DRAG_TOP_MIN, state.widget_drag_start_margin_top + @as(i32, @intFromFloat(@round(state.widget_drag_start_mouse_y - mouse.y))));
-            if (@abs(next_left - state.widget_margin_left) >= SNAP_STEP_THRESHOLD or @abs(next_top - state.widget_margin_top) >= SNAP_STEP_THRESHOLD) {
-                state.widget_margin_left = next_left;
-                state.widget_margin_top = next_top;
-                state.panel_position_dirty = true;
+            const next_left: i32 = @max(0, state.shared().widget_drag_start_margin_left + @as(i32, @intFromFloat(@round(mouse.x - state.shared().widget_drag_start_mouse_x))));
+            const next_top: i32 = @max(PANEL_DRAG_TOP_MIN, state.shared().widget_drag_start_margin_top + @as(i32, @intFromFloat(@round(state.shared().widget_drag_start_mouse_y - mouse.y))));
+            if (@abs(next_left - state.shared().widget_margin_left) >= SNAP_STEP_THRESHOLD or @abs(next_top - state.shared().widget_margin_top) >= SNAP_STEP_THRESHOLD) {
+                state.shared().widget_margin_left = next_left;
+                state.shared().widget_margin_top = next_top;
+                state.shared().panel_position_dirty = true;
             }
         }
 
@@ -134,8 +134,8 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         const visual_width: f64 = @floatFromInt(native.wallify_width());
         const visual_height: f64 = @floatFromInt(native.wallify_height());
 
-        window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, true);
-        const live_snap = window.widget_nearby_panel_snap(state.widget_margin_left, state.widget_margin_top, visual_left, visual_top, visual_width, visual_height);
+        window.widget_set_snap_debug(state.shared().mode_mix, visual_width, visual_height, true);
+        const live_snap = window.widget_nearby_panel_snap(state.shared().widget_margin_left, state.shared().widget_margin_top, visual_left, visual_top, visual_width, visual_height);
 
         const visual_span = @max(visual_width, visual_height);
         const preview_radius: f64 = @max(180.0, visual_span * 0.45);
@@ -150,35 +150,35 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
         if (is_release) {
             const mouse = window.widget_mouse_location();
-            const idle_click = state.spotifyIdle() and @abs(mouse.x - state.widget_drag_start_mouse_x) < CLICK_TOLERANCE and @abs(mouse.y - state.widget_drag_start_mouse_y) < CLICK_TOLERANCE;
+            const idle_click = state.spotifyIdle() and @abs(mouse.x - state.shared().widget_drag_start_mouse_x) < CLICK_TOLERANCE and @abs(mouse.y - state.shared().widget_drag_start_mouse_y) < CLICK_TOLERANCE;
             if (idle_click) {
                 std.log.info("input: idle click at {d:.1},{d:.1}", .{ px, py });
-                if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else openIdlePlayer();
+                if (state.shared().setting_idle_style != .spotify) state.shared().cat_pet_until = state.shared().animation_time + PET_DURATION else openIdlePlayer();
             }
 
             const snap_target = live_snap;
             if (!idle_click and snap_target.found and snap_target.distance_sq <= commit_radius * commit_radius) {
                 std.log.info("input: snap commit {d},{d} -> {d},{d}, distance²={d:.0}", .{
-                    state.widget_margin_left,
-                    state.widget_margin_top,
+                    state.shared().widget_margin_left,
+                    state.shared().widget_margin_top,
                     snap_target.margin_left,
                     snap_target.margin_top,
                     snap_target.distance_sq,
                 });
-                state.panel_snap_active = true;
-                state.panel_snap_elapsed = 0;
-                state.panel_snap_start_left = state.widget_margin_left;
-                state.panel_snap_start_top = state.widget_margin_top;
-                state.panel_snap_target_left = @max(0, snap_target.margin_left);
-                state.panel_snap_target_top = @max(PANEL_DRAG_TOP_MIN, snap_target.margin_top);
-                state.panel_save_after_snap = true;
+                state.shared().panel_snap_active = true;
+                state.shared().panel_snap_elapsed = 0;
+                state.shared().panel_snap_start_left = state.shared().widget_margin_left;
+                state.shared().panel_snap_start_top = state.shared().widget_margin_top;
+                state.shared().panel_snap_target_left = @max(0, snap_target.margin_left);
+                state.shared().panel_snap_target_top = @max(PANEL_DRAG_TOP_MIN, snap_target.margin_top);
+                state.shared().panel_save_after_snap = true;
             }
 
-            state.global_panel_dragging = false;
-            std.log.info("input: panel drag end at {d},{d}", .{ state.widget_margin_left, state.widget_margin_top });
-            window.widget_set_snap_debug(state.mode_mix, visual_width, visual_height, false);
+            state.shared().global_panel_dragging = false;
+            std.log.info("input: panel drag end at {d},{d}", .{ state.shared().widget_margin_left, state.shared().widget_margin_top });
+            window.widget_set_snap_debug(state.shared().mode_mix, visual_width, visual_height, false);
             window.widget_hide_snap_outline();
-            if (!state.panel_snap_active) state.saveWidgetSettings();
+            if (!state.shared().panel_snap_active) state.saveWidgetSettings();
         }
         state.requestFrame();
         return;
@@ -186,13 +186,13 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 
     if (state.spotifyIdle()) {
         if (is_release) {
-            if (state.setting_idle_style != .spotify) state.cat_pet_until = state.animation_time + PET_DURATION else openIdlePlayer();
+            if (state.shared().setting_idle_style != .spotify) state.shared().cat_pet_until = state.shared().animation_time + PET_DURATION else openIdlePlayer();
         }
         return;
     }
 
-    if (is_release and !state.global_is_dragging) {
-        if (state.global_click_target == new_hover_target) {
+    if (is_release and !state.shared().global_is_dragging) {
+        if (state.shared().global_click_target == new_hover_target) {
             std.log.info("input: release target={s}", .{@tagName(new_hover_target)});
             if (new_hover_target.toActionId()) |action| {
                 switch (action) {
@@ -205,23 +205,23 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         pressed = null;
     }
 
-    if (state.global_is_dragging) {
+    if (state.shared().global_is_dragging) {
         var x_offs: f64 = px - state.layout.bar_x;
         if (x_offs < 0.0) x_offs = 0.0;
         if (x_offs > state.layout.bar_w) x_offs = state.layout.bar_w;
-        const target = state.global_duration * (x_offs / state.layout.bar_w);
+        const target = state.shared().global_duration * (x_offs / state.layout.bar_w);
 
         if (is_release) {
             std.log.info("input: seek end at {d:.2}s", .{target});
-            state.global_is_dragging = false;
-            state.global_elapsed = target;
+            state.shared().global_is_dragging = false;
+            state.shared().global_elapsed = target;
             state_changed = true;
-            state.playback_clock.sync(target, state.global_rate, window.widget_monotonic_time(), state.global_duration, true);
+            state.shared().playback_clock.sync(target, state.shared().global_rate, window.widget_monotonic_time(), state.shared().global_duration, true);
             media.triggerSeek(target);
-            state.global_rate_lock = RATE_LOCKED;
-            state.global_rate_lock_until = window.widget_monotonic_time() + RATE_LOCK_DURATION;
+            state.shared().global_rate_lock = RATE_LOCKED;
+            state.shared().global_rate_lock_until = window.widget_monotonic_time() + RATE_LOCK_DURATION;
         } else {
-            state.global_elapsed = target;
+            state.shared().global_elapsed = target;
             state.requestFrame();
         }
     }
