@@ -6,7 +6,7 @@ See [Swift port status](swift-port.md) for migrated components and the remaining
 
 ## GPU Renderer & Native Glass
 
-`graphics/render.zig` composes an ordered scene using `graphics/canvas.zig`. A scene contains at most 128 small commands, each with geometry, color, texture coordinates, and shared rounded card clipping. `platform/gpu.h` defines the shared C-ABI struct consumed by Zig, Swift, and `platform/shaders.metal`.
+`graphics/render.zig` composes an ordered scene using `graphics/canvas.zig`. Swift's `graphics/commands.swift` initializes draw commands for both player scenes and pet sprites, preserving clipping and opacity in one implementation. A scene contains at most 128 small commands, each with geometry, color, texture coordinates, and shared rounded card clipping. `platform/gpu.h` defines the shared C-ABI struct consumed by Zig, Swift, and `platform/shaders.metal`.
 
 - **Metal Pipeline**: `platform/metal_renderer.swift` snapshots command lists and texture references under a lock into reusable buffers. Only the latest pending scene is retained, drawing directly into a framebuffer-only `CAMetalLayer` drawable with at most two command buffers in flight. Lists within Metal's 4 KB inline limit use `setVertexBytes`/`setFragmentBytes`; larger lists use an owned GPU buffer. Both split scenes and direct command lists share this renderer.
 - **Static scene cache**: Active playback is submitted as two layers. The static layer contains artwork, glow, controls, background treatment, and the frame; it is rendered once into a private Metal texture and reused. The dynamic layer composites that texture and only redraws content that actually changes, such as progress, timestamps, hover states, and Aurora.
@@ -20,13 +20,15 @@ Set `WALLIFY_PROFILE=1` when measuring renderer behavior. The profile stream rep
 
 The intended steady-state path is a small dynamic pass over a cached scene. A cache rebuild is expected after metadata/artwork changes that alter static commands, widget resizing, or a backing-scale change. Repeated cache rebuilds during otherwise idle playback are a signal to investigate rather than a normal steady-state condition.
 
-`platform/idle_animation.swift` owns the repeating Core Animation layer tree for idle companions. It copies Zig's sampled draw commands before dispatching to the main queue, converts retained Metal sprite textures into cached images, and preserves discrete frame timing, clipping, and nearest-neighbor scaling. The renderer exposes only the texture and surface accessors needed by this bridge.
+`graphics/sprites.swift` decodes the embedded RLE atlases into premultiplied RGBA pixels, draws all three idle companions and their sleep/heart effects, and samples complete repeating sequences. `platform/idle_animation.swift` owns the Core Animation layer tree, copies borrowed commands before dispatching to the main queue, and converts retained Metal textures into cached images. Discrete frame timing, clipping and nearest-neighbor scaling are shared with direct Metal pet rendering. Zig retains atlas storage/upload and the policy deciding when idle animation yields to interaction. Verification includes actual window-backed Metal layers because offscreen Core Animation layers discard animations after committing.
+
+`platform/frame_wakeup.swift` coalesces repeated producers into one pending semaphore token for the animation worker and supports monotonic timed waits. `graphics/motion.swift` preserves the play/pause icon's 90 ms contraction and 240 ms expansion. Zig retains frame budgets and animation state coordination.
 
 `graphics/raster.swift` uses Core Text for Unicode measurement, ellipsis truncation, alignment, and text rasterization; AppKit supplies cached SF Symbol images for playback controls. ImageIO decodes artwork directly into the same RGBA buffers consumed by Metal. Zig retains texture-cache policy, artwork transitions, and color extraction.
 
 `platform/desktop_glass.swift` owns native glass creation, clipping, and Metal-view reparenting. It coalesces unchanged geometry before scheduling AppKit work and restores the full-window Metal view when glass is disabled or unavailable. `platform/widget_window.swift` also owns panel movement and the coordinate offsets used for desktop snapping.
 
-`platform/desktop_snap.swift` queries WindowServer for the player and visible desktop-widget candidates, including when foreign window titles are redacted. It owns the reusable, click-through snap-preview panel. `ui/snap.zig` retains the tested grid solver and Inspector state, passing native window rectangles through shared C structs.
+`platform/desktop_snap.swift` queries WindowServer for the player and visible desktop-widget candidates, including when foreign window titles are redacted. It owns the reusable, click-through snap-preview panel and the grid solver for neighboring rows/columns, screen offsets and card insets. `ui/snap.zig` retains drag offset caching and Inspector state, passing native window rectangles through shared C structs.
 
 ## Media Subsystem & Auto Source
 

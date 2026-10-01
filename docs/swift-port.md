@@ -11,8 +11,11 @@ Work happens in the original checkout on `swift-port`. Each completed slice keep
 | Widget window and input events | `src/platform/widget_window.swift` | Hitboxes, drag and playback actions |
 | Right-click menu | `src/ui/context_menu.swift` | Action queue and state changes |
 | Metal renderer | `src/platform/metal_renderer.swift` | Scene composition and texture cache policy |
-| Glass and snap preview | `src/platform/desktop_glass.swift`, `desktop_snap.swift` | Snap grid solver and Inspector state |
-| Idle layer animation | `src/platform/idle_animation.swift` | Sprite definitions and command sampling |
+| Glass, snap preview and grid solver | `src/platform/desktop_glass.swift`, `desktop_snap.swift` | Drag offset cache and Inspector state |
+| Idle layer animation and keyframes | `src/platform/idle_animation.swift`, `src/graphics/sprites.swift` | Eligibility and geometry cache policy |
+| Sprite decoding and pet rendering | `src/graphics/sprites.swift` | Embedded atlas storage and upload lifecycle |
+| GPU command construction | `src/graphics/commands.swift` | Scene composition and effect parameter adapters |
+| Frame wakeups and icon motion | `src/platform/frame_wakeup.swift`, `src/graphics/motion.swift` | Frame budget and animation state coordination |
 | Text, symbols and artwork decoding | `src/graphics/raster.swift` | Asset caching, colors and transitions |
 | MediaRemote helper and controls | `src/media/metadata_fetcher.swift`, `src/platform/media_remote.swift` | Metadata controller and playback state |
 | Spotify and Spotifast | `src/media/spotify.swift`, `spotifast.swift` | Backend routing |
@@ -29,8 +32,8 @@ The Objective-C renderer has been removed. Metal shaders remain Metal source. Th
 
 1. Media source routing, metadata worker lifecycle and state coordination.
 2. Configuration serialization and shared widget state.
-3. Input actions and snap grid solving; layout and rounded hit testing are already Swift.
-4. Animation, asset caches and scene composition.
+3. Input actions; layout, hit testing and snap grid solving are already Swift.
+4. Animation state, asset caches and player scene composition. Pet rendering, idle samples and command initialization are already Swift.
 5. Swift executable startup and build/package cleanup after Zig responsibilities are gone.
 
 Keep shared C interfaces only while both languages need them; remove each bridge when its last Zig caller migrates. Native Swift files live in their existing `platform`, `media`, `graphics` or `ui` area rather than a second copy of the source tree.
