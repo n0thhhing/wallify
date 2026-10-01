@@ -115,6 +115,7 @@ struct SettingsBridgeCheck {
         checkMediaCoordination()
         checkPointerActions()
         checkSceneAssets()
+        checkAnimationCoordination()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3

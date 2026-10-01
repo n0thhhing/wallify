@@ -14,6 +14,8 @@ private let intSettingKeys: [Int32: (WritableKeyPath<WallifyWidgetState, UInt8>,
 
 @_cdecl("wallify_native_apply_bool")
 public func applyWidgetBool(_ key: Int32, _ value: Bool) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     guard let path = boolSettingKeys[key] else { return }
     widgetStatePointer().pointee[keyPath: path] = value
     if key == 4 { if value { widget_debug_window_show() } else { widget_debug_window_hide() } }
@@ -23,6 +25,8 @@ public func applyWidgetBool(_ key: Int32, _ value: Bool) {
 
 @_cdecl("wallify_native_apply_int")
 public func applyWidgetInt(_ key: Int32, _ value: Int32) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     let state = widgetStatePointer()
     if key == 14 {
         let mode = UInt8(max(0, min(4, value)))
@@ -45,6 +49,8 @@ public func applyWidgetInt(_ key: Int32, _ value: Int32) {
 
 @_cdecl("wallify_native_reset_position")
 public func resetWidgetPosition() {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     widgetStatePointer().pointee.widget_margin_left = 8
     widgetStatePointer().pointee.widget_margin_top = 8
     widgetStatePointer().pointee.panel_position_dirty = true
@@ -54,6 +60,8 @@ public func resetWidgetPosition() {
 
 @_cdecl("wallify_native_restore_defaults")
 public func restoreWidgetDefaults() {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     let state = widgetStatePointer()
     for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7].contains(key) }
     for (key, (path, _)) in intSettingKeys { state.pointee[keyPath: path] = [13, 18].contains(key) ? 0 : 1 }
@@ -160,6 +168,8 @@ func configurationValues(_ state: WallifyWidgetState) -> [String: String] {
 
 @_cdecl("wallify_parse_config")
 public func parseConfigurationBridge(_ bytes: UnsafePointer<UInt8>?, _ count: Int) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     guard count >= 0, count <= 1_048_576, let bytes,
           let content = String(bytes: UnsafeBufferPointer(start: bytes, count: count), encoding: .utf8) else { return }
     parseConfiguration(content, into: &widgetStatePointer().pointee)
@@ -167,6 +177,8 @@ public func parseConfigurationBridge(_ bytes: UnsafePointer<UInt8>?, _ count: In
 
 @_cdecl("wallify_load_config")
 public func loadConfiguration() {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     let url = URL(fileURLWithPath: String(cString: wallify_settings_path()))
     do {
         let data = try Data(contentsOf: url)
@@ -181,6 +193,8 @@ func persistConfiguration(_ content: String, to url: URL) throws {
 
 @_cdecl("wallify_save_config")
 public func saveConfiguration() {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     do {
         try persistConfiguration(renderConfiguration(widgetStatePointer().pointee), to: URL(fileURLWithPath: String(cString: wallify_settings_path())))
         refreshSettingsUI()
@@ -189,6 +203,8 @@ public func saveConfiguration() {
 
 @_cdecl("wallify_render_config")
 public func renderConfigurationBridge(_ output: UnsafeMutablePointer<UInt8>?, _ capacity: Int) -> Int {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     let bytes = Array(renderConfiguration(widgetStatePointer().pointee).utf8)
     guard let output, capacity >= bytes.count else { return -1 }
     output.update(from: bytes, count: bytes.count)
@@ -289,6 +305,8 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
 
 @_cdecl("wallify_native_settings_snapshot")
 public func widgetSettingsSnapshot(_ output: UnsafeMutablePointer<WallifySettingsSnapshot>?) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     guard let output else { return }
     let state = widgetStatePointer().pointee
     var value = WallifySettingsSnapshot()

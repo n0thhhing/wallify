@@ -130,7 +130,9 @@ public func setWidgetVisible(_ visible: Bool) {
 }
 
 func widgetTitle() -> String {
-    withUnsafeBytes(of: widgetState.pointee.global_title) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
+    return withUnsafeBytes(of: widgetState.pointee.global_title) {
         String(decoding: $0.prefix(widgetState.pointee.global_title_len), as: UTF8.self)
     }
 }
@@ -141,6 +143,8 @@ func placeholderTitle(_ title: String) -> Bool {
 
 @_cdecl("wallify_spotify_idle")
 public func spotifyIsIdle() -> Bool {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     let value = widgetState.pointee
     guard value.setting_source == 1 else { return false }
     if stateFlag(0, 0, false) { return true }
@@ -159,6 +163,8 @@ func modeDimensions(_ mode: UInt8) -> (Double, Double) {
 
 @_cdecl("wallify_begin_mode_transition")
 public func beginWidgetMode(_ mode: UInt8, _ width: Double, _ height: Double, _ animate: Bool) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     guard mode <= 4, width.isFinite, height.isFinite else { return }
     let (w, h) = modeDimensions(mode)
     widgetState.pointee.mode_from = widgetState.pointee.setting_mode
@@ -173,6 +179,8 @@ public func beginWidgetMode(_ mode: UInt8, _ width: Double, _ height: Double, _ 
 
 @_cdecl("wallify_finish_mode_transition")
 public func finishWidgetMode() {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     widgetState.pointee.mode_mix = 1
     widgetState.pointee.mode_transition_active = false
     widgetState.pointee.mode_from = widgetState.pointee.setting_mode

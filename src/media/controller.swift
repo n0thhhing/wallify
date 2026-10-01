@@ -31,7 +31,10 @@ func queryMediaSource(_ source: UInt8, capacity: Int = 1024) -> [UInt8] {
 }
 
 func activeMediaSource() -> UInt8 {
-    sourceRouter.resolve(widgetStatePointer().pointee.setting_source, now: monotonicTime()) {
+    sceneLock.lock()
+    let configured = widgetStatePointer().pointee.setting_source
+    sceneLock.unlock()
+    return sourceRouter.resolve(configured, now: monotonicTime()) {
         let reply = queryMediaSource(2, capacity: 32)
         return !reply.isEmpty && reply != Array("CLOSED".utf8)
     }
@@ -82,13 +85,17 @@ func optimisticPlayback(_ state: UnsafeMutablePointer<WallifyWidgetState>, now: 
 
 @_cdecl("wallify_native_toggle_playback")
 public func toggleWidgetPlayback() {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     enqueueMediaCommand(optimisticPlayback(widgetStatePointer(), now: monotonicTime()))
     requestWidgetFrame()
 }
 
 @_cdecl("wallify_native_media_key")
 public func handleWidgetMediaKey(_ code: Int32) {
+    sceneLock.lock()
     let target = widgetStatePointer().pointee.setting_media_key_target
+    sceneLock.unlock()
     guard target != 0, let command: UInt32 = code == 16 ? 2 : code == 19 ? 4 : code == 20 ? 5 : nil else { return }
     if target == 1 {
         if code == 16 { toggleWidgetPlayback() } else { enqueueMediaCommand(command) }
@@ -133,6 +140,8 @@ final class MediaCoordinator {
     }
 
     func select(_ next: UInt8) {
+        sceneLock.lock()
+        defer { sceneLock.unlock() }
         guard source != next else { return }
         cancel()
         source = next
@@ -156,6 +165,8 @@ final class MediaCoordinator {
 
     // Returns the retry interval for empty/CLOSED/NO_TRACK replies.
     func apply(_ bytes: [UInt8], source: UInt8, spotifyRunning: Bool = false, now: Double) -> Double? {
+        sceneLock.lock()
+        defer { sceneLock.unlock() }
         let state = widgetStatePointer()
         if source != 0 {
             guard !bytes.isEmpty else { return 2 }
@@ -237,6 +248,8 @@ final class MediaCoordinator {
 
 @_cdecl("wallify_native_artwork_downloaded")
 public func receiveArtwork(_ available: Bool) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
     widgetStatePointer().pointee.global_has_artwork = available
     widgetStatePointer().pointee.artwork_refresh_pending = available
     if available { wallify_extract_color() }

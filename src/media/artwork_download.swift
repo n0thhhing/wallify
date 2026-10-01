@@ -44,6 +44,9 @@ final class ArtworkDownload {
     }
 
     func complete(_ data: Data?, status: Int, generation token: UInt64) {
+        // Match the state → downloader order used by metadata source changes.
+        sceneLock.lock()
+        defer { sceneLock.unlock() }
         lock.lock()
         defer { lock.unlock() }
         guard token == generation else { return }

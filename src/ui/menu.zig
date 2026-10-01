@@ -1,5 +1,4 @@
 const std = @import("std");
-const state = @import("../state.zig");
 
 pub const ContextMenuAction = enum(c_int) {
     none = 0,
@@ -43,20 +42,17 @@ pub const ContextMenuAction = enum(c_int) {
     _,
 };
 
-var menu_action: std.atomic.Value(c_int) = std.atomic.Value(c_int).init(0);
+extern fn wallify_native_menu_selected(tag: c_int) callconv(.c) void;
+extern fn wallify_native_menu_action() callconv(.c) c_int;
 extern fn wallify_show_context_menu() callconv(.c) void;
-
 pub fn widget_context_menu() void {
     wallify_show_context_menu();
 }
-
 pub export fn wallify_context_menu_selected(tag: c_int) callconv(.c) void {
-    menu_action.store(tag, .release);
-    state.requestFrame();
+    wallify_native_menu_selected(tag);
 }
-
 pub export fn widget_context_menu_action() callconv(.c) ContextMenuAction {
-    return @enumFromInt(menu_action.swap(0, .acquire));
+    return @enumFromInt(wallify_native_menu_action());
 }
 
 test "context menu action tags stay stable" {

@@ -77,6 +77,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/graphics/text_cache.swift"));
     swift_settings.addFileArg(b.path("src/graphics/player.swift"));
     swift_settings.addFileArg(b.path("src/graphics/render.swift"));
+    swift_settings.addFileArg(b.path("src/graphics/animation.swift"));
     swift_settings.addFileArg(b.path("src/graphics/idle_compositor.swift"));
     swift_settings.addArg("-o");
     const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
@@ -246,11 +247,13 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/graphics/text_cache.swift"));
     swift_check.addFileArg(b.path("src/graphics/player.swift"));
     swift_check.addFileArg(b.path("src/graphics/render.swift"));
+    swift_check.addFileArg(b.path("src/graphics/animation.swift"));
     swift_check.addFileArg(b.path("src/graphics/idle_compositor.swift"));
     swift_check.addFileArg(b.path("tests/configuration.swift"));
     swift_check.addFileArg(b.path("tests/media_coordination.swift"));
     swift_check.addFileArg(b.path("tests/pointer_actions.swift"));
     swift_check.addFileArg(b.path("tests/scene_assets.swift"));
+    swift_check.addFileArg(b.path("tests/animation_coordination.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
     swift_check.addArg("-o");
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");

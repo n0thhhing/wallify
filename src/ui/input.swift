@@ -119,10 +119,12 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
 @MainActor public func handleWidgetPointer(_ x: Double, _ y: Double, _ kind: Int32, _ geometry: UnsafePointer<WallifyInputGeometry>?) {
     guard let geometry else { return }
     let state = widgetStatePointer(), width = Double(wallify_width()), height = Double(wallify_height())
+    sceneLock.lock()
     let actions = reducePointer(x, y, kind: kind, mouse: NSEvent.mouseLocation, now: monotonicTime(),
                                 width: width, height: height, geometry: geometry.pointee, state: state, idle: spotifyIsIdle()) {
         widget_nearby_panel_snap($0, $1, 0, 0, width, height)
     }
+    sceneLock.unlock()
     for action in actions {
         switch action {
         case .redraw: requestWidgetFrame()
