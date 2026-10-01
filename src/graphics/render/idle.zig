@@ -16,7 +16,7 @@ pub fn drawIdle(canvas: *gpu.Canvas, card: gpu.Rect) void {
         canvas.fill(card, idle_card_bg);
     }
 
-    if (@import("../idle_compositor.zig").active) return;
+    if (@import("../idle_compositor.zig").isActive()) return;
     switch (state.shared().setting_idle_style) {
         .pixel_cat => @import("../pets/idle_cat.zig").draw(canvas, card, state.shared().cat_time, state.shared().animation_time < state.shared().cat_pet_until),
         .banana_cat => @import("../pets/banana_cat.zig").draw(canvas, card, state.shared().cat_time),

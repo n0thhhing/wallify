@@ -114,6 +114,7 @@ struct SettingsBridgeCheck {
         checkConfigurationStorage()
         checkMediaCoordination()
         checkPointerActions()
+        checkSceneAssets()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3

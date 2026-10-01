@@ -47,3 +47,32 @@ public func roundedContains(_ x: Double, _ y: Double, _ width: Double, _ height:
     let dy = max(max(y + r - py, py - (y + height - r)), 0)
     return dx * dx + dy * dy <= r * r
 }
+
+struct SceneLayout {
+    var width: Double = 540, height: Double = 180
+    var geometry = widgetLayouts[2]
+    private var from: UInt8 = 2, to: UInt8 = 2
+    private var mix: Double = 1
+
+    mutating func update(width: Double, height: Double, state: WallifyWidgetState) {
+        guard self.width != width || self.height != height || from != state.mode_from || to != state.setting_mode || mix != state.mode_mix else { return }
+        self.width = width; self.height = height; from = state.mode_from; to = state.setting_mode; mix = state.mode_mix
+        _ = widgetLayoutGeometry(Int32(from), Int32(to), mix, &geometry)
+    }
+    var card: WallifyCardRect { cardRect(8, 8, max(0, width - 16), max(0, height - 16), 26) }
+    var buttons: [(x: Double, y: Double)] { [-1.0, 0, 1].map { (geometry.button_center + $0 * 46, geometry.button_y) } }
+    func buttonBounds(_ index: Int) -> WallifyCardRect {
+        let radius: Double = index == 1 ? 20 : 15, button = buttons[index]
+        return cardRect(button.x - radius, button.y - radius, radius * 2, radius * 2, radius)
+    }
+    func controlsVisible(_ enabled: Bool) -> Bool { enabled && geometry.compact_mix <= 0.5 }
+    func progressVisible(_ hidden: Bool) -> Bool { !hidden && geometry.compact_mix <= 0.5 }
+    func inputGeometry(_ state: WallifyWidgetState) -> WallifyInputGeometry {
+        WallifyInputGeometry(card: card, art: cardRect(geometry.art_x, geometry.art_y, geometry.art_size, geometry.art_size, 14),
+            bar: cardRect(geometry.bar_x, geometry.bar_y - 14, geometry.bar_w, geometry.bar_h + 28, 3),
+            buttons: (buttonBounds(0), buttonBounds(1), buttonBounds(2)), bar_x: geometry.bar_x, bar_width: geometry.bar_w,
+            controls_visible: controlsVisible(state.setting_show_controls), progress_visible: progressVisible(state.setting_hide_progress))
+    }
+}
+
+var sceneLayout = SceneLayout()

@@ -213,7 +213,7 @@ pub fn animationLoop() void {
         if (state.shared().idle_mix > 0 and state.shared().cat_pet_until > 0 and state.shared().animation_time < state.shared().cat_pet_until + ARTWORK_WAKE_GRACE) needs_draw = true;
         // Account for time spent asleep at the compositor's previous speed,
         // including the wakeup that changes speed or disables animations.
-        if (idle_compositor.active) {
+        if (idle_compositor.isActive()) {
             state.shared().cat_time += idle_compositor.elapsedAnimationTime(now - previous_time);
         }
         if (state.shared().idle_mix > 0 and state.shared().setting_idle_style != .spotify and state.shared().setting_animations) {
@@ -223,7 +223,7 @@ pub fn animationLoop() void {
             };
             const previous_tick = @floor(state.shared().cat_time * fps);
             idle_frame_interval = 1.0 / fps;
-            if (!idle_compositor.active) state.shared().cat_time += dt;
+            if (!idle_compositor.isActive()) state.shared().cat_time += dt;
             if (@floor(state.shared().cat_time * fps) != previous_tick) {
                 needs_draw = true;
             }
@@ -405,7 +405,7 @@ pub fn animationLoop() void {
             VISUAL_FRAME_INTERVAL
         else if (ambient_animation)
             AMBIENT_FRAME_INTERVAL
-        else if (idle_frame_interval > 0 and !idle_compositor.active)
+        else if (idle_frame_interval > 0 and !idle_compositor.isActive())
             idle_frame_interval
         else if (playback_interval > 0)
             playback_interval

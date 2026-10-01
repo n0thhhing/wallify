@@ -1,0 +1,72 @@
+import Foundation
+
+// Renderer/animation caches are owned by one worker. Native state access uses this
+// recursive lock so callbacks can request/save while the worker updates a frame.
+let sceneLock = NSRecursiveLock()
+
+struct StaticSceneKey: Equatable {
+    let geometry: [Double]
+    let settings: [UInt8]
+    let flags: [Bool]
+    let generation: UInt64
+    init(layout: SceneLayout, state: WallifyWidgetState, hasArtwork: Bool, generation: UInt64) {
+        geometry = [layout.width, layout.height, state.mode_mix, state.idle_mix, state.global_anim_art_t, state.play_pause_mix,
+                    state.art_transition_until > state.animation_time ? state.animation_time : 0]
+        settings = [state.mode_from, state.setting_mode, state.setting_artwork_radius, state.setting_frame,
+                    state.setting_intensity, state.setting_transition, state.extracted_r, state.extracted_g, state.extracted_b]
+        flags = [state.setting_native_glass, state.setting_glow, state.setting_dim, state.setting_compact_gradient,
+                 state.setting_show_controls, state.setting_artwork_border, state.global_has_artwork, hasArtwork,
+                 state.art_transition_until > state.animation_time]
+        self.generation = generation
+    }
+}
+
+private var cachedSceneKey: StaticSceneKey?
+private var cachedScene = Canvas(clip: WallifyCardRect())
+
+@_cdecl("wallify_scene_artwork_dirty")
+public func markSceneArtworkDirty() { sceneAssets.markArtworkDirty() }
+@_cdecl("wallify_scene_clear_artwork")
+public func clearSceneArtwork() { sceneAssets.clearArtwork() }
+
+@_cdecl("wallify_swift_draw_frame")
+public func drawSwiftUIFrame() {
+    let started = monotonicTime()
+    sceneLock.lock()
+    defer { sceneLock.unlock(); profileMetalScene(monotonicTime() - started) }
+    do { try sceneAssets.initialize() }
+    catch { NSLog("Wallify: scene assets failed: %@", error.localizedDescription); return }
+    sceneAssets.refreshArtwork()
+    let state = widgetStatePointer().pointee
+    sceneLayout.update(width: Double(metalWidgetWidth()), height: Double(metalWidgetHeight()), state: state)
+    let layout = sceneLayout, card = layout.card
+    idleCompositor.update(card: card, state: state)
+    let clip = state.setting_native_glass ? WallifyCardRect() : card
+    let color = SIMD3<Float>(Float(state.extracted_r) / 255, Float(state.extracted_g) / 255, Float(state.extracted_b) / 255)
+    updateDesktopGlass(card.x, card.y, card.w, card.h, card.radius, color.x, color.y, color.z, state.setting_native_glass)
+    let key = StaticSceneKey(layout: layout, state: state, hasArtwork: sceneAssets.hasArtwork, generation: sceneAssets.generation)
+    if cachedSceneKey != key {
+        cachedScene = Canvas(clip: clip)
+        if !state.setting_native_glass {
+            cachedScene.glass(card, SIMD4(28 / 255, 28 / 255, 30 / 255, 1), color,
+                state.global_has_artwork && sceneAssets.hasArtwork && state.setting_glow ? 0.12 : 0)
+        }
+        if state.idle_mix < 1 { drawPlayerStatic(cachedScene, card: card, layout: layout, state: state, hasArtwork: sceneAssets.hasArtwork) }
+        let frame = state.setting_frame == 0 ? 0 : state.setting_frame == 2 ? 1.5 : 1
+        if !state.setting_native_glass && frame > 0 { cachedScene.stroke(card, 0.8, SIMD4(1, 1, 1, Float(0.12 * frame))) }
+        cachedSceneKey = key
+    }
+    let dynamic = Canvas(clip: clip)
+    dynamic.image(.cachedScene, cardRect(0, 0, layout.width, layout.height))
+    if !state.setting_native_glass && state.aurora_mix > 0.001 && state.global_has_artwork && sceneAssets.hasArtwork {
+        let dim = state.setting_dim && state.global_rate == 0 ? 0.65 : 1
+        dynamic.aurora(card, color, Float(state.animation_time), Float(0.32 * state.aurora_mix * (1 - state.idle_mix) * dim))
+    }
+    if state.idle_mix < 1 {
+        let elapsed = state.global_rate == 0 || state.global_is_dragging ? state.global_elapsed : playbackPosition(state.playback_clock, now: monotonicTime(), duration: state.global_duration)
+        drawPlayerDynamic(dynamic, elapsed: elapsed, layout: layout, state: state)
+    } else if !idleCompositor.active { drawIdleScene(dynamic, card: card, layout: layout, state: state) }
+    cachedScene.commands.withUnsafeBufferPointer { statics in dynamic.commands.withUnsafeBufferPointer {
+        presentMetalScene(Float(layout.width), Float(layout.height), statics.baseAddress, UInt(statics.count), $0.baseAddress, UInt($0.count))
+    } }
+}
