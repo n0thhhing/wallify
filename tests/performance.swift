@@ -31,3 +31,24 @@ func benchmarkFramePreparation() {
     let stats = metalRenderer.stats()
     print(String(format: "frame_prepare_us=%.3f texture_bytes=%llu text_scratch_bytes=%d", samples.sorted()[2], stats.texture_bytes, textCache.scratchBytes))
 }
+
+func benchmarkMath() {
+    let pixels = (0..<180 * 180).map { UInt32(truncatingIfNeeded: $0 &* 2654435761) }
+    var layout = WallifyLayoutGeometry(), checksum = 0.0
+    var layoutSamples = [Double](), colorSamples = [Double]()
+    for _ in 0..<5 {
+        var started = monotonicTime()
+        for i in 0..<20_000 {
+            precondition(widgetLayoutGeometry(Int32(i % 5), Int32((i + 1) % 5), Double(i % 101) / 100, &layout))
+            checksum += layout.art_x + layout.compact_mix
+        }
+        layoutSamples.append((monotonicTime() - started) * 1_000_000 / 20_000)
+        started = monotonicTime()
+        for _ in 0..<500 {
+            let color = artworkColor(pixels)
+            checksum += Double(color.0) + Double(color.1) + Double(color.2)
+        }
+        colorSamples.append((monotonicTime() - started) * 1_000_000 / 500)
+    }
+    print(String(format: "layout_us=%.3f artwork_color_us=%.3f checksum=%.0f", layoutSamples.sorted()[2], colorSamples.sorted()[2], checksum))
+}
