@@ -26,4 +26,4 @@ python3 scripts/encode-sprite.py assets/sprites/raccoon.png src/assets/bin/racco
 ```
 
 The binary uses the same RGBA run format as the cat and banana atlases.
-The Zig decoder premultiplies alpha when uploading the texture.
+The Swift decoder premultiplies alpha when uploading the texture.

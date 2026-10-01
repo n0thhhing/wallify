@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/n0thhhing/wallify/actions/workflows/ci.yml/badge.svg)](https://github.com/n0thhhing/wallify/actions/workflows/ci.yml)
 
-A native macOS music widget with a Zig core, Swift/AppKit application and menu bar, SwiftUI Settings, and a Swift Metal renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
+A native macOS music widget written in Swift, with AppKit controls, SwiftUI Settings, and a Metal renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
 
 ## Features
 
@@ -18,7 +18,7 @@ A native macOS music widget with a Zig core, Swift/AppKit application and menu b
 
 ## Run
 
-**Requirements:** Zig **0.16.0**, Swift (via Xcode), Clang, and the Xcode Metal toolchain (`xcrun metal` / `xcrun metallib`). Metal-capable Mac required.
+**Requirements:** Swift (via Xcode), Clang, and the Xcode Metal toolchain (`xcrun metal` / `xcrun metallib`). Metal-capable Mac required.
 
 ```sh
 ./run                    # Build ReleaseFast, package, and launch Wallify.app
@@ -31,7 +31,7 @@ A native macOS music widget with a Zig core, Swift/AppKit application and menu b
 ./run -h                 # Show all options
 ```
 
-After building, open `zig-out/Wallify.app` from Finder. Drag to move, right-click for the full Settings panel, use the on-screen buttons and seek bar to control playback. The music-note menu-bar item provides quick playback, appearance, media-source, widget-mode, idle-style, transition, frame, Settings, and Inspector controls. Quit from that same menu.
+After building, open `build/Wallify.app` from Finder. Drag to move, right-click for the full Settings panel, use the on-screen buttons and seek bar to control playback. The music-note menu-bar item provides quick playback, appearance, media-source, widget-mode, idle-style, transition, frame, Settings, and Inspector controls. Quit from that same menu.
 
 ## Configuration
 
@@ -78,17 +78,17 @@ widget_debug        = false         # Show snapping diagnostics HUD
 ## Develop
 
 ```sh
-zig build -Doptimize=ReleaseFast
-zig build test
-zig build preview-cat               # Sprite contact sheet → /tmp/wallify-poses.ppm
+./scripts/build.sh -O ReleaseFast
+./scripts/build.sh -O Debug --test
+./scripts/build.sh -O Debug --debug-inspector
 bash scripts/package-app.sh
 ```
 
-If compiler caches are restricted, supply writable `--cache-dir` and `--global-cache-dir` paths. `zig build` without an optimization flag builds Debug; use ReleaseFast for performance measurements.
+Build output lives under `build/`. Use ReleaseFast for performance measurements; Debug retains runtime assertions.
 
 Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, texture upload counters, and periodic renderer statistics. Native lifecycle logs also report cache rebuilds, texture uploads/swaps, resize requests, and visibility changes.
 
-Debug builds can enable the Dear ImGui Inspector with `-Ddebug-inspector=true`. It includes Widget, Renderer, Performance, Input, Layout, and Console / Events tabs. The Performance tab exposes scheduler tier, occlusion state, static-scene cache status and rebuilds, renderer timing, draw-call averages, and texture memory.
+Debug builds can enable the Dear ImGui Inspector with `--debug-inspector`. It includes Widget, Renderer, Performance, Input, Layout, and Console / Events tabs. The Performance tab exposes scheduler tier, occlusion state, static-scene cache status and rebuilds, renderer timing, draw-call averages, and texture memory.
 
 ### Performance model
 

@@ -30,7 +30,7 @@ func parseMediaPayload(_ bytes: [UInt8], format: Int32) -> WallifyMediaPayload? 
         guard index < fields.count, let value = Double(fields[index]), value.isFinite else { return 0 }
         return max(0, value)
     }
-    // The current Zig artwork URL cache holds 512 bytes.
+    // Preserve the existing protocol's 512-byte artwork URL bound.
     if format != 2 && span(format == 1 ? 9 : 5).count > 512 { return nil }
     switch format {
     case 1:

@@ -1,5 +1,30 @@
 import Foundation
 
+@MainActor func checkSharedStateAndInspector() {
+    let pointer = widgetStatePointer(), original = pointer.pointee
+    defer { pointer.pointee = original }
+    pointer.pointee.setting_source = 1
+    pointer.pointee.global_rate = 0
+    updateTrackText(Array("Spotify".utf8), [], state: pointer)
+    _ = stateFlag(0, 1, false); _ = stateFlag(1, 1, true)
+    precondition(!spotifyIsIdle()) // A paused, present track keeps the player visible.
+    _ = stateFlag(1, 1, false)
+    precondition(spotifyIsIdle())
+    _ = stateFlag(0, 1, true)
+    precondition(spotifyIsIdle())
+    _ = stateFlag(0, 1, false)
+    pointer.pointee.setting_idle_style = 3
+    pointer.pointee.setting_native_glass = true
+    updateTrackText(Array("Track 🎵".utf8), Array("Artist".utf8), state: pointer)
+    var snapshot = WallifySettingsSnapshot()
+    widgetSettingsSnapshot(&snapshot)
+    precondition(snapshot.idle_style == 3 && snapshot.native_glass && snapshot.media_source == 1)
+    precondition(withUnsafeBytes(of: snapshot.title) { String(decoding: $0.prefix(10), as: UTF8.self) } == "Track 🎵")
+    let debug = inspectorSnapshot()
+    precondition(debug.title_len == 10 && debug.native_glass == 1 && debug.source == 1)
+    precondition(debug.layout_width == sceneLayout.width && debug.duration == pointer.pointee.global_duration)
+}
+
 func checkConfigurationStorage() {
     var value = widgetStatePointer().pointee
     parseConfiguration("""

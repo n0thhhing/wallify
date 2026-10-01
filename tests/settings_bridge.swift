@@ -116,6 +116,7 @@ struct SettingsBridgeCheck {
         checkPointerActions()
         checkSceneAssets()
         checkAnimationCoordination()
+        checkSharedStateAndInspector()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -397,6 +398,21 @@ struct SettingsBridgeCheck {
     }
 
     @MainActor static func checkDesktopSnap() {
+        var neighbor = WallifyWindowRect(x: 400, y: 400, width: 360, height: 360)
+        var result = WallifyPanelSnap()
+        calculatePanelSnap(&neighbor, 1, 225, 765, 540, 180, 10, 33, 8, 8, &result)
+        precondition(result.found && result.margin_left == 202 && result.margin_top == 719)
+        precondition(result.outline_x == 228 && result.outline_y == 768 && result.distance_sq == 50)
+        for mode: UInt8 in 0...4 {
+            let (width, height) = modeDimensions(mode)
+            neighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 180)
+            calculatePanelSnap(&neighbor, 1, 600, 580, width, height, 0, 0, 0, 0, &result)
+            precondition(result.found && result.outline_width == width - 16 && result.outline_height == height - 16)
+        }
+        calculatePanelSnap(nil, 0, 100, 100, 180, 180, 0, 0, 0, 0, &result)
+        precondition(!result.found)
+        calculatePanelSnap(&neighbor, 1, .nan, 100, 180, 180, 0, 0, 0, 0, &result)
+        precondition(!result.found)
         var widget: [String: Any] = [kCGWindowOwnerName as String: "Wallify", kCGWindowName as String: "Wallify Settings",
                                    kCGWindowLayer as String: 3]
         precondition(!isWallifyWindow(widget, expectedID: 0))

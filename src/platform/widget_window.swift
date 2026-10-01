@@ -30,7 +30,7 @@ final class WidgetView: NSView {
     override func mouseExited(with event: NSEvent) { wallify_pointer(-1, -1, 0) }
 
     override func rightMouseDown(with event: NSEvent) {
-        // Store the original event before Zig synchronously opens the context menu.
+        // Retain the original event for synchronous native context-menu tracking.
         Self.contextEvent = event
         pointer(event, kind: 3)
     }
