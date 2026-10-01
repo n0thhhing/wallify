@@ -153,8 +153,8 @@ final class MediaCoordinator {
         _ = stateFlag(0, 1, false)
         _ = stateFlag(1, 1, false)
         noTrackMisses = 0; emptyPolls = 0; emptyArtPolls = 0; artworkURL = []
+        clearTrack()
         widgetStatePointer().pointee.artwork_refresh_pending = true
-        widgetStatePointer().pointee.global_title_len = 0
     }
 
     private func clearTrack(title: String = "", artist: String = "") {
@@ -177,6 +177,7 @@ final class MediaCoordinator {
         sceneLock.lock()
         defer { sceneLock.unlock() }
         let state = widgetStatePointer()
+        guard self.source == source, state.pointee.setting_source == source || state.pointee.setting_source == 3 else { return nil }
         if source != 0 {
             guard !bytes.isEmpty else { return 2 }
             let closed = bytes == Array("CLOSED".utf8)
@@ -283,6 +284,7 @@ public func runMetadataWorker() {
             Thread.sleep(forTimeInterval: 2)
         } else {
             let reply = autoreleasepool { queryMediaSource(source) }
+            guard activeMediaSource() == source else { continue }
             let running = source == 1 && reply == Array("CLOSED".utf8) && isSpotifyRunning() != 0
             let retry = coordinator.apply(reply, source: source, spotifyRunning: running, now: monotonicTime())
             if let retry { Thread.sleep(forTimeInterval: retry) }

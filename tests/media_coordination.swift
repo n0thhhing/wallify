@@ -15,6 +15,7 @@ func checkMediaCoordination() {
     precondition(backendCommand(6) == nil && utf8Prefix(Array("café".utf8), limit: 4) == Array("caf".utf8))
     var downloads = [[UInt8]](), clears = 0, cancellations = 0
     let media = MediaCoordinator(clear: { clears += 1 }, extract: {}, download: { downloads.append($0) }, cancel: { cancellations += 1 })
+    state.pointee.setting_source = 1
     media.select(1)
     func apply(_ reply: String, _ now: Double, running: Bool = false) {
         _ = media.apply(Array(reply.utf8), source: 1, spotifyRunning: running, now: now)
@@ -35,15 +36,18 @@ func checkMediaCoordination() {
     apply("NO_TRACK", 16); apply("NO_TRACK", 17)
     precondition(widgetTitle() == "café")
     apply("NO_TRACK", 18)
-    precondition(widgetTitle() == "Spotify" && state.pointee.global_duration == 0 && clears == 1)
+    precondition(widgetTitle() == "Spotify" && state.pointee.global_duration == 0 && clears == 2)
     precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_state.pending == -1)
+    state.pointee.setting_source = 0
+    apply("Late reply|||Old source|||playing|||99|||180", 19)
+    precondition(widgetTitle() == "Spotify" && state.pointee.global_rate == 0)
     media.select(0)
     _ = media.apply(Array("Title|||Artist|||0|||1|||5|||30".utf8), source: 0, now: 20)
     precondition(widgetTitle() == "Title" && state.pointee.global_rate == 1)
     for t in [21.0, 22.0] { _ = media.apply([], source: 0, now: t) }
     precondition(widgetTitle() == "Title")
     _ = media.apply([], source: 0, now: 23)
-    precondition(widgetTitle().isEmpty && clears == 2 && cancellations >= 2)
+    precondition(widgetTitle().isEmpty && clears == 4 && cancellations >= 2)
     precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_clock.elapsed == 0)
     _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: 24)
     for t in 25...54 { _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: Double(t)) }
@@ -69,4 +73,9 @@ func checkMediaCoordination() {
     try! Data([2]).write(to: incoming)
     _ = artworkMedia.apply(paused, source: 0, now: 101)
     precondition(refreshes == 2 && (try! Data(contentsOf: published)) == Data([2]))
+    artworkMedia.select(1)
+    precondition(widgetTitle().isEmpty && state.pointee.global_artist_len == 0 && state.pointee.global_duration == 0)
+    precondition(!state.pointee.global_has_artwork && state.pointee.playback_state.pending == -1)
+    _ = artworkMedia.apply(paused, source: 0, now: 102)
+    precondition(widgetTitle().isEmpty)
 }
