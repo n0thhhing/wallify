@@ -408,6 +408,9 @@ struct SettingsBridgeCheck {
         calculatePanelSnap(&neighbor, 1, 225, 765, 540, 180, 10, 33, 8, 8, &result)
         precondition(result.found && result.margin_left == 202 && result.margin_top == 719)
         precondition(result.outline_x == 228 && result.outline_y == 768 && result.distance_sq == 50)
+        neighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 180)
+        calculatePanelSnap(&neighbor, 1, 400, 400, 180, 180, 0, 0, 0, 0, &result)
+        precondition(result.found && result.margin_left == 400 && result.margin_top == 220 && result.distance_sq == 32400)
         for mode: UInt8 in 0...4 {
             let (width, height) = modeDimensions(mode)
             neighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 180)

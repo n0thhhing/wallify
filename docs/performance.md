@@ -83,3 +83,12 @@ whole-app CPU usage by 80×; steady frames already cache layout geometry.
 A SIMD3<Double> RGB accumulation trial took 51.331 µs versus the original
 20.462 µs for 180×180 artwork. It was discarded. Merely spelling an operation
 as SIMD does not guarantee faster generated code.
+
+### Snap distance SIMD trial
+
+`--benchmark-snap` measures target selection with 64 candidates and varied
+pointer positions. Pairing targets with SIMD2<Double> gave median 0.574 µs
+versus scalar 0.591 µs. Scalar runs ranged from 0.577 to 0.632 µs, so the 3%
+difference did not exceed normal variation. Both checksums were 29624600;
+tie-breaking checks passed. Discarded the SIMD implementation and retained
+the benchmark and equal-distance regression check.
