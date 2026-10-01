@@ -96,3 +96,54 @@ public func drawPet(_ style: Int32, _ card: UnsafePointer<WallifyCardRect>?, _ c
     }
     return UInt(count)
 }
+
+struct PetSequence {
+    let sprites: [DrawCommand]
+    let period: Double
+    let effects: [DrawCommand]
+}
+
+func samplePetAnimation(style: Int32, card: WallifyCardRect) -> PetSequence? {
+    guard (0...2).contains(style), card.w > 0, card.h > 0 else { return nil }
+    let banana = style == 1
+    let frameCount = banana ? 45 : 5
+    let fps = banana ? 24.0 : 3.0
+    var sprites: [DrawCommand] = []
+    sprites.reserveCapacity(frameCount)
+    var scratch = Array(repeating: DrawCommand(), count: 19)
+    let sampled = withUnsafePointer(to: card) { bounds in
+        scratch.withUnsafeMutableBufferPointer { commands -> Bool in
+            for frame in 0..<frameCount {
+                guard drawPet(style, bounds, bounds, (Double(frame) + 0.5) / fps, false, 1,
+                              commands.baseAddress, UInt(commands.count)) > 0 else { return false }
+                sprites.append(commands[0])
+            }
+            return true
+        }
+    }
+    guard sampled else { return nil }
+    var effects = Array(repeating: DrawCommand(), count: banana ? 0 : 108 * 15)
+    if !banana {
+        withUnsafePointer(to: card) { bounds in
+            effects.withUnsafeMutableBufferPointer { commands in
+                for frame in 0..<108 {
+                    _ = drawPet(3, bounds, bounds, Double(frame) / 30, false, 1,
+                                commands.baseAddress!.advanced(by: frame * 15), 15)
+                }
+            }
+        }
+    }
+    return PetSequence(sprites: sprites, period: Double(frameCount) / fps, effects: effects)
+}
+
+@_cdecl("wallify_start_pet_animation")
+public func startPetAnimation(_ style: Int32, _ card: UnsafePointer<WallifyCardRect>?, _ phase: Double, _ speed: Double) -> Bool {
+    guard let card = card, phase.isFinite, speed.isFinite, speed > 0,
+          let sequence = samplePetAnimation(style: style, card: card.pointee) else { return false }
+    return sequence.sprites.withUnsafeBufferPointer { sprites in
+        sequence.effects.withUnsafeBufferPointer { effects in
+            startIdleAnimation(sprites.baseAddress, UInt(sprites.count), sequence.period,
+                               effects.baseAddress, sequence.effects.isEmpty ? 0 : 108, 15, 3.6, phase, speed)
+        }
+    }
+}

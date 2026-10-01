@@ -76,7 +76,6 @@ func idleCommandLayers(_ root: CALayer, frames: [DrawCommand], frameCount: Int,
     }
 }
 
-@_cdecl("wallify_idle_animation")
 public func startIdleAnimation(_ sprites: UnsafePointer<DrawCommand>?, _ spriteCount: UInt, _ spritePeriod: Double,
                                _ effects: UnsafePointer<DrawCommand>?, _ effectFrames: UInt, _ effectCount: UInt,
                                _ effectPeriod: Double, _ phase: Double, _ speed: Double) -> Bool {
@@ -86,7 +85,7 @@ public func startIdleAnimation(_ sprites: UnsafePointer<DrawCommand>?, _ spriteC
           speed.isFinite, speed > 0, phase.isFinite, spritePeriod.isFinite, spritePeriod > 0,
           effectFrames == 0 || (effectPeriod.isFinite && effectPeriod > 0),
           let image = idleSpriteImage(sprites[0].texture_id) else { return false }
-    // Zig supplies stack-backed samples; own them before the main-queue hop.
+    // Own borrowed samples before the main-queue hop.
     let spriteCommands = Array(UnsafeBufferPointer(start: sprites, count: Int(spriteCount)))
     let effectCommands = totalEffects == 0 ? [] : Array(UnsafeBufferPointer(start: effects, count: Int(totalEffects)))
     DispatchQueue.main.async {

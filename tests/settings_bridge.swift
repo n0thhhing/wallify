@@ -233,6 +233,27 @@ struct SettingsBridgeCheck {
             precondition(drawPet(0, &card, &clip, .nan, false, 1, commands.baseAddress, 19) == 0)
         }
         precondition(raccoonFrame(-0.1) == 4)
+        for style: Int32 in 0...2 {
+            let sequence = samplePetAnimation(style: style, card: card)!
+            precondition(sequence.sprites.count == (style == 1 ? 45 : 5))
+            precondition(sequence.effects.count == (style == 1 ? 0 : 108 * 15))
+            for command in sequence.sprites {
+                precondition(command.kind == WALLIFY_NEAREST && command.clip_radius == 26)
+                precondition(command.sx >= 0 && command.sy >= 0 && command.sx + command.sw <= 1.0001 && command.sy + command.sh <= 1.0001)
+            }
+            if style != 1 {
+                for frame in 0..<108 {
+                    var actual = Array(repeating: DrawCommand(), count: 15)
+                    actual.withUnsafeMutableBufferPointer {
+                        precondition(drawPet(3, &card, &clip, Double(frame) / 30, false, 1, $0.baseAddress, 15) == 15)
+                    }
+                    for index in 0..<15 {
+                        let expected = sequence.effects[frame * 15 + index]
+                        precondition(actual[index].dx == expected.dx && actual[index].dy == expected.dy && actual[index].alpha == expected.alpha)
+                    }
+                }
+            }
+        }
     }
 
     static func checkMediaActions() {
