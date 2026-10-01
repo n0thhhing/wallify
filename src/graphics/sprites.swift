@@ -58,15 +58,9 @@ public func drawPet(_ style: Int32, _ card: UnsafePointer<WallifyCardRect>?, _ c
     var count = 0
     func add(_ kind: Int32, _ texture: Int32, _ x: Double, _ y: Double, _ width: Double, _ height: Double,
              _ red: Float = 1, _ green: Float = 1, _ blue: Float = 1, _ alpha: Float = 1) {
-        var command = DrawCommand()
-        command.kind = kind
-        command.texture_id = texture
-        command.dx = Float(x); command.dy = Float(y); command.dw = Float(width); command.dh = Float(height)
-        command.sw = 1; command.sh = 1
-        command.r = red; command.g = green; command.b = blue; command.alpha = alpha * opacity
-        command.clip_x = Float(clip.x); command.clip_y = Float(clip.y)
-        command.clip_w = Float(clip.w); command.clip_h = Float(clip.h); command.clip_radius = Float(clip.radius)
-        output[count] = command
+        output[count] = makeDrawCommand(kind: kind, texture: texture,
+            rect: WallifyCardRect(x: x, y: y, w: width, h: height, radius: 0), clip: clip,
+            red: red, green: green, blue: blue, alpha: alpha, opacity: opacity)
         count += 1
     }
     if style == 0 {

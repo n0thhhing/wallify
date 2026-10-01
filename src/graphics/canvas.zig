@@ -2,6 +2,7 @@ const std = @import("std");
 const native = @import("../platform/native.zig");
 pub const Rect = @import("../ui/hitbox.zig").Rect;
 pub const Color = [4]f32;
+extern fn wallify_init_draw_command(output: *native.DrawCommand, kind: c_int, texture: c_int, rect: *const Rect, clip: *const Rect, color: *const Color, opacity: f32) callconv(.c) void;
 
 pub const Texture = enum(c_int) {
     white,
@@ -34,31 +35,7 @@ pub const Canvas = struct {
         const c = &self.commands[self.count];
         self.count += 1;
 
-        // Every DrawCommand field is assigned below, so a full memset is
-        // unnecessary on the hot rendering path.
-        c.* = undefined;
-        c.kind = kind;
-        c.texture_id = texture;
-        c.dx = @floatCast(rect.x);
-        c.dy = @floatCast(rect.y);
-        c.dw = @floatCast(rect.w);
-        c.dh = @floatCast(rect.h);
-        c.radius = @floatCast(rect.radius);
-        c.sx = 0;
-        c.sy = 0;
-        c.sw = 1;
-        c.sh = 1;
-        c.r = color[0];
-        c.g = color[1];
-        c.b = color[2];
-        c.alpha = color[3] * self.opacity;
-        c.clip_x = @floatCast(self.clip.x);
-        c.clip_y = @floatCast(self.clip.y);
-        c.clip_w = @floatCast(self.clip.w);
-        c.clip_h = @floatCast(self.clip.h);
-        c.clip_radius = @floatCast(self.clip.radius);
-        c.stroke = 0;
-        c.parameter = 0;
+        wallify_init_draw_command(c, kind, texture, &rect, &self.clip, &color, self.opacity);
         return c;
     }
 
