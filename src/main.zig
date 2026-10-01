@@ -98,6 +98,7 @@ test {
     _ = @import("ui/layout.zig");
     _ = @import("ui/snap.zig");
     _ = @import("ui/hitbox.zig");
+    _ = @import("ui/menu.zig");
     _ = @import("ui/window.zig");
     _ = @import("ui/settings_window.zig");
     _ = @import("media/playback_state.zig");

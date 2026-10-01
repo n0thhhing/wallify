@@ -52,6 +52,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
     swift_settings.addFileArg(b.path("src/ui/context_menu.swift"));
     swift_settings.addFileArg(b.path("src/ui/layout.swift"));
+    swift_settings.addFileArg(b.path("src/ui/input.swift"));
     swift_settings.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_snap.swift"));
@@ -213,6 +214,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
     swift_check.addFileArg(b.path("src/ui/context_menu.swift"));
     swift_check.addFileArg(b.path("src/ui/layout.swift"));
+    swift_check.addFileArg(b.path("src/ui/input.swift"));
     swift_check.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_snap.swift"));
@@ -235,6 +237,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/graphics/commands.swift"));
     swift_check.addFileArg(b.path("tests/configuration.swift"));
     swift_check.addFileArg(b.path("tests/media_coordination.swift"));
+    swift_check.addFileArg(b.path("tests/pointer_actions.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
     swift_check.addArg("-o");
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");
@@ -275,6 +278,8 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_widget_debug_window_hide",        "_wallify_context_menu_selected",
         "_wallify_artwork_downloaded",      "_wallify_execute_media_command",
         "_wallify_execute_media_seek",      "_wallify_clear_artwork",
-        "_wallify_extract_color",
+        "_wallify_extract_color",           "_widget_start_drag",
+        "_widget_nearby_panel_snap",        "_widget_show_snap_outline",
+        "_widget_hide_snap_outline",        "_widget_set_snap_debug",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

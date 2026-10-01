@@ -28,3 +28,8 @@ extern void widget_debug_window_hide(void);
 
 extern void wallify_clear_artwork(void);
 extern void wallify_extract_color(void);
+extern void widget_start_drag(int left, int top, double width);
+extern WallifyPanelSnap widget_nearby_panel_snap(int left, int top, double x, double y, double width, double height);
+extern void widget_show_snap_outline(double x, double y, double width, double height);
+extern void widget_hide_snap_outline(void);
+extern void widget_set_snap_debug(double mix, double width, double height, bool dragging);

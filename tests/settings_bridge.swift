@@ -20,6 +20,16 @@ func artworkDownloadedStub(_ available: Bool) {}
 func clearArtworkStub() {}
 @_cdecl("wallify_extract_color")
 func extractColorStub() {}
+@_cdecl("widget_start_drag")
+func startDragStub(_ left: Int32, _ top: Int32, _ width: Double) {}
+@_cdecl("widget_nearby_panel_snap")
+func nearbySnapStub(_ left: Int32, _ top: Int32, _ x: Double, _ y: Double, _ width: Double, _ height: Double) -> WallifyPanelSnap { WallifyPanelSnap() }
+@_cdecl("widget_show_snap_outline")
+func showPreviewStub(_ x: Double, _ y: Double, _ width: Double, _ height: Double) {}
+@_cdecl("widget_hide_snap_outline")
+func hidePreviewStub() {}
+@_cdecl("widget_set_snap_debug")
+func dragDebugStub(_ mix: Double, _ width: Double, _ height: Double, _ dragging: Bool) {}
 @_cdecl("wallify_execute_media_command")
 func executeCommandStub(_ command: UInt32) {}
 @_cdecl("wallify_execute_media_seek")
@@ -103,6 +113,7 @@ struct SettingsBridgeCheck {
         checkFrameWakeups()
         checkConfigurationStorage()
         checkMediaCoordination()
+        checkPointerActions()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
