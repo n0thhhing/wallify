@@ -98,6 +98,7 @@ private let idleTestSurface = CAMetalLayer()
 struct SettingsBridgeCheck {
     @MainActor static func main() {
         checkMetalRenderer()
+        checkPerformanceSample()
         if CommandLine.arguments.contains("--benchmark") { benchmarkFramePreparation(); return }
         checkSpotifyBridge()
         checkSpotifastBridge()
@@ -463,11 +464,15 @@ struct SettingsBridgeCheck {
         let preview = SnapPreview()
         preview.show(rect: expected, radius: 26, screenHeight: 1080, playerLayer: -1)
         let panel = preview.panel!
+        precondition(!preview.needsUpdate(rect: expected, radius: 26, screenHeight: 1080))
+        precondition(preview.needsUpdate(rect: expected, radius: 30, screenHeight: 1080))
+        preview.show(rect: expected, radius: 26, screenHeight: 1080, playerLayer: -1)
         precondition(panel.level.rawValue == -2 && panel.ignoresMouseEvents && !panel.hasShadow)
         precondition(panel.frame == NSRect(x: 188, y: 679, width: 180, height: 180))
         precondition(panel.contentView!.layer!.cornerRadius == 26 && panel.contentView!.layer!.borderWidth == 2.5)
         preview.hide()
         precondition(!panel.isVisible)
+        precondition(preview.needsUpdate(rect: expected, radius: 26, screenHeight: 1080))
         preview.show(rect: NSRect(x: 188, y: 221, width: 524, height: 164), radius: 26, screenHeight: 1080, playerLayer: nil)
         precondition(preview.panel === panel && panel.frame.size == NSSize(width: 524, height: 164))
         preview.hide()

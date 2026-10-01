@@ -42,6 +42,7 @@ final class MetalRenderer: @unchecked Sendable {
     private var sceneFrames: UInt64 = 0
     private var renderedFrames: UInt64 = 0
     private var drawCalls: UInt64 = 0
+    private var performance = PerformanceSample()
 
     init() {
         for buffer in [latestStatic, latestDynamic, presentStatic, presentDynamic, cachedStatic] {
@@ -301,11 +302,9 @@ final class MetalRenderer: @unchecked Sendable {
                     self.cacheValid = false
                     NSLog("Wallify GPU error: %@", completed.error?.localizedDescription ?? "Unknown")
                 }
-                if self.profiling {
-                    self.renderedFrames &+= 1
-                    let duration = max(0, completed.gpuEndTime - completed.gpuStartTime)
-                    if duration.isFinite { self.gpuNanos &+= UInt64(duration * 1e9) }
-                }
+                self.renderedFrames &+= 1
+                let duration = max(0, completed.gpuEndTime - completed.gpuStartTime)
+                if duration.isFinite { self.gpuNanos &+= UInt64(duration * 1e9) }
                 let pending = self.scheduled
                 self.lock.unlock()
                 self.inFlight.signal()
@@ -343,11 +342,11 @@ final class MetalRenderer: @unchecked Sendable {
     }
 
     func profileScene(_ seconds: Double) {
-        guard profiling, seconds.isFinite, seconds >= 0, seconds < Double(UInt64.max) / 1e9 else { return }
+        guard seconds.isFinite, seconds >= 0, seconds < Double(UInt64.max) / 1e9 else { return }
         lock.lock()
         sceneNanos &+= UInt64(seconds * 1e9)
         sceneFrames &+= 1
-        if sceneFrames % 300 == 0 {
+        if profiling && sceneFrames % 300 == 0 {
             NSLog("Wallify profile: frames=%llu scene_cpu_ms=%.3f gpu_ms=%.3f commands_per_frame=%.1f asset_upload_bytes=%llu full_frame_upload_bytes=0",
                   sceneFrames, Double(sceneNanos) / Double(sceneFrames) / 1e6,
                   renderedFrames == 0 ? 0 : Double(gpuNanos) / Double(renderedFrames) / 1e6,
@@ -360,6 +359,18 @@ final class MetalRenderer: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         var stats = WallifyRendererStats()
+        let now = monotonicTime()
+        if now - performance.time >= 1 {
+            var usage = rusage()
+            if getrusage(RUSAGE_SELF, &usage) == 0 {
+                let cpu = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) +
+                    Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+                performance.update(now: now, cpu: cpu, frames: renderedFrames, gpu: gpuNanos)
+            }
+        }
+        stats.cpu_percent = performance.cpuPercent
+        stats.redraws_per_second = performance.redraws
+        stats.live_gpu_ms = performance.gpuMS
         let name = Array((device?.name ?? "Unavailable").utf8.prefix(127))
         withUnsafeMutableBytes(of: &stats.device_name) { bytes in
             for (index, byte) in name.enumerated() { bytes[index] = byte }

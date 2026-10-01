@@ -387,6 +387,14 @@ static void drawRenderer(const WallifyDebugSnapshot& s) {
         propertyReadout("Render scale", "%.2fx", renderer.scale);
         ImGui::EndTable();
     }
+    ImGui::SeparatorText("Live performance / last sampling interval");
+    if (beginProperties("live_performance")) {
+        propertyReadout("App CPU (100% = one core)", "%.1f%%", renderer.cpu_percent);
+        propertyReadout("Widget redraws", "%.1f / sec", renderer.redraws_per_second);
+        propertyReadout("Widget GPU / frame", "%.3f ms", renderer.live_gpu_ms);
+        ImGui::EndTable();
+    }
+    ImGui::TextWrapped("App CPU includes this inspector; media helper and WindowServer CPU are separate.");
     if (renderer.profiling) {
         ImGui::SeparatorText("Widget profiling / averages since launch");
         if (beginProperties("widget_profile")) {
@@ -398,7 +406,7 @@ static void drawRenderer(const WallifyDebugSnapshot& s) {
             ImGui::EndTable();
         }
     } else {
-        ImGui::TextWrapped("Widget CPU/GPU timing is disabled. Launch with WALLIFY_PROFILE=1 ./run -d -f to collect it.");
+        ImGui::TextWrapped("Launch with WALLIFY_PROFILE=1 for additional lifetime profiling counters.");
     }
     ImGui::SeparatorText("Inspector rendering / separate from widget");
     const ImGuiIO& io = ImGui::GetIO();
@@ -446,6 +454,9 @@ static void drawPerformance(const WallifyDebugSnapshot& s) {
     ImGui::Spacing();
 
     if (beginProperties("performance_status")) {
+        propertyReadout("App CPU (100% = one core)", "%.1f%%", renderer.cpu_percent);
+        propertyReadout("Widget redraws", "%.1f / sec", renderer.redraws_per_second);
+        propertyReadout("Live GPU / frame", "%.3f ms", renderer.live_gpu_ms);
         propertyText("Widget", visible ? "Visible" : "Fully occluded");
         propertyText("Scheduler", scheduler);
         propertyText("Renderer", renderer.ready ? "Metal ready" : "Unavailable");

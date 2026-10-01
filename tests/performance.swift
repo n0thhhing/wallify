@@ -1,5 +1,17 @@
 import Foundation
 
+func checkPerformanceSample() {
+    var sample = PerformanceSample()
+    sample.update(now: 10, cpu: 2, frames: 100, gpu: 1_000_000)
+    precondition(sample.cpuPercent == 0)
+    sample.update(now: 12, cpu: 2.5, frames: 140, gpu: 81_000_000)
+    precondition(sample.cpuPercent == 25 && sample.redraws == 20 && sample.gpuMS == 2)
+    sample.update(now: 14, cpu: 2.5, frames: 140, gpu: 81_000_000)
+    precondition(sample.cpuPercent == 0 && sample.redraws == 0 && sample.gpuMS == 0)
+    sample.update(now: 15, cpu: 1, frames: 0, gpu: 0)
+    precondition(sample.cpuPercent == 0 && sample.redraws == 0 && sample.gpuMS == 0)
+}
+
 func benchmarkFramePreparation() {
     let state = widgetStatePointer()
     state.pointee.setting_source = 0; state.pointee.global_rate = 1

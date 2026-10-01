@@ -43,6 +43,7 @@ typedef struct {
     double drawable_width, drawable_height, scale;
     uint32_t static_cache_valid, static_cache_rebuilds;
     double static_cache_width, static_cache_height;
+    double cpu_percent, redraws_per_second, live_gpu_ms;
 } WallifyRendererStats;
 
 #ifdef __cplusplus

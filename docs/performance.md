@@ -49,3 +49,19 @@ Regression checks verify that a pure drag produces a move and no redraw,
 and that position-only updates and snap steps move without drawing.
 This removes redundant submissions; whole-app CPU/GPU savings during live
 dragging have not been measured.
+
+## Live inspector readings
+
+The inspector's Renderer and Performance pages show app CPU percentage,
+completed widget redraws per second, and GPU time per completed widget frame.
+Samples refresh at most once per second when stats are requested; no new
+background timer is installed. CPU uses process user/system time, with 100%
+representing one CPU core. It includes inspector overhead but excludes the
+separate media helper and WindowServer. GPU/redraw values return to zero when
+no widget frames complete in the sampling interval. The first sample establishes
+the baseline. These readings work without WALLIFY_PROFILE; that flag still
+enables detailed lifetime logs and upload counters.
+
+Snap previews now ignore unchanged geometry/radius and repeated hides.
+Unchanged previews also avoid the player-window query and window ordering.
+Hiding clears the visible state so showing the same target again still works.

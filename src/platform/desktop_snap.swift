@@ -116,9 +116,17 @@ func snapPreviewFrame(_ rect: NSRect, screenHeight: CGFloat) -> NSRect {
     static let shared = SnapPreview()
     private(set) var panel: NSPanel?
     private var wasVisible = false
+    private var radius: CGFloat = 0
+
+    func needsUpdate(rect: NSRect, radius: CGFloat, screenHeight: CGFloat) -> Bool {
+        !wasVisible || panel?.frame != snapPreviewFrame(rect, screenHeight: screenHeight) || self.radius != radius
+    }
 
     func show(rect: NSRect, radius: CGFloat, screenHeight: CGFloat, playerLayer: Int?) {
         let frame = snapPreviewFrame(rect, screenHeight: screenHeight)
+        let level = playerLayer.map { $0 - 1 } ?? -2
+        guard needsUpdate(rect: rect, radius: radius, screenHeight: screenHeight) || panel?.level.rawValue != level else { return }
+        self.radius = radius
         if panel == nil {
             let panel = NSPanel(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
             panel.title = "Wallify Snap Outline"
@@ -136,7 +144,8 @@ func snapPreviewFrame(_ rect: NSRect, screenHeight: CGFloat) -> NSRect {
         }
         let panel = panel!
         panel.setFrame(frame, display: true)
-        panel.level = NSWindow.Level(rawValue: playerLayer.map { $0 - 1 } ?? -2)
+        panel.level = NSWindow.Level(rawValue: level)
+        panel.contentView?.layer?.cornerRadius = radius
         panel.orderFrontRegardless()
         if !wasVisible {
             panel.alphaValue = 0
@@ -147,7 +156,10 @@ func snapPreviewFrame(_ rect: NSRect, screenHeight: CGFloat) -> NSRect {
         panel.contentView?.layer?.frame = NSRect(origin: .zero, size: frame.size)
     }
 
-    func hide() { panel?.orderOut(nil); wasVisible = false }
+    func hide() {
+        guard wasVisible else { return }
+        panel?.orderOut(nil); wasVisible = false
+    }
 }
 
 @_cdecl("wallify_show_snap_preview")
@@ -156,6 +168,7 @@ public func showSnapPreview(_ x: Double, _ y: Double, _ width: Double, _ height:
     let rect = NSRect(x: x, y: y, width: width, height: height)
     DispatchQueue.main.async {
         guard let screen = NSScreen.main else { return }
+        guard SnapPreview.shared.needsUpdate(rect: rect, radius: radius, screenHeight: screen.frame.height) else { return }
         let player = playerWindowInfo()
         SnapPreview.shared.show(rect: rect, radius: radius, screenHeight: screen.frame.height,
                                 playerLayer: player.number > 0 ? Int(player.layer) : nil)
