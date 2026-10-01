@@ -44,14 +44,14 @@ final class SceneAssets {
         guard loadedPets & bit == 0 else { return }
         let (name, texture, w, h) = [("cat_pixels.bin", Texture.cat, 541, 52),
                                   ("banana_pixels.bin", .banana, 98, 114 * 45), ("raccoon_pixels.bin", .raccoon, 550, 68)][Int(style - 1)]
-            guard let url = assetURL(name) else { throw NSError(domain: "Wallify", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing sprite: \(name)"]) }
-            let bytes = Array(try Data(contentsOf: url))
-            var pixels = [UInt32](repeating: 0, count: w * h)
-            let valid = bytes.withUnsafeBufferPointer { input in pixels.withUnsafeMutableBufferPointer {
-                decodeSpriteRLE(input.baseAddress, UInt(input.count), $0.baseAddress, UInt($0.count))
-            } }
-            guard valid else { throw NSError(domain: "Wallify", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid sprite: \(name)"]) }
-            pixels.withUnsafeBufferPointer { loadMetalTexture(texture.rawValue, $0.baseAddress, UInt(w), UInt(h)) }
+        guard let url = assetURL(name) else { throw NSError(domain: "Wallify", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing sprite: \(name)"]) }
+        let bytes = Array(try Data(contentsOf: url))
+        var pixels = [UInt32](repeating: 0, count: w * h)
+        let valid = bytes.withUnsafeBufferPointer { input in pixels.withUnsafeMutableBufferPointer {
+            decodeSpriteRLE(input.baseAddress, UInt(input.count), $0.baseAddress, UInt($0.count))
+        } }
+        guard valid else { throw NSError(domain: "Wallify", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid sprite: \(name)"]) }
+        pixels.withUnsafeBufferPointer { loadMetalTexture(texture.rawValue, $0.baseAddress, UInt(w), UInt(h)) }
         loadedPets |= bit
     }
 
