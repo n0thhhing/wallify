@@ -17,6 +17,7 @@ func checkWaveform() {
         let waves = canvas.commands.filter { $0.kind == Int32(WALLIFY_WAVEFORM) }
         assert(waves.count == (elapsed > 0 ? 1 : 0))
         if let wave = waves.first {
+            assert(canvas.commands.first!.dh == 3)
             assert(abs(Double(wave.dw) - layout.geometry.bar_w * min(1, elapsed / 100)) < 0.001)
             assert(wave.dh == 12)
         }

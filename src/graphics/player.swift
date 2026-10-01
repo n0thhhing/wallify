@@ -53,13 +53,17 @@ func drawPlayerProgress(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, 
     let g = layout.geometry
     if layout.progressVisible(state.setting_hide_progress) {
         let base: Double = state.setting_progress_thickness == 0 ? 3 : state.setting_progress_thickness == 2 ? 8 : 5
-        let height = (state.setting_waveform ? max(12, base) : base) + 4 * state.seek_expansion
+        let height = (waveform ? max(12, base) : base) + 4 * state.seek_expansion
         let bar = cardRect(g.bar_x, g.bar_y - (height - g.bar_h) / 2, g.bar_w, height, height / 2)
-        canvas.fill(bar, SIMD4(0.176, 0.176, 0.176, 1))
+        let trackHeight = base + 4 * state.seek_expansion
+        canvas.fill(cardRect(bar.x, bar.y + (height - trackHeight) / 2, bar.w, trackHeight, trackHeight / 2), SIMD4(0.176, 0.176, 0.176, 1))
         if state.global_duration > 0 {
             var progress = bar; progress.w *= min(1, max(0, elapsed / state.global_duration))
             if progress.w > 0 {
-                if waveform { canvas.add(Int32(WALLIFY_WAVEFORM), Texture.waveform.rawValue, progress, SIMD4(1, 1, 1, 1)) }
+                if waveform {
+                    progress.radius = 1
+                    canvas.add(Int32(WALLIFY_WAVEFORM), Texture.waveform.rawValue, progress, SIMD4(1, 1, 1, 1))
+                }
                 else { canvas.fill(progress, SIMD4(1, 1, 1, 1)) }
             }
         }

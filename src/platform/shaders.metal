@@ -119,11 +119,14 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     } else if (c.kind == WALLIFY_WAVEFORM) {
         constexpr sampler waveSampler(filter::linear, address::clamp_to_edge);
         uint tex_idx = min((uint)max(0, c.texture_id), (uint)(WALLIFY_MAX_TEXTURES - 1));
-        float2 peaks = textures[tex_idx].sample(waveSampler, float2(in.uv.x, 0.5f)).rg;
-        float y = (in.uv.y - 0.5f) * 2.0f;
-        float aaWave = max(fwidth(y), 0.03f);
-        float low = -max(peaks.r, aaWave * 0.5f), high = max(peaks.g, aaWave * 0.5f);
-        coverage *= smoothstep(low - aaWave, low, y) * (1.0f - smoothstep(high, high + aaWave, y));
+        float x = in.uv.x * c.dw;
+        float center = floor(x / 4.0f) * 4.0f + 2.0f;
+        float2 peaks = textures[tex_idx].sample(waveSampler, float2(center / max(c.dw, 1.0f), 0.5f)).rg;
+        float halfHeight = max(1.0f, max(peaks.r, peaks.g) * c.dh * 0.5f);
+        float y = abs((in.uv.y - 0.5f) * c.dh);
+        float distance = length(float2(x - center, max(0.0f, y - halfHeight + 1.0f))) - 1.0f;
+        float aaWave = max(fwidth(distance), 0.25f);
+        coverage *= 1.0f - smoothstep(-aaWave, aaWave, distance);
     } else if (c.kind == WALLIFY_GRADIENT) {
         coverage *= mix(c.parameter, 1.0f, smoothstep(0.0f, 1.0f, in.uv.y));
     } else if (c.kind == WALLIFY_GLASS) {
