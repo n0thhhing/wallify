@@ -15,3 +15,4 @@ extern void *wallify_idle_surface(void);
 extern int wallify_width(void);
 extern int wallify_height(void);
 extern void widget_debug_window_show(void);
+extern void wallify_context_menu_selected(int tag);

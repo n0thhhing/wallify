@@ -23,7 +23,6 @@ fn isContextMenuKind(kind: c_int) bool {
     return kind == POINTER_RIGHT_CLICK;
 }
 
-
 fn openIdlePlayer() void {
     if (state.setting_source == .spotifast) {
         spotifast.widget_open_spotifast();
@@ -51,19 +50,7 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
         state.global_panel_dragging = false;
         window.widget_hide_snap_outline();
         state.global_hover_target = .none;
-        menu.widget_context_menu(
-            @intFromBool(state.global_rate > 0),
-            @intFromBool(state.setting_glow),
-            @intFromBool(state.setting_aurora),
-            @intFromBool(state.setting_animations),
-            @intFromBool(state.setting_dim),
-            state.setting_frame,
-            state.setting_intensity,
-            state.setting_speed,
-            state.setting_source,
-            state.setting_mode,
-            state.setting_transition,
-        );
+        menu.widget_context_menu();
         state.requestFrame();
         return;
     }
@@ -246,7 +233,6 @@ pub export fn wallify_pointer(x: f64, y_top_down: f64, kind: c_int) void {
 pub fn enableRawMode() !void {}
 pub fn disableRawMode() void {}
 pub fn inputLoop() void {}
-
 
 test "right-click input is routed only to context menu handling" {
     try std.testing.expect(isContextMenuKind(POINTER_RIGHT_CLICK));

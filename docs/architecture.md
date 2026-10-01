@@ -1,5 +1,7 @@
 # Architecture
 
+See [Swift port status](swift-port.md) for migrated components and the remaining order of work.
+
 `main.zig` initializes assets and boots background animation and media telemetry workers. Swift's `platform/application.swift` initializes AppKit, owns the status-bar menu, and runs the native event loop through C entry points. `platform/widget_window.swift` supplies the desktop panel and input view, retains right-click events for synchronous context menus, and forwards visibility changes to the scheduler. `platform/metal_renderer.swift` owns the panel, Metal layer, GPU pipeline, texture slots, and frame presentation. `state.Layout` owns logical-point geometry used across rendering, input hitboxes, and native panel sizing.
 
 ## GPU Renderer & Native Glass
@@ -47,7 +49,9 @@ To prevent macOS from automatically waking Apple Music when hardware media keys 
 
 The Swift/AppKit status-bar menu is the fast path for common actions. It mirrors the live settings snapshot so checkmarks and the Play/Pause label stay synchronized with Settings, while media commands go through the same Zig media controller as the widget itself. Metadata refresh runs every 0.2 seconds only while the menu is open. Toggle actions read the current snapshot rather than relying on a potentially stale checkmark. In developer builds, the menu also exposes the Dear ImGui Inspector.
 
-The Settings window uses SwiftUI hosted in an AppKit window (`platform/settings_window.swift`). Its controls read the existing C settings snapshot and call the Zig settings bridge, which applies state changes and persists them. Swift is compiled into `libWallifySettings.dylib`, linked by the Zig executable, and packaged in the app’s Frameworks directory. The renderer and widget state remain in Zig during this first migration step. The Performance page surfaces the native renderer's current device/timing information and links directly to the Inspector. The System section uses Apple's `SMAppService` main-app login-item API for Launch at Login; registration errors are logged rather than silently changing the UI.
+The Settings window uses SwiftUI hosted in an AppKit window (`platform/settings_window.swift`). Its controls read the existing C settings snapshot and call the Zig settings bridge, which applies state changes and persists them. Swift is compiled into `libWallifySettings.dylib`, linked by the Zig executable, and packaged in the app’s Frameworks directory. The renderer is now Swift; shared widget state and scene composition remain Zig. The Performance page surfaces the native renderer's current device/timing information and links directly to the Inspector. The System section uses Apple's `SMAppService` main-app login-item API for Launch at Login; registration errors are logged rather than silently changing the UI.
+
+`ui/context_menu.swift` builds the widget's right-click menu from the same settings snapshot. AppKit starts tracking synchronously inside the main-thread mouse handler using its original event and view. A screen-coordinate fallback uses no view. Selections enter Zig's atomic action queue and wake the frame scheduler; the animation worker applies them through the existing state/controller path.
 
 The Inspector is a separate MetalKit + Dear ImGui window intended for development builds. Its Performance tab combines AppKit window occlusion, the renderer statistics bridge, and the frame scheduler's state to make the power model visible. The Console / Events tab captures stdout/stderr into a bounded in-memory log while mirroring the original terminal stream. This makes cache rebuilds, texture uploads, GPU failures, and visibility transitions inspectable without adding per-frame log spam.
 

@@ -10,6 +10,10 @@ private var lastInt: (Int32, Int32)?
 private var playbackCommands: [String] = []
 private var lastPointer: (Double, Double, Int32)?
 private var visible = Int32(0)
+private var contextSelection = Int32(0)
+
+@_cdecl("wallify_context_menu_selected")
+func contextSelectionStub(_ tag: Int32) { contextSelection = tag }
 
 @_cdecl("wallify_pointer")
 @MainActor func pointerStub(_ x: Double, _ y: Double, _ kind: Int32) {
@@ -79,6 +83,7 @@ struct SettingsBridgeCheck {
         checkRasterGraphics()
         checkDesktopGlass()
         checkDesktopSnap()
+        checkContextMenu()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -173,6 +178,49 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    @MainActor static func checkContextMenu() {
+        var snapshot = WallifySettingsSnapshot()
+        snapshot.playing = true
+        snapshot.media_source = 2
+        snapshot.idle_style = 3
+        snapshot.widget_mode = 4
+        snapshot.track_transition = 5
+        snapshot.glow = true
+        snapshot.frame_strength = 2
+        snapshot.glow_intensity = 1
+        snapshot.animation_speed = 0
+        let target = WidgetContextMenu.shared
+        let menu = target.build(snapshot)
+        precondition(menu.items[0].title == "Pause" && menu.items[3].title == "Open Spotifast")
+        func children(_ title: String, in parent: NSMenu) -> [NSMenuItem] {
+            parent.items.first { $0.title == title }!.submenu!.items
+        }
+        for (title, selected) in [("Media Source", 52), ("Widget Mode", 64), ("Idle Style", 83), ("Track Transition", 75)] {
+            let items = children(title, in: menu)
+            precondition(items.filter { $0.state == .on }.map(\.tag) == [selected])
+            for item in items {
+                target.choose(item)
+                precondition(contextSelection == Int32(item.tag))
+            }
+        }
+        let preferences = menu.items.first { $0.title == "Quick Preferences" }!.submenu!
+        precondition(preferences.items[0].state == .on && preferences.items[1].state == .off)
+        for (title, selected) in [("Frame Strength", 12), ("Glow Intensity", 21), ("Animation Speed", 30)] {
+            precondition(children(title, in: preferences).filter { $0.state == .on }.map(\.tag) == [selected])
+        }
+        let settings = menu.items.first { $0.tag == 90 }!
+        precondition(settings.keyEquivalent == ",")
+        target.choose(settings)
+        precondition(contextSelection == 90)
+        snapshot.playing = false
+        snapshot.media_source = 3
+        snapshot.idle_style = 2
+        let refreshed = target.build(snapshot)
+        precondition(refreshed.items[0].title == "Play")
+        precondition(children("Media Source", in: refreshed).allSatisfy { $0.state == .off })
+        precondition(children("Idle Style", in: refreshed).first { $0.tag == 80 }!.state == .on)
     }
 
     @MainActor static func checkDesktopSnap() {

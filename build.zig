@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_settings.addFileArg(b.path("src/ui/context_menu.swift"));
     swift_settings.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_snap.swift"));
@@ -189,6 +190,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_check.addFileArg(b.path("src/ui/context_menu.swift"));
     swift_check.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_snap.swift"));
@@ -236,5 +238,6 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_menu_previous",           "_wallify_menu_next",
         "_wallify_pointer",                 "_wallify_set_window_visible",
         "_wallify_media_key_event",         "_widget_debug_window_show",
+        "_wallify_context_menu_selected",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }
