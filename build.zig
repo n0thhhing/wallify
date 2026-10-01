@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_settings.addFileArg(b.path("src/platform/application.swift"));
     swift_settings.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_settings.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_settings.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_settings.addFileArg(b.path("src/platform/idle_animation.swift"));
     swift_settings.addFileArg(b.path("src/platform/media_keys.swift"));
@@ -70,14 +71,6 @@ pub fn build(b: *std.Build) void {
     mod.linkFramework("ServiceManagement", .{});
     mod.addOptions("build_options", build_options);
     mod.addIncludePath(b.path("src/platform"));
-    const native = b.addSystemCommand(&.{ "/usr/bin/clang", "-c", "-fobjc-arc", "-fmodules", "-fmodules-cache-path=/tmp/wallify-clang-modules" });
-    native.addArg("-include");
-    native.addFileArg(b.path("src/platform/gpu.h"));
-    native.addFileArg(b.path("src/platform/native.m"));
-    native.addFileInput(b.path("src/platform/settings_window.h"));
-    native.addFileInput(b.path("src/platform/debug_stats.h"));
-    native.addArg("-o");
-    mod.addObjectFile(native.addOutputFileArg("native.o"));
     mod.linkFramework("Metal", .{});
     mod.linkFramework("MetalPerformanceShaders", .{});
     mod.linkFramework("QuartzCore", .{});
@@ -195,6 +188,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/settings_window.swift"));
     swift_check.addFileArg(b.path("src/platform/application.swift"));
     swift_check.addFileArg(b.path("src/platform/widget_window.swift"));
+    swift_check.addFileArg(b.path("src/platform/metal_renderer.swift"));
     swift_check.addFileArg(b.path("src/platform/desktop_glass.swift"));
     swift_check.addFileArg(b.path("src/platform/idle_animation.swift"));
     swift_check.addFileArg(b.path("src/platform/media_keys.swift"));
@@ -208,10 +202,14 @@ pub fn build(b: *std.Build) void {
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");
     const run_check = b.addSystemCommand(&.{"/usr/bin/env"});
     run_check.addFileArg(check_binary);
+    run_check.addArg("--metallib");
+    run_check.addFileArg(metallib_out);
     test_step.dependOn(&run_check.step);
     const run_flag_check = b.addSystemCommand(&.{"/usr/bin/env"});
     run_flag_check.addFileArg(check_binary);
     run_flag_check.addArg("--settings");
+    run_flag_check.addArg("--metallib");
+    run_flag_check.addFileArg(metallib_out);
     test_step.dependOn(&run_flag_check.step);
 }
 
@@ -232,11 +230,9 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_settings_get_snapshot",   "_wallify_settings_apply_bool",
         "_wallify_settings_apply_int",      "_wallify_settings_restore_defaults",
         "_wallify_settings_reset_position", "_wallify_settings_path",
-        "_wallify_debug_renderer_stats",    "_wallify_open_inspector",
-        "_wallify_menu_play_pause",         "_wallify_menu_previous",
-        "_wallify_menu_next",               "_wallify_pointer",
-        "_wallify_set_window_visible",      "_wallify_media_key_event",
-        "_wallify_copy_idle_texture",       "_wallify_idle_surface",
-        "_wallify_width",                   "_wallify_height",
+        "_wallify_open_inspector",          "_wallify_menu_play_pause",
+        "_wallify_menu_previous",           "_wallify_menu_next",
+        "_wallify_pointer",                 "_wallify_set_window_visible",
+        "_wallify_media_key_event",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

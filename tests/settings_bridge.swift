@@ -57,9 +57,6 @@ func intStub(_ key: Int32, _ value: Int32) {
     }
 }
 
-@_cdecl("wallify_debug_renderer_stats")
-func rendererStub(_ output: UnsafeMutablePointer<WallifyRendererStats>?) { output?.pointee = WallifyRendererStats() }
-
 @_cdecl("wallify_settings_restore_defaults")
 func defaultsStub() {}
 @_cdecl("wallify_settings_reset_position")
@@ -67,24 +64,12 @@ func positionStub() {}
 @_cdecl("wallify_open_inspector")
 func inspectorStub() {}
 
-// Renderer callbacks are supplied by native.m in the app.
-private var idleTestTexture: MTLTexture?
-private let idleTestSurface = CALayer()
-@_cdecl("wallify_copy_idle_texture")
-func idleTextureStub(_ textureID: Int32) -> UnsafeMutableRawPointer? {
-    guard let texture = idleTestTexture, textureID == 0 else { return nil }
-    return Unmanaged.passRetained(texture as AnyObject).toOpaque()
-}
-@_cdecl("wallify_idle_surface")
-func idleSurfaceStub() -> UnsafeMutableRawPointer? { Unmanaged.passUnretained(idleTestSurface).toOpaque() }
-@_cdecl("wallify_width")
-func widthStub() -> Int32 { 200 }
-@_cdecl("wallify_height")
-func heightStub() -> Int32 { 100 }
+private let idleTestSurface = CAMetalLayer()
 
 @main
 struct SettingsBridgeCheck {
     @MainActor static func main() {
+        checkMetalRenderer()
         checkSpotifyBridge()
         checkSpotifastBridge()
         checkIdleAnimation()
@@ -185,6 +170,110 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkMetalRenderer() {
+        let arguments = ProcessInfo.processInfo.arguments
+        let library = URL(fileURLWithPath: arguments[arguments.firstIndex(of: "--metallib")! + 1])
+        let renderer = metalRenderer
+        do { try renderer.initialize(libraryURL: library) }
+        catch { preconditionFailure("Metal initialization failed: \(error)") }
+        renderer.profiling = true
+        renderer.surface = idleTestSurface
+        renderer.resize(width: 200, height: 100)
+        var white: UInt32 = 0xFFFFFFFF
+        renderer.loadTexture(0, pixels: &white, width: 1, height: 1)
+        let original = renderer.texture(0)!
+        renderer.swapTextures(0, 1)
+        precondition(renderer.texture(0) == nil && renderer.texture(1)! === original)
+        renderer.swapTextures(0, 1)
+        renderer.loadTexture(-1, pixels: &white, width: 1, height: 1)
+        renderer.loadTexture(2, pixels: &white, width: UInt.max, height: 1)
+        precondition(renderer.texture(-1) == nil && renderer.texture(2) == nil)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 8, height: 8, mipmapped: false)
+        descriptor.storageMode = .shared
+        descriptor.usage = [.renderTarget, .shaderRead]
+        let target = renderer.device!.makeTexture(descriptor: descriptor)!
+        var solid = DrawCommand()
+        solid.kind = WALLIFY_SOLID; solid.dw = 8; solid.dh = 8
+        solid.r = 1; solid.alpha = 1
+        var composite = solid
+        composite.kind = WALLIFY_TEXTURE; composite.texture_id = WALLIFY_CACHED_SCENE_TEXTURE
+        composite.g = 1; composite.b = 1; composite.sw = 1; composite.sh = 1
+        let textures = [MTLTexture?](repeating: original, count: Int(WALLIFY_MAX_TEXTURES))
+        func render() {
+            let command = renderer.queue!.makeCommandBuffer()!
+            withUnsafePointer(to: &solid) { statics in
+                withUnsafePointer(to: &composite) { dynamics in
+                    precondition(renderer.encodeScene(command, target: target, staticCommands: statics, staticCount: 1,
+                        dynamicCommands: dynamics, dynamicCount: 1, size: SIMD2(repeating: 8), scale: 1, textures: textures))
+                }
+            }
+            command.commit()
+            command.waitUntilCompleted()
+            precondition(command.status == .completed)
+        }
+        func centerPixel() -> UInt32 {
+            var pixels = [UInt32](repeating: 0, count: 64)
+            pixels.withUnsafeMutableBytes {
+                target.getBytes($0.baseAddress!, bytesPerRow: 32, from: MTLRegionMake2D(0, 0, 8, 8), mipmapLevel: 0)
+            }
+            return pixels[4 * 8 + 4]
+        }
+        render()
+        precondition(centerPixel() == 0xFFFF0000)
+        precondition(renderer.stats().static_cache_rebuilds == 1)
+        render()
+        precondition(centerPixel() == 0xFFFF0000)
+        precondition(renderer.stats().static_cache_rebuilds == 1)
+        solid.r = 0; solid.g = 1
+        render()
+        precondition(centerPixel() == 0xFF00FF00)
+        precondition(renderer.stats().static_cache_rebuilds == 2)
+        let many = [DrawCommand](repeating: solid, count: Int(WALLIFY_MAX_COMMANDS))
+        let full = renderer.queue!.makeCommandBuffer()!
+        many.withUnsafeBufferPointer {
+            precondition(renderer.encode(full, target: target, commands: $0.baseAddress!, count: $0.count,
+                size: SIMD2(repeating: 8), textures: textures))
+        }
+        full.commit(); full.waitUntilCompleted()
+        precondition(full.status == .completed && centerPixel() == 0xFF00FF00)
+        let scaled = renderer.queue!.makeCommandBuffer()!
+        withUnsafePointer(to: &solid) { statics in
+            withUnsafePointer(to: &composite) { dynamics in
+                precondition(renderer.encodeScene(scaled, target: target, staticCommands: statics, staticCount: 1,
+                    dynamicCommands: dynamics, dynamicCount: 1, size: SIMD2(repeating: 8), scale: 2, textures: textures))
+            }
+        }
+        scaled.commit(); scaled.waitUntilCompleted()
+        precondition(scaled.status == .completed && renderer.stats().static_cache_rebuilds == 3)
+        precondition(renderer.stats().static_cache_width == 16 && centerPixel() == 0xFF00FF00)
+        renderer.blurTexture(0, 2, artSize: 132)
+        let glow = renderer.texture(2)!
+        precondition(glow.width == Int(ceil(glowExtent(132) * Float(WALLIFY_GLOW_BAKE_SCALE))) && glow.width == glow.height)
+        let wait = renderer.queue!.makeCommandBuffer()!
+        let glowDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: glow.width, height: glow.height, mipmapped: false)
+        glowDescriptor.storageMode = .shared
+        let readableGlow = renderer.device!.makeTexture(descriptor: glowDescriptor)!
+        let blit = wait.makeBlitCommandEncoder()!
+        blit.copy(from: glow, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                  sourceSize: MTLSize(width: glow.width, height: glow.height, depth: 1),
+                  to: readableGlow, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        wait.commit(); wait.waitUntilCompleted()
+        precondition(wait.status == .completed)
+        var glowPixel: UInt32 = 0
+        readableGlow.getBytes(&glowPixel, bytesPerRow: 4, from: MTLRegionMake2D(glow.width / 2, glow.height / 2, 1, 1), mipmapLevel: 0)
+        precondition(glowPixel >> 24 > 0)
+        renderer.blurTexture(-1, 3, artSize: 132)
+        precondition(renderer.texture(3) == nil)
+        renderer.profileScene(0.001)
+        let stats = renderer.stats()
+        precondition(stats.scene_frames == 1 && stats.scene_ms == 1 && stats.uploaded_bytes == 4)
+        precondition(stats.static_cache_valid == 1 && stats.static_cache_width == 16 && stats.texture_count == 2)
+        presentMetalScene(.nan, 8, nil, 0, nil, 0)
+        presentMetalScene(8, 8, nil, UInt(WALLIFY_MAX_COMMANDS) + 1, nil, 0)
+        precondition(renderer.stats().pending == 0)
     }
 
     @MainActor static func checkDesktopGlass() {
@@ -349,6 +438,7 @@ struct SettingsBridgeCheck {
         precondition(animation.beginTime == 10 && animation.timeOffset == 0.25 && animation.repeatCount.isInfinite)
         precondition(animation.keyTimes == [0, 0.5])
         var first = DrawCommand()
+        first.texture_id = 4
         first.dx = 30; first.dy = 40; first.dw = 20; first.dh = 10
         first.clip_x = 5; first.clip_y = 10; first.clip_h = 100
         first.r = 1; first.alpha = 0.5; first.sw = 0.25; first.sh = 0.5
@@ -370,14 +460,8 @@ struct SettingsBridgeCheck {
             precondition(!startIdleAnimation($0, 1, 1, nil, UInt.max, 2, 1, 0, 1))
             precondition(!startIdleAnimation($0, 1, 1, nil, 0, 0, 1, 0, 1))
         }
-        let device = MTLCreateSystemDefaultDevice()!
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
-        descriptor.storageMode = .shared
-        idleTestTexture = device.makeTexture(descriptor: descriptor)!
-        let pixel: [UInt8] = [255, 0, 0, 255]
-        pixel.withUnsafeBytes {
-            idleTestTexture!.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: 4)
-        }
+        var spritePixel: UInt32 = 0xFF0000FF
+        loadMetalTexture(4, &spritePixel, 1, 1)
         idleTestSurface.bounds = CGRect(x: 0, y: 0, width: 200, height: 160)
         first.clip_w = 100; first.clip_radius = 6
         withUnsafePointer(to: &first) {
@@ -394,7 +478,6 @@ struct SettingsBridgeCheck {
         stopIdleAnimation()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
         precondition(idleTestSurface.sublayers?.isEmpty != false)
-        idleTestTexture = nil
     }
 
     static func checkSpotifastBridge() {

@@ -71,7 +71,7 @@ final class WidgetPanel: NSPanel {
     WidgetPanel.current = panel
     NotificationCenter.default.addObserver(panel, selector: #selector(WidgetPanel.occlusionChanged(_:)),
                                            name: NSWindow.didChangeOcclusionStateNotification, object: panel)
-    // The Objective-C renderer takes ownership with __bridge_transfer.
+    // The Swift renderer consumes this retained reference at the C boundary.
     return Unmanaged.passRetained(panel).toOpaque()
 }
 
