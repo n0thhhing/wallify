@@ -35,6 +35,8 @@ After building, open `build/Wallify.app` from Finder. Drag to move, right-click 
 
 ## Configuration
 
+The optional **System Audio Waveform** in Settings → Playback → Progress replaces the elapsed progress fill with live audio; the remaining track stays plain. It is off by default, requires macOS 14.2+ and system audio capture permission, and saves no audio. Capture stops when playback pauses, the widget is hidden, or progress/animations are disabled. The normal fill returns when audio is unavailable.
+
 Settings are saved to `widget-settings.conf`. The app checks these locations in order:
 
 1. **`~/.config/Wallify/widget-settings.conf`** — XDG path; use for dotfiles or symlinks

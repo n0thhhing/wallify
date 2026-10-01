@@ -4,7 +4,7 @@ private let boolSettingKeys: [Int32: WritableKeyPath<WallifyWidgetState, Bool>] 
     0: \.setting_glow, 1: \.setting_aurora, 2: \.setting_animations, 3: \.setting_dim,
     4: \.setting_debug, 5: \.setting_native_glass, 6: \.setting_hide_text,
     7: \.setting_hide_progress, 8: \.setting_show_controls, 9: \.setting_show_timestamps,
-    19: \.setting_artwork_border, 20: \.setting_compact_gradient
+    19: \.setting_artwork_border, 20: \.setting_compact_gradient, 23: \.setting_waveform
 ]
 private let intSettingKeys: [Int32: (WritableKeyPath<WallifyWidgetState, UInt8>, Int32)] = [
     10: (\.setting_frame, 2), 11: (\.setting_intensity, 2), 12: (\.setting_speed, 2),
@@ -18,6 +18,7 @@ public func applyWidgetBool(_ key: Int32, _ value: Bool) {
     defer { sceneLock.unlock() }
     guard let path = boolSettingKeys[key] else { return }
     widgetStatePointer().pointee[keyPath: path] = value
+    if !value && [2, 23].contains(key) || value && key == 7 { audioWaveform.update(active: false) }
     if key == 4 { if value { widget_debug_window_show() } else { widget_debug_window_hide() } }
     saveConfiguration()
     requestWidgetFrame()
@@ -63,9 +64,10 @@ public func restoreWidgetDefaults() {
     sceneLock.lock()
     defer { sceneLock.unlock() }
     let state = widgetStatePointer()
-    for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7].contains(key) }
+    for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7, 23].contains(key) }
     for (key, (path, _)) in intSettingKeys { state.pointee[keyPath: path] = [13, 18].contains(key) ? 0 : 1 }
     state.pointee.setting_idle_style = 1
+    audioWaveform.update(active: false)
     beginWidgetMode(2, Double(wallify_width()), Double(wallify_height()), true)
     widget_debug_window_hide()
     updateMediaKeyTap(0)
@@ -79,7 +81,8 @@ private let boolSettings: [(String, WritableKeyPath<WallifyWidgetState, Bool>)] 
     ("dim_paused_artwork", \.setting_dim), ("widget_debug", \.setting_debug),
     ("hide_text", \.setting_hide_text), ("hide_progress", \.setting_hide_progress),
     ("show_controls", \.setting_show_controls), ("show_timestamps", \.setting_show_timestamps),
-    ("artwork_border", \.setting_artwork_border), ("compact_gradient", \.setting_compact_gradient)
+    ("artwork_border", \.setting_artwork_border), ("compact_gradient", \.setting_compact_gradient),
+    ("waveform", \.setting_waveform)
 ]
 
 // Config mode integers predate the five-mode UI; numeric 1 must remain 3×1.
@@ -232,6 +235,9 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
     # Fluid UI animations for transitions and controls [true, false]
     animations = \(values["animations"]!)
     
+    # Live system-audio waveform on the progress bar [true, false]
+    waveform = \(values["waveform"]!)
+
     # Dim album artwork when playback is paused [true, false]
     dim_paused_artwork = \(values["dim_paused_artwork"]!)
     
@@ -326,6 +332,7 @@ public func widgetSettingsSnapshot(_ output: UnsafeMutablePointer<WallifySetting
     value.show_timestamps = state.setting_show_timestamps
     value.artwork_border = state.setting_artwork_border
     value.compact_gradient = state.setting_compact_gradient
+    value.waveform = state.setting_waveform
     value.frame_strength = Int32(state.setting_frame)
     value.glow_intensity = Int32(state.setting_intensity)
     value.animation_speed = Int32(state.setting_speed)

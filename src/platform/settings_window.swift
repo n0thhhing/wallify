@@ -146,6 +146,16 @@ private struct SettingsView: View {
                 toggle("Time Labels", "Show elapsed and remaining time.", 9, \.show_timestamps)
             }
             section("Progress") {
+                if #available(macOS 14.2, *) {
+                    toggle("System Audio Waveform", "Show live audio along the progress bar. Requires system audio capture permission; audio is never saved.", 23, \.waveform)
+                        .disabled(model.snapshot.hide_progress || !model.snapshot.animations)
+                    Text(model.snapshot.waveform ? audioWaveform.status : "Off").font(.caption).foregroundColor(.secondary)
+                    if model.snapshot.waveform {
+                        Button("Open Capture Permissions") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                        }
+                    }
+                } else { Text("Audio waveform requires macOS 14.2 or later.").foregroundColor(.secondary) }
                 picker("Progress Thickness", "Choose the visual weight of the progress bar.", 22, \.progress_thickness,
                        ["Thin", "Standard", "Thick"])
             }

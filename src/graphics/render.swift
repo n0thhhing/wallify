@@ -45,6 +45,10 @@ public func drawSwiftUIFrame() {
     }
     sceneLayout.update(width: Double(metalWidgetWidth()), height: Double(metalWidgetHeight()), state: state)
     let layout = sceneLayout, card = layout.card
+    if state.setting_waveform {
+        audioWaveform.update(active: state.global_rate > 0 && state.global_duration > 0 && state.setting_animations &&
+            state.idle_mix < 1 && layout.progressVisible(state.setting_hide_progress) && stateFlag(3, 0, false))
+    }
     idleCompositor.update(card: card, state: state)
     let clip = state.setting_native_glass ? WallifyCardRect() : card
     let color = SIMD3<Float>(Float(state.extracted_r) / 255, Float(state.extracted_g) / 255, Float(state.extracted_b) / 255)

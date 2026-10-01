@@ -40,22 +40,30 @@ func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayo
 }
 
 func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, state: WallifyWidgetState) {
-    let g = layout.geometry
-    if layout.progressVisible(state.setting_hide_progress) {
-        let base: Double = state.setting_progress_thickness == 0 ? 3 : state.setting_progress_thickness == 2 ? 8 : 5
-        let height = base + 4 * state.seek_expansion
-        let bar = cardRect(g.bar_x, g.bar_y - (height - g.bar_h) / 2, g.bar_w, height, height / 2)
-        canvas.fill(bar, SIMD4(0.176, 0.176, 0.176, 1))
-        if state.global_duration > 0 {
-            var progress = bar; progress.w *= min(1, max(0, elapsed / state.global_duration))
-            if progress.w > 0 { canvas.fill(progress, SIMD4(1, 1, 1, 1)) }
-        }
-    }
+    drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state,
+        waveform: state.setting_waveform && state.global_rate > 0 && state.setting_animations && audioWaveform.textureAvailable())
     if layout.controlsVisible(state.setting_show_controls) {
         let hover = [state.hover_amount.0, state.hover_amount.1, state.hover_amount.2]
         for index in 0..<3 where hover[index] > 0.001 { canvas.fill(layout.buttonBounds(index), SIMD4(1, 1, 1, Float(hover[index] * 31 / 255))) }
     }
     drawPlayerLabels(canvas, elapsed: elapsed, layout: layout, state: state)
+}
+
+func drawPlayerProgress(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, state: WallifyWidgetState, waveform: Bool) {
+    let g = layout.geometry
+    if layout.progressVisible(state.setting_hide_progress) {
+        let base: Double = state.setting_progress_thickness == 0 ? 3 : state.setting_progress_thickness == 2 ? 8 : 5
+        let height = (state.setting_waveform ? max(12, base) : base) + 4 * state.seek_expansion
+        let bar = cardRect(g.bar_x, g.bar_y - (height - g.bar_h) / 2, g.bar_w, height, height / 2)
+        canvas.fill(bar, SIMD4(0.176, 0.176, 0.176, 1))
+        if state.global_duration > 0 {
+            var progress = bar; progress.w *= min(1, max(0, elapsed / state.global_duration))
+            if progress.w > 0 {
+                if waveform { canvas.add(Int32(WALLIFY_WAVEFORM), Texture.waveform.rawValue, progress, SIMD4(1, 1, 1, 1)) }
+                else { canvas.fill(progress, SIMD4(1, 1, 1, 1)) }
+            }
+        }
+    }
 }
 
 func trackArtist(_ state: WallifyWidgetState) -> String {

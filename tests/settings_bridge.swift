@@ -98,6 +98,7 @@ private let idleTestSurface = CAMetalLayer()
 struct SettingsBridgeCheck {
     @MainActor static func main() {
         checkMetalRenderer()
+        checkWaveform()
         checkPerformanceSample()
         checkLayoutInterpolation()
         if CommandLine.arguments.contains("--benchmark-snap") { benchmarkSnap(); return }

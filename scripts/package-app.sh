@@ -138,6 +138,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Wallify uses system audio only to draw the optional live waveform. Audio is not recorded or saved.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Wallify uses Apple Events to display track metadata and control music playback.</string>
     <key>NSAccessibilityUsageDescription</key>

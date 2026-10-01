@@ -127,6 +127,7 @@ public func setWidgetVisible(_ visible: Bool) {
     if changed { flags[2] = true }
     flagLock.unlock()
     if changed && visible { wakeFrame() }
+    if !visible { audioWaveform.update(active: false) }
 }
 
 func widgetTitle() -> String {

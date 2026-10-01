@@ -116,6 +116,14 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         uint tex_idx = min((uint)max(0, c.texture_id), (uint)(WALLIFY_MAX_TEXTURES - 1));
         float4 sample = (c.kind == WALLIFY_NEAREST) ? textures[tex_idx].sample(pixelSampler, uv) : textures[tex_idx].sample(linearSampler, uv);
         color *= sample;
+    } else if (c.kind == WALLIFY_WAVEFORM) {
+        constexpr sampler waveSampler(filter::linear, address::clamp_to_edge);
+        uint tex_idx = min((uint)max(0, c.texture_id), (uint)(WALLIFY_MAX_TEXTURES - 1));
+        float2 peaks = textures[tex_idx].sample(waveSampler, float2(in.uv.x, 0.5f)).rg;
+        float y = (in.uv.y - 0.5f) * 2.0f;
+        float aaWave = max(fwidth(y), 0.03f);
+        float low = -max(peaks.r, aaWave * 0.5f), high = max(peaks.g, aaWave * 0.5f);
+        coverage *= smoothstep(low - aaWave, low, y) * (1.0f - smoothstep(high, high + aaWave, y));
     } else if (c.kind == WALLIFY_GRADIENT) {
         coverage *= mix(c.parameter, 1.0f, smoothstep(0.0f, 1.0f, in.uv.y));
     } else if (c.kind == WALLIFY_GLASS) {

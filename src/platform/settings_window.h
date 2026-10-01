@@ -30,6 +30,7 @@ typedef struct {
     bool show_timestamps;
     bool artwork_border;
     bool compact_gradient;
+    bool waveform;
     int artwork_radius;
     int progress_thickness;
     int font_scale;      // 0: small, 1: normal, 2: large

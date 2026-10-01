@@ -39,6 +39,7 @@ typedef struct {
     bool setting_show_timestamps;
     bool setting_artwork_border;
     bool setting_compact_gradient;
+    bool setting_waveform;
     uint8_t setting_font_scale;
     uint8_t setting_artwork_radius;
     uint8_t setting_progress_thickness;
