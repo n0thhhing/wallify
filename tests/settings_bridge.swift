@@ -100,6 +100,7 @@ struct SettingsBridgeCheck {
         checkMetalRenderer()
         checkPerformanceSample()
         checkLayoutInterpolation()
+        if CommandLine.arguments.contains("--benchmark-snap") { benchmarkSnap(); return }
         if CommandLine.arguments.contains("--benchmark-math") { benchmarkMath(); return }
         if CommandLine.arguments.contains("--benchmark") { benchmarkFramePreparation(); return }
         checkSpotifyBridge()

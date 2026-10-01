@@ -74,3 +74,25 @@ func benchmarkMath() {
     }
     print(String(format: "layout_us=%.3f artwork_color_us=%.3f checksum=%.0f", layoutSamples.sorted()[2], colorSamples.sorted()[2], checksum))
 }
+
+func benchmarkSnap() {
+    let candidates: [WallifyWindowRect] = (0..<64).map { index in
+        let x = Double(index % 8) * 220, y = Double(index / 8) * 200
+        let width: Double = index % 2 == 0 ? 180 : 360
+        return WallifyWindowRect(x: x, y: y, width: width, height: 180)
+    }
+    var samples = [Double](), checksum = 0.0
+    candidates.withUnsafeBufferPointer { buffer in
+        for _ in 0..<5 {
+            let start = monotonicTime()
+            for i in 0..<2000 {
+                var snap = WallifyPanelSnap()
+                calculatePanelSnap(buffer.baseAddress, UInt(buffer.count), Double(i % 1000), Double(i % 700),
+                                   540, 180, 0, 0, 0, 0, &snap)
+                checksum += snap.distance_sq + Double(snap.margin_left) + Double(snap.margin_top)
+            }
+            samples.append((monotonicTime() - start) * 1_000_000 / 2000)
+        }
+    }
+    print(String(format: "snap_us=%.3f checksum=%.0f", samples.sorted()[2], checksum))
+}
