@@ -98,6 +98,7 @@ private let idleTestSurface = CAMetalLayer()
 struct SettingsBridgeCheck {
     @MainActor static func main() {
         checkMetalRenderer()
+        if CommandLine.arguments.contains("--benchmark") { benchmarkFramePreparation(); return }
         checkSpotifyBridge()
         checkSpotifastBridge()
         checkIdleAnimation()

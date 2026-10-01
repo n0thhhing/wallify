@@ -37,7 +37,7 @@ fi
 xcrun swiftc "${COMMON[@]}" "$OPT" -import-objc-header src/platform/settings_bridge.h "${SOURCES[@]}" src/native_bindings.swift src/wallify.swift ${OBJECTS[@]+"${OBJECTS[@]}"} -o build/bin/wallify
 if [[ "$TEST" == true ]]; then
     # Test callbacks deliberately replace the application's native bindings.
-    xcrun swiftc -swift-version 5 -module-cache-path /tmp/wallify-swift-modules -import-objc-header src/platform/settings_bridge.h "${SOURCES[@]}" src/media/metadata_fetcher.swift tests/*.swift -o build/bin/settings-bridge-check
+    xcrun swiftc -swift-version 5 "$OPT" -module-cache-path /tmp/wallify-swift-modules -import-objc-header src/platform/settings_bridge.h "${SOURCES[@]}" src/media/metadata_fetcher.swift tests/*.swift -o build/bin/settings-bridge-check
     /usr/bin/perl tests/helper-loader.pl build/lib/libmetadata_fetcher.dylib
     build/bin/settings-bridge-check --metallib "$PWD/build/bin/default.metallib"
     build/bin/settings-bridge-check --settings --metallib "$PWD/build/bin/default.metallib"

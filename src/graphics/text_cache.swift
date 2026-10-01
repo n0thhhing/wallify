@@ -6,6 +6,7 @@ final class TextCache {
     private var entries = [Entry]()
     private var tick: UInt64 = 0
     private var scratch = [UInt32](repeating: 0, count: 2048 * 96)
+    var scratchBytes: Int { scratch.count * MemoryLayout<UInt32>.stride }
 
     private func get(_ text: String, _ size: Double, _ bold: Bool) -> Int? {
         guard !text.isEmpty, size.isFinite, size > 0 else { return nil }
