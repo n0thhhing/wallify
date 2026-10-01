@@ -16,3 +16,4 @@ extern int wallify_width(void);
 extern int wallify_height(void);
 extern void widget_debug_window_show(void);
 extern void wallify_context_menu_selected(int tag);
+extern void wallify_artwork_downloaded(bool available);

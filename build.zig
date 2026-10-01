@@ -54,6 +54,7 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/platform/media_remote.swift"));
     swift_settings.addFileArg(b.path("src/media/spotify.swift"));
     swift_settings.addFileArg(b.path("src/media/spotifast.swift"));
+    swift_settings.addFileArg(b.path("src/media/artwork_download.swift"));
     swift_settings.addFileArg(b.path("src/graphics/raster.swift"));
     swift_settings.addArg("-o");
     const settings_dylib = swift_settings.addOutputFileArg("libWallifySettings.dylib");
@@ -199,6 +200,7 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/platform/media_remote.swift"));
     swift_check.addFileArg(b.path("src/media/spotify.swift"));
     swift_check.addFileArg(b.path("src/media/spotifast.swift"));
+    swift_check.addFileArg(b.path("src/media/artwork_download.swift"));
     swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
     swift_check.addFileArg(b.path("src/graphics/raster.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
@@ -238,6 +240,6 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_menu_previous",           "_wallify_menu_next",
         "_wallify_pointer",                 "_wallify_set_window_visible",
         "_wallify_media_key_event",         "_widget_debug_window_show",
-        "_wallify_context_menu_selected",
+        "_wallify_context_menu_selected",   "_wallify_artwork_downloaded",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

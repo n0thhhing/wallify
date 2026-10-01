@@ -304,55 +304,13 @@ pub const SpotifyPayload = struct {
     artwork_url: []const u8,
 };
 
-// Generation invalidates stale artwork downloads when a newer track arrives.
-var spotify_download_gen = std.atomic.Value(u32).init(0);
+extern fn wallify_download_artwork(bytes: [*]const u8, count: usize) callconv(.c) void;
+extern fn wallify_cancel_artwork_download() callconv(.c) void;
 
-// A monotonically increasing generation prevents an older async download from publishing stale artwork.
-
-fn spotifyDownloadWorker(url: []const u8, gen: u32, _: std.Io) void {
-    // metadataLoop allocates this URL specifically for this worker; ownership transfers here.
-    defer std.heap.page_allocator.free(url);
-
-    // All temporary path formatting in this worker is arena-backed and dies together at return.
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-
-    const tmp_path_c = std.fmt.allocPrint(arena.allocator(), "/tmp/art_sp_{}.raw\x00", .{gen}) catch return;
-
-    const macos = @import("../platform/macos.zig");
-    const pool = macos.send(macos.Ref, macos.send(macos.Ref, macos.objc_getClass("NSAutoreleasePool"), "alloc", .{}), "init", .{});
-
-    const ns_url_str = macos.string(url);
-    const nsurl = macos.send(macos.Ref, macos.objc_getClass("NSURL"), "URLWithString:", .{ns_url_str});
-    const data = macos.send(macos.Ref, macos.objc_getClass("NSData"), "dataWithContentsOfURL:", .{nsurl});
-
-    var curl_ok = false;
-    if (data != null) {
-        const dest_path = macos.string(tmp_path_c[0 .. tmp_path_c.len - 1]);
-        curl_ok = macos.send(bool, data, "writeToFile:atomically:", .{ dest_path, true });
-        macos.CFRelease(dest_path);
-    }
-
-    macos.CFRelease(ns_url_str);
-    macos.send(void, pool, "release", .{});
-
-    if (spotify_download_gen.load(.acquire) != gen) {
-        _ = std.posix.system.unlink(@ptrCast(tmp_path_c.ptr));
-        return;
-    }
-
-    if (curl_ok) {
-        std.log.info("media: artwork download complete, generation={d}", .{gen});
-        _ = std.posix.system.rename(@ptrCast(tmp_path_c.ptr), "/tmp/art.raw");
-        state.global_has_artwork = true;
-        state.artwork_refresh_pending = true;
-        render.extractColor();
-    } else {
-        std.log.warn("media: artwork download failed, generation={d}", .{gen});
-        _ = std.posix.system.unlink(@ptrCast(tmp_path_c.ptr));
-        state.global_has_artwork = false;
-        _ = std.posix.system.unlink("/tmp/art.raw");
-    }
+pub export fn wallify_artwork_downloaded(available: bool) callconv(.c) void {
+    state.global_has_artwork = available;
+    state.artwork_refresh_pending = available;
+    if (available) render.extractColor();
     state.requestFrame();
 }
 
@@ -375,7 +333,7 @@ pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
     };
 }
 
-pub fn metadataLoop(io: std.Io) void {
+pub fn metadataLoop(_: std.Io) void {
     // MediaRemote is a locked private framework. Processes can only access it if their bundle ID starts with `com.apple.`.
     // We pipe a script with DynaLoader into `/usr/bin/perl` because its `com.apple.perl` bundle ID bypasses the restriction.
     // If the main Zig process crashes, the pipe breaks and Perl immediately exits ($SIG{PIPE}), avoiding zombie processes.
@@ -413,6 +371,7 @@ pub fn metadataLoop(io: std.Io) void {
         const active_source = getActiveSource();
         if (last_source == null or active_source != last_source.?) {
             std.log.info("media: active source -> {s}", .{@tagName(active_source)});
+            wallify_cancel_artwork_download();
             last_source = active_source;
             state.spotify_closed.store(false, .release);
             state.spotify_has_track.store(false, .release);
@@ -460,6 +419,7 @@ pub fn metadataLoop(io: std.Io) void {
                 state.requestFrame();
             }
             if (confirmed_closed) {
+                wallify_cancel_artwork_download();
                 state.spotify_has_track.store(false, .release);
                 spotify_no_track_misses = 0;
                 const title_span = if (active_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
@@ -487,6 +447,7 @@ pub fn metadataLoop(io: std.Io) void {
                     sleep_ms(SPOTIFY_POLL_INTERVAL_MS);
                     continue;
                 }
+                wallify_cancel_artwork_download();
                 state.spotify_has_track.store(false, .release);
                 const title_span = if (active_source == .spotifast) "Spotifast" else "Spotify";
                 const artist_span = "No Track Playing";
@@ -576,16 +537,10 @@ pub fn metadataLoop(io: std.Io) void {
                             @memcpy(last_art_url[0..item.artwork_url.len], item.artwork_url);
                             last_art_url_len = item.artwork_url.len;
 
-                            const url_dup = std.heap.page_allocator.dupe(u8, item.artwork_url) catch continue;
-                            const gen = spotify_download_gen.fetchAdd(1, .acq_rel) + 1;
-
-                            const thread = std.Thread.spawn(.{}, spotifyDownloadWorker, .{ url_dup, gen, io }) catch {
-                                std.heap.page_allocator.free(url_dup);
-                                continue;
-                            };
-                            thread.detach();
+                            wallify_download_artwork(item.artwork_url.ptr, item.artwork_url.len);
                         }
                     } else if (title_changed) {
+                        wallify_cancel_artwork_download();
                         state.global_has_artwork = false;
                         last_art_url_len = 0;
                     }

@@ -14,6 +14,8 @@ private var contextSelection = Int32(0)
 
 @_cdecl("wallify_context_menu_selected")
 func contextSelectionStub(_ tag: Int32) { contextSelection = tag }
+@_cdecl("wallify_artwork_downloaded")
+func artworkDownloadedStub(_ available: Bool) {}
 
 @_cdecl("wallify_pointer")
 @MainActor func pointerStub(_ x: Double, _ y: Double, _ kind: Int32) {
@@ -84,6 +86,7 @@ struct SettingsBridgeCheck {
         checkDesktopGlass()
         checkDesktopSnap()
         checkContextMenu()
+        checkArtworkDownload()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3
@@ -178,6 +181,32 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         panel.orderOut(nil)
+    }
+
+    static func checkArtworkDownload() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let destination = directory.appendingPathComponent("art.raw")
+        var changes: [Bool] = []
+        let downloader = ArtworkDownload(destination: destination) { changes.append($0) }
+        let old = downloader.cancel()
+        let latest = downloader.cancel()
+        downloader.complete(Data([2, 3]), status: 200, generation: latest)
+        downloader.complete(Data([1]), status: 200, generation: old)
+        precondition(try! Data(contentsOf: destination) == Data([2, 3]))
+        precondition(changes == [true])
+        downloader.complete(nil, status: 500, generation: old)
+        precondition(FileManager.default.fileExists(atPath: destination.path))
+        let failure = downloader.cancel()
+        downloader.complete(Data([9]), status: 404, generation: failure)
+        precondition(changes == [true, false] && !FileManager.default.fileExists(atPath: destination.path))
+        downloader.start("file:///tmp/not-an-artwork-source")
+        precondition(changes.last == false)
+        let cancelled = downloader.cancel()
+        downloader.cancel()
+        downloader.complete(Data([1]), status: 200, generation: cancelled)
+        precondition(!FileManager.default.fileExists(atPath: destination.path))
     }
 
     @MainActor static func checkContextMenu() {
