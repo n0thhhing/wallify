@@ -1,6 +1,9 @@
 import Foundation
 
 func checkSceneAssets() {
+    let textScratch = TextCache()
+    precondition(textScratch.width("Short", 17, false) > 0)
+    precondition(textScratch.scratchBytes > 0 && textScratch.scratchBytes < 2048 * 96 * 4)
     let black = artworkColor([0xff000000])
     precondition(black.0 == 0 && black.1 == 0 && black.2 == 0)
     let color = artworkColor([0xff201008, 0xff201008])

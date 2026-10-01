@@ -5,7 +5,7 @@ final class TextCache {
     private struct Entry { var key: Key; var width: Double; var height: Double; var stamp: UInt64 }
     private var entries = [Entry]()
     private var tick: UInt64 = 0
-    private var scratch = [UInt32](repeating: 0, count: 2048 * 96)
+    private var scratch = [UInt32]()
     var scratchBytes: Int { scratch.count * MemoryLayout<UInt32>.stride }
 
     private func get(_ text: String, _ size: Double, _ bold: Bool) -> Int? {
@@ -17,6 +17,7 @@ final class TextCache {
         let width = bytes.withUnsafeBufferPointer { min(2048, ceil(rasterTextWidth($0.baseAddress, UInt($0.count), size * 2, bold ? 1 : 0)) + 8) }
         let height = min(96, ceil(size * 3)), w = Int(width), h = Int(height)
         guard w > 0, h > 0 else { return nil }
+        if scratch.count < w * h { scratch = [UInt32](repeating: 0, count: w * h) }
         scratch.withUnsafeMutableBufferPointer { pixels in
             pixels.baseAddress!.update(repeating: 0, count: w * h)
             bytes.withUnsafeBufferPointer { drawRasterText(pixels.baseAddress, UInt(w), UInt(h), $0.baseAddress, UInt($0.count), 0, 0, width, size * 2, bold ? 1 : 0, 0, 255, 255, 255) }
