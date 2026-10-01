@@ -20,6 +20,9 @@ func checkPointerActions() {
     }
     _ = pointer(344, 132, 1)
     precondition(pointer(344, 132, 2).contains(.toggle))
+    _ = pointer(344, 132, 1)
+    _ = pointer(344, 132, 3)
+    precondition(!pointer(344, 132, 2).contains(.toggle))
     _ = pointer(298, 132, 1)
     precondition(!pointer(390, 132, 2).contains(.command(4)))
     _ = pointer(344, 84, 1)

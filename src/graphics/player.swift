@@ -21,7 +21,7 @@ func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayo
         if state.setting_transition != 0 && mix < 1 {
             canvas.transition(state.setting_transition, art, Float(mix), Float(state.animation_time), SIMD3(Float(state.extracted_r) / 255, Float(state.extracted_g) / 255, Float(state.extracted_b) / 255))
         } else {
-            let dim: Float = state.setting_dim ? 0.6 : 1
+            let dim: Float = state.setting_dim && state.global_rate == 0 ? 0.6 : 1
             if mix < 1 { canvas.imageTint(.previousArtwork, art, SIMD4(dim, dim, dim, 1)) }
             canvas.imageTint(.artwork, art, SIMD4(dim, dim, dim, Float(mix)))
         }

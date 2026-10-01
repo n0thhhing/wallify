@@ -17,7 +17,7 @@ struct StaticSceneKey: Equatable {
                     state.setting_intensity, state.setting_transition, state.extracted_r, state.extracted_g, state.extracted_b]
         flags = [state.setting_native_glass, state.setting_glow, state.setting_dim, state.setting_compact_gradient,
                  state.setting_show_controls, state.setting_artwork_border, state.global_has_artwork, hasArtwork,
-                 state.art_transition_until > state.animation_time]
+                 state.art_transition_until > state.animation_time, state.global_rate > 0]
         self.generation = generation
     }
 }

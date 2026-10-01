@@ -159,6 +159,10 @@ final class MediaCoordinator {
         state.pointee.global_elapsed = 0
         state.pointee.global_duration = 0
         state.pointee.global_has_artwork = false
+        state.pointee.playback_clock = WallifyPlaybackClock()
+        state.pointee.playback_state = WallifyPlaybackIntent(pending: -1, deadline: 0, confirmed_since: -1)
+        state.pointee.global_rate_lock = 0; state.pointee.global_rate_lock_until = 0
+        state.pointee.global_is_dragging = false
         clearArtwork()
         requestWidgetFrame()
     }

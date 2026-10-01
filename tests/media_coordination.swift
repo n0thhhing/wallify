@@ -36,6 +36,7 @@ func checkMediaCoordination() {
     precondition(widgetTitle() == "café")
     apply("NO_TRACK", 18)
     precondition(widgetTitle() == "Spotify" && state.pointee.global_duration == 0 && clears == 1)
+    precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_state.pending == -1)
     media.select(0)
     _ = media.apply(Array("Title|||Artist|||0|||1|||5|||30".utf8), source: 0, now: 20)
     precondition(widgetTitle() == "Title" && state.pointee.global_rate == 1)
@@ -43,6 +44,7 @@ func checkMediaCoordination() {
     precondition(widgetTitle() == "Title")
     _ = media.apply([], source: 0, now: 23)
     precondition(widgetTitle().isEmpty && clears == 2 && cancellations >= 2)
+    precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_clock.elapsed == 0)
     var replies = [String]()
     runNowPlayingHelper(script: #"$|=1; print "$$\n"; print "Title|||Artist|||0|||1|||0|||30\n"; sleep 10;"#) {
         replies.append(String(decoding: $0, as: UTF8.self))

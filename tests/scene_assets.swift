@@ -30,6 +30,19 @@ func checkSceneAssets() {
     var state = widgetStatePointer().pointee
     state.setting_show_controls = true; state.setting_hide_progress = false; state.setting_hide_text = false
     state.global_duration = 200; state.global_anim_art_t = 1; state.global_rate = 1
+    state.setting_dim = true; state.setting_transition = 0; state.global_has_artwork = true
+    let artworkLayout = SceneLayout()
+    func artworkBrightness() -> Float {
+        let scene = Canvas(clip: artworkLayout.card)
+        drawPlayerStatic(scene, card: artworkLayout.card, layout: artworkLayout, state: state, hasArtwork: true)
+        return scene.commands.first { $0.texture_id == Texture.artwork.rawValue }!.r
+    }
+    precondition(artworkBrightness() == 1)
+    let playingKey = StaticSceneKey(layout: artworkLayout, state: state, hasArtwork: true, generation: 1)
+    state.global_rate = 0
+    precondition(artworkBrightness() == 0.6)
+    precondition(playingKey != StaticSceneKey(layout: artworkLayout, state: state, hasArtwork: true, generation: 1))
+    state.global_rate = 1
     for mode in UInt8(0)...4 {
         let (w, h) = modeDimensions(mode)
         state.setting_mode = mode; state.mode_from = mode; state.mode_mix = 1

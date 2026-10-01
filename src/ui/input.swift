@@ -16,6 +16,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
     let click = kind == 1, release = kind == 2
     if kind == 3 {
         state.pointee.global_is_dragging = false; state.pointee.global_panel_dragging = false
+        state.pointee.global_click_target = 0
         state.pointee.global_hover_target = 0
         return [.hidePreview, .menu, .redraw]
     }
