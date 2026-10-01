@@ -101,6 +101,7 @@ public func startIdleAnimation(_ sprites: UnsafePointer<DrawCommand>?, _ spriteC
         root.isGeometryFlipped = true
         root.masksToBounds = true
         root.cornerRadius = CGFloat(first.clip_radius)
+        NSLog("Wallify layer: start idle sprite=%d frame=%@", first.texture_id, NSStringFromRect(root.frame))
         surface.addSublayer(root)
         let started = root.convertTime(CACurrentMediaTime(), from: nil)
         idleCommandLayers(root, frames: spriteCommands, frameCount: Int(spriteCount), commandCount: 1,
@@ -118,6 +119,7 @@ public func startIdleAnimation(_ sprites: UnsafePointer<DrawCommand>?, _ spriteC
 @_cdecl("wallify_idle_animation_stop")
 public func stopIdleAnimation() {
     DispatchQueue.main.async {
+        if idleAnimationLayer != nil { NSLog("Wallify layer: stop idle") }
         idleAnimationLayer?.removeFromSuperlayer()
         idleAnimationLayer = nil
     }

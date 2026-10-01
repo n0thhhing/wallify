@@ -46,6 +46,13 @@ time. Existing steady playback/ambient frame rates are unchanged.
 
 The optional Dear ImGui Inspector remains C++/Objective-C++ and builds with `--debug-inspector`. It provides renderer, scheduler, layout, input, and bounded console diagnostics. `WALLIFY_PROFILE=1` enables preparation/GPU timings, draw counts, and upload statistics.
 
+Native symbol rasterization uses owned bitmap contexts rather than NSImage's
+deprecated lockFocus/offscreen-window cache. Window-show logs include widget,
+snap-preview, and inspector window IDs and frames; idle-layer start/stop logs
+record sprite and geometry. These event-only logs help investigate rare visual
+flashes without adding a polling timer. The reported intermittent red flash has
+not been reproduced, so the bitmap change is a precaution, not a confirmed fix.
+
 ## Build
 
 `scripts/build.sh` invokes Xcode Swift, Clang, and Metal compilers. No Zig compiler is required. Packaging embeds the helper, shaders, and sprites, generates `Info.plist`, signs the app, and verifies its signature. See [Swift port verification](swift-port.md) for commands and checks.

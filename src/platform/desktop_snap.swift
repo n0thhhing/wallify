@@ -148,6 +148,7 @@ func snapPreviewFrame(_ rect: NSRect, screenHeight: CGFloat) -> NSRect {
         panel.contentView?.layer?.cornerRadius = radius
         panel.orderFrontRegardless()
         if !wasVisible {
+            NSLog("Wallify window: show snap preview id=%d frame=%@", panel.windowNumber, NSStringFromRect(frame))
             panel.alphaValue = 0
             panel.animator().alphaValue = 1
             wasVisible = true

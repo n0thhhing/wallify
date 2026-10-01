@@ -670,11 +670,15 @@ struct SettingsBridgeCheck {
         }
         let left = rasterColumns(right: 0), right = rasterColumns(right: 1)
         precondition(!left.isEmpty && !right.isEmpty && right.first! > left.last!)
+        let visibleWindows = Set(NSApp.windows.filter { $0.isVisible }.map { $0.windowNumber })
+        let originalContext = NSGraphicsContext.current
         for kind: Int32 in 0...3 {
             var icon = [UInt32](repeating: 0, count: 96 * 96)
             icon.withUnsafeMutableBufferPointer { drawRasterIcon($0.baseAddress, 96, 96, 48, 48, kind, 0, 1, 2) }
             precondition(icon.contains { $0 != 0 })
+            precondition(NSGraphicsContext.current === originalContext)
         }
+        precondition(Set(NSApp.windows.filter { $0.isVisible }.map { $0.windowNumber }) == visibleWindows)
         precondition(drawRasterSymbol(nil, 0) == 0 && drawRasterSymbol(nil, -1) == 0)
         let scratch = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
         defer { try? FileManager.default.removeItem(at: scratch) }

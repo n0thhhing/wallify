@@ -59,11 +59,19 @@ private let rasterSymbols: [(CGImage, NSSize)?] = {
             guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil),
                   let configured = symbol.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: index < 2 ? 28 : 17, weight: .regular)) else { return nil }
             let size = configured.size
-            let raster = NSImage(size: NSSize(width: size.width * 3, height: size.height * 3))
-            raster.lockFocus()
-            configured.draw(in: NSRect(origin: .zero, size: raster.size), from: .zero, operation: .sourceOver, fraction: 1)
-            raster.unlockFocus()
-            guard let image = raster.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            // An owned bitmap avoids lockFocus's implicit offscreen window/focus stack.
+            guard let raster = NSBitmapImageRep(bitmapDataPlanes: nil,
+                pixelsWide: Int(ceil(size.width * 3)), pixelsHigh: Int(ceil(size.height * 3)),
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 32),
+                let context = NSGraphicsContext(bitmapImageRep: raster) else { return nil }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            let rect = NSRect(x: 0, y: 0, width: raster.pixelsWide, height: raster.pixelsHigh)
+            context.cgContext.clear(rect)
+            configured.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+            NSGraphicsContext.restoreGraphicsState()
+            guard let image = raster.cgImage else { return nil }
             return (image, size)
         }
     }

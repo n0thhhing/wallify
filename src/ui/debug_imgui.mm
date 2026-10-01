@@ -1127,6 +1127,8 @@ static void showInspectorOnMain(void) {
         // Do not reset a deliberately collapsed/resized inspector just because
         // another caller asks for it to be shown again.
         if (!wasVisible) {
+            NSLog(@"Wallify window: show inspector id=%ld frame=%@", (long)gInspectorPanel.windowNumber,
+                  NSStringFromRect(gInspectorPanel.frame));
             ImGui::SetWindowCollapsed("Wallify Inspector", false);
             gInspectorCollapsed = false;
             gInspectorExpandedWidth = kInspectorWidth;

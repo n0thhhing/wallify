@@ -253,6 +253,7 @@ final class MetalRenderer: @unchecked Sendable {
         self.view = view
         self.surface = surface
         moveWidgetPanelNow(left, top)
+        NSLog("Wallify window: show widget id=%d frame=%@", panel.windowNumber, NSStringFromRect(panel.frame))
         panel.makeKeyAndOrderFront(nil)
         wallify_set_window_visible(panel.occlusionState.contains(.visible) ? 1 : 0)
         installStatusMenu()
