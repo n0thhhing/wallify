@@ -56,7 +56,11 @@ public func drawSwiftUIFrame() {
             cachedScene.glass(card, SIMD4(28 / 255, 28 / 255, 30 / 255, 1), color,
                 state.global_has_artwork && sceneAssets.hasArtwork && state.setting_glow ? 0.12 : 0)
         }
-        if state.idle_mix < 1 { drawPlayerStatic(cachedScene, card: card, layout: layout, state: state, hasArtwork: sceneAssets.hasArtwork) }
+        if state.idle_mix < 1 {
+            cachedScene.opacity = Float(1 - smoothTransition(state.idle_mix))
+            drawPlayerStatic(cachedScene, card: card, layout: layout, state: state, hasArtwork: sceneAssets.hasArtwork)
+            cachedScene.opacity = 1
+        }
         let frame = state.setting_frame == 0 ? 0 : state.setting_frame == 2 ? 1.5 : 1
         if !state.setting_native_glass && frame > 0 { cachedScene.stroke(card, 0.8, SIMD4(1, 1, 1, Float(0.12 * frame))) }
         cachedSceneKey = key
@@ -69,8 +73,10 @@ public func drawSwiftUIFrame() {
     }
     if state.idle_mix < 1 {
         let elapsed = state.global_rate == 0 || state.global_is_dragging ? state.global_elapsed : playbackPosition(state.playback_clock, now: monotonicTime(), duration: state.global_duration)
+        dynamic.opacity = Float(1 - smoothTransition(state.idle_mix))
         drawPlayerDynamic(dynamic, elapsed: elapsed, layout: layout, state: state)
-    } else if !idleCompositor.active { drawIdleScene(dynamic, card: card, layout: layout, state: state) }
+    }
+    if state.idle_mix > 0 && !idleCompositor.active { drawIdleScene(dynamic, card: card, layout: layout, state: state) }
     cachedScene.commands.withUnsafeBufferPointer { statics in dynamic.commands.withUnsafeBufferPointer {
         presentMetalScene(Float(layout.width), Float(layout.height), statics.baseAddress, UInt(statics.count), $0.baseAddress, UInt($0.count))
     } }

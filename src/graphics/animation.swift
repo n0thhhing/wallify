@@ -43,12 +43,11 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
             result.resize = (Int32(w), Int32(h))
             finishModeState(&state)
         } else {
-            let previousMix = state.mode_mix
             state.mode_mix = min(1, state.mode_mix + dt * 5.5)
-            let inverse = 1 - state.mode_mix, eased = 1 - inverse * inverse * inverse
+            let eased = smoothTransition(state.mode_mix)
             result.resize = (Int32(max(1, (state.mode_start_width + (state.mode_target_width - state.mode_start_width) * eased).rounded())),
                              Int32(max(1, (state.mode_start_height + (state.mode_target_height - state.mode_start_height) * eased).rounded())))
-            if state.mode_mix >= 1 || state.mode_mix == previousMix {
+            if state.mode_mix >= 1 {
                 finishModeState(&state)
                 let (w, h) = modeDimensions(state.setting_mode); result.resize = (Int32(w), Int32(h))
             }
@@ -57,7 +56,7 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     if state.panel_position_dirty { state.panel_position_dirty = false; result.move = true }
     if state.panel_snap_active {
         high = true; state.panel_snap_elapsed += dt
-        let t = min(1, state.panel_snap_elapsed / 0.22), inverse = 1 - t, eased = 1 - inverse * inverse * inverse
+        let t = min(1, state.panel_snap_elapsed / 0.22), eased = smoothTransition(t)
         state.widget_margin_left = Int32((Double(state.panel_snap_start_left) + (Double(state.panel_snap_target_left) - Double(state.panel_snap_start_left)) * eased).rounded())
         state.widget_margin_top = Int32((Double(state.panel_snap_start_top) + (Double(state.panel_snap_target_top) - Double(state.panel_snap_start_top)) * eased).rounded())
         result.move = true
@@ -73,15 +72,21 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     let auroraTarget: Double = !state.setting_native_glass && state.setting_aurora && state.idle_mix < 0.5 && state.global_has_artwork ? 1 : 0
     if !state.setting_animations || state.setting_native_glass { state.aurora_mix = auroraTarget }
     else if abs(state.aurora_mix - auroraTarget) > 0.001 {
-        state.aurora_mix += (auroraTarget - state.aurora_mix) * min(1, dt * 3.5); result.draw = true; ambient = true
+        state.aurora_mix += (auroraTarget - state.aurora_mix) * (1 - exp(-dt * 3.5)); result.draw = true; ambient = true
     } else { state.aurora_mix = auroraTarget }
     if state.aurora_mix > 0.001 && state.global_rate > 0 && state.setting_animations { result.draw = true; ambient = true }
     let seekTarget: Double = state.global_is_dragging ? 1 : 0
     if abs(state.seek_expansion - seekTarget) > 0.0001 || abs(state.seek_velocity) > 0.001 {
         high = true
-        let step = min(dt, 1 / 60)
-        state.seek_velocity += (322.27 * (seekTarget - state.seek_expansion) - 25.13 * state.seek_velocity) * step
-        state.seek_expansion += state.seek_velocity * step; result.draw = true
+        // Exact critically damped step: a dropped frame cannot destabilize the spring.
+        let displacement = state.seek_expansion - seekTarget, decay = exp(-18 * dt)
+        let momentum = state.seek_velocity + 18 * displacement
+        state.seek_expansion = seekTarget + (displacement + momentum * dt) * decay
+        state.seek_velocity = (state.seek_velocity - 18 * momentum * dt) * decay
+        if abs(state.seek_expansion - seekTarget) < 0.0001 && abs(state.seek_velocity) < 0.001 {
+            state.seek_expansion = seekTarget; state.seek_velocity = 0
+        }
+        result.draw = true
     }
     let playback = playbackFrameInterval(playing: state.global_rate > 0, dragging: state.global_is_dragging, playerVisible: state.idle_mix < 1,
         progressVisible: layout.progressVisible(state.setting_hide_progress), timestampsVisible: !state.setting_hide_text && state.setting_show_timestamps && layout.geometry.compact_mix <= 0.12)
@@ -95,7 +100,7 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
         let target: Double = state.global_hover_target == Int32(index + 5) ? 1 : 0
         if abs(hover[index] - target) > 0.001 {
             visual = visual || state.setting_animations
-            hover[index] += (target - hover[index]) * (state.setting_animations ? min(1, dt * 10) : 1); result.draw = true
+            hover[index] += (target - hover[index]) * (state.setting_animations ? 1 - exp(-dt * 10) : 1); result.draw = true
         }
     }
     state.hover_amount = (hover[0], hover[1], hover[2])
@@ -156,11 +161,12 @@ func applyContextSelection(_ tag: Int32) {
 public func runAnimationWorker() {
     var previousWidth = metalWidgetWidth(), previousTime = monotonicTime(), lastDraw = previousTime
     var marqueeTitle = "", marqueeWidth: Double = 0
+    var rested = false
     while true {
         let now = monotonicTime()
         if !stateFlag(3, 0, false) {
             previousTime = now; lastDraw = now; _ = stateFlag(2, 1, false)
-            waitForFrame(); continue
+            waitForFrame(); rested = true; continue
         }
         sceneLock.lock()
         let state = widgetStatePointer(), width = metalWidgetWidth(), action = takeContextSelection()
@@ -172,9 +178,10 @@ public func runAnimationWorker() {
             marqueeTitle = title; marqueeWidth = textCache.width(title, 15, true)
         }
         let idle = spotifyIsIdle()
-        let step = advanceAnimations(&state.pointee, now: now, previous: previousTime, lastDraw: lastDraw, idle: idle,
+        // Start newly requested motion at frame zero, while preserving native pet elapsed time.
+        let step = advanceAnimations(&state.pointee, now: now, previous: rested ? now : previousTime, lastDraw: lastDraw, idle: idle,
             compositorActive: idleCompositor.active, compositorElapsed: idleCompositor.elapsed(now - previousTime), layout: sceneLayout, titleWidth: marqueeWidth)
-        previousTime = now
+        previousTime = now; rested = false
         if let (w, h) = step.resize { resizeMetalWidget(w, h) }
         if step.move { moveWidgetPanel(state.pointee.widget_margin_left, state.pointee.widget_margin_top); settingsPositionChanged() }
         if step.save { saveConfiguration() }
@@ -182,7 +189,7 @@ public func runAnimationWorker() {
         if dirty { drawSwiftUIFrame(); lastDraw = monotonicTime() }
         sceneLock.unlock()
         let remaining = step.interval - (monotonicTime() - now)
-        if step.interval == 0 { waitForFrame() }
+        if step.interval == 0 { waitForFrame(); rested = true }
         else if remaining > 0 { waitForFrameInterval(UInt64(remaining * 1_000_000_000)) }
     }
 }

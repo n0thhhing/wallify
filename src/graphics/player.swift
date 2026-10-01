@@ -3,11 +3,11 @@ import Foundation
 let primaryTextColor = SIMD4<Float>(245 / 255, 245 / 255, 247 / 255, 1)
 
 func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayout, state: WallifyWidgetState, hasArtwork: Bool) {
-    let g = layout.geometry, inverse = 1 - state.global_anim_art_t, ease = 1 - inverse * inverse * inverse, inset = 10 * (1 - ease)
+    let g = layout.geometry, ease = smoothTransition(state.global_anim_art_t), inset = 10 * (1 - ease)
     let radiusDelta: Double = state.setting_artwork_radius == 0 ? -8 : state.setting_artwork_radius == 2 ? 8 : 0
     let art = cardRect(g.art_x + inset, g.art_y + inset, max(1, g.art_size - 2 * inset), max(1, g.art_size - 2 * inset), max(0, g.art_radius + radiusDelta - inset * g.compact_mix))
     let transition = min(1, max(0, 1 - (state.art_transition_until - state.animation_time) / 0.5))
-    let mix = transition * transition * transition * (10 + transition * (-15 + 6 * transition))
+    let mix = smoothTransition(transition)
     if state.setting_glow && state.global_has_artwork && hasArtwork {
         let size = Double(metalGlowExtent(132)) * g.art_size / 132
         let glow = cardRect(g.art_x + (g.art_size - size) / 2, g.art_y + (g.art_size - size) / 2, size, size)
@@ -87,7 +87,8 @@ func formatTimestamp(_ seconds: Double) -> String {
 }
 
 func drawIdleScene(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayout, state: WallifyWidgetState) {
-    if !state.setting_native_glass { canvas.opacity = Float(state.idle_mix); canvas.fill(card, SIMD4(30 / 255, 29 / 255, 32 / 255, 1)) }
+    canvas.opacity = Float(smoothTransition(state.idle_mix))
+    if !state.setting_native_glass { canvas.fill(card, SIMD4(30 / 255, 29 / 255, 32 / 255, 1)) }
     if state.setting_idle_style != 0 {
         canvas.pet(Int32(state.setting_idle_style - 1), card, state.cat_time, state.animation_time < state.cat_pet_until)
     } else {

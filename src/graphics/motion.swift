@@ -1,5 +1,10 @@
 import Foundation
 
+func smoothTransition(_ progress: Double) -> Double {
+    let t = min(1, max(0, progress))
+    return t * t * t * (10 + t * (-15 + 6 * t))
+}
+
 @_cdecl("wallify_icon_scale")
 public func playbackIconScale(_ mix: Double, _ playing: Bool) -> Double {
     let progress = playing ? mix : 1 - mix

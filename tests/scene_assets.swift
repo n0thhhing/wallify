@@ -39,6 +39,11 @@ func checkSceneAssets() {
     }
     precondition(formatTimestamp(-1) == "0:00" && formatTimestamp(.nan) == "0:00")
     var state = widgetStatePointer().pointee
+    state.idle_mix = 0.5; state.setting_idle_style = 0; state.setting_native_glass = false
+    let idleFade = Canvas(clip: cardRect(8, 8, 524, 164, 26))
+    drawIdleScene(idleFade, card: idleFade.clip, layout: SceneLayout(), state: state)
+    precondition(!idleFade.commands.isEmpty && idleFade.commands.allSatisfy { abs($0.alpha - 0.5) < 0.0001 })
+    state.idle_mix = 0
     state.setting_show_controls = true; state.setting_hide_progress = false; state.setting_hide_text = false
     state.global_duration = 200; state.global_anim_art_t = 1; state.global_rate = 1
     state.setting_dim = true; state.setting_transition = 0; state.global_has_artwork = true

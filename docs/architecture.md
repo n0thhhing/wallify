@@ -34,6 +34,14 @@ Artwork downloads use URLSession, cancellation, generation checks, and atomic pu
 
 ## Input and diagnostics
 
+Window resizing and layout geometry share a quintic easing curve so their
+positions stay synchronized, with gentle starts and stops. Idle/player content
+crossfades throughout the transition. Hover and aurora blends use exponential
+smoothing; the seek bar uses an exact critically damped spring, preserving
+timing across frame rates and settling to exact endpoints. Event-driven wakes
+start new motion at frame zero while retaining elapsed native pet animation
+time. Existing steady playback/ambient frame rates are unchanged.
+
 `ui/input.swift` reduces pointer events using shared geometry. Press/release pairing guards clicks, seeking clamps to duration, dragging uses screen coordinates, and snapping respects offsets and card insets. `ui/inspector.swift` owns drag diagnostics and snapshots.
 
 The optional Dear ImGui Inspector remains C++/Objective-C++ and builds with `--debug-inspector`. It provides renderer, scheduler, layout, input, and bounded console diagnostics. `WALLIFY_PROFILE=1` enables preparation/GPU timings, draw counts, and upload statistics.

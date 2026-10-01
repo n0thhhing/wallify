@@ -43,6 +43,48 @@ func checkAnimationCoordination() {
     _ = step(0.2, previous: 0.1)
     let done = step(0.3, previous: 0.2)
     precondition(done.save && !state.panel_snap_active && state.widget_margin_left == 188)
+    func simulatedMotion(_ dt: Double, _ count: Int) -> WallifyWidgetState {
+        var motion = state
+        motion.global_is_dragging = true; motion.global_hover_target = 5
+        motion.setting_aurora = true; motion.global_has_artwork = true
+        for i in 0..<count {
+            _ = advanceAnimations(&motion, now: Double(i + 1) * dt, previous: Double(i) * dt,
+                lastDraw: 0, idle: false, compositorActive: false, compositorElapsed: dt, layout: SceneLayout(), titleWidth: 0)
+        }
+        return motion
+    }
+    let slow = simulatedMotion(1 / 30, 9), fast = simulatedMotion(1 / 60, 18)
+    precondition(abs(slow.seek_expansion - fast.seek_expansion) < 1e-10)
+    precondition(abs(slow.hover_amount.0 - fast.hover_amount.0) < 1e-10)
+    precondition(abs(slow.aurora_mix - fast.aurora_mix) < 1e-10)
+    precondition(slow.seek_expansion > 0 && slow.seek_expansion < 1)
+    var returning = slow
+    returning.global_is_dragging = false
+    var settled = AnimationStep()
+    for i in 0..<120 {
+        settled = advanceAnimations(&returning, now: Double(i + 1) / 60, previous: Double(i) / 60,
+            lastDraw: 0, idle: false, compositorActive: false, compositorElapsed: 1 / 60, layout: SceneLayout(), titleWidth: 0)
+        precondition(returning.seek_expansion.isFinite && returning.seek_velocity.isFinite)
+    }
+    precondition(returning.seek_expansion == 0 && returning.seek_velocity == 0 && settled.interval == 0)
+    var nativePhase = state
+    nativePhase.cat_time = 1
+    _ = advanceAnimations(&nativePhase, now: 10, previous: 10, lastDraw: 10, idle: false,
+        compositorActive: true, compositorElapsed: 12, layout: SceneLayout(), titleWidth: 0)
+    precondition(nativePhase.cat_time == 13)
+    var resize = state
+    resize.mode_transition_active = true; resize.mode_mix = 0; resize.mode_from = 0; resize.setting_mode = 2
+    resize.mode_start_width = 180; resize.mode_start_height = 180
+    resize.mode_target_width = 540; resize.mode_target_height = 180
+    _ = advanceAnimations(&resize, now: 1, previous: 1, lastDraw: 1, idle: false,
+        compositorActive: false, compositorElapsed: 0, layout: SceneLayout(), titleWidth: 0)
+    precondition(resize.mode_transition_active && resize.mode_mix == 0)
+    let resized = advanceAnimations(&resize, now: 1.05, previous: 1, lastDraw: 1, idle: false,
+        compositorActive: false, compositorElapsed: 0.05, layout: SceneLayout(), titleWidth: 0)
+    var interpolated = SceneLayout()
+    interpolated.update(width: Double(resized.resize!.0), height: Double(resized.resize!.1), state: resize)
+    precondition(abs(interpolated.geometry.compact_mix - (1 - smoothTransition(resize.mode_mix))) < 1e-10)
+    precondition(smoothTransition(0) == 0 && smoothTransition(1) == 1 && smoothTransition(0.5) == 0.5)
     state.idle_mix = 1; state.setting_idle_style = 1; state.global_panel_dragging = false
     state.cat_pet_until = 0; state.mode_transition_active = false
     precondition(idleCompositorEligible(state))

@@ -62,7 +62,7 @@ struct SceneLayout {
     mutating func update(width: Double, height: Double, state: WallifyWidgetState) {
         guard self.width != width || self.height != height || from != state.mode_from || to != state.setting_mode || mix != state.mode_mix else { return }
         self.width = width; self.height = height; from = state.mode_from; to = state.setting_mode; mix = state.mode_mix
-        _ = widgetLayoutGeometry(Int32(from), Int32(to), mix, &geometry)
+        _ = widgetLayoutGeometry(Int32(from), Int32(to), smoothTransition(mix), &geometry)
     }
     var card: WallifyCardRect { cardRect(8, 8, max(0, width - 16), max(0, height - 16), 26) }
     var buttons: [(x: Double, y: Double)] { [-1.0, 0, 1].map { (geometry.button_center + $0 * 46, geometry.button_y) } }
