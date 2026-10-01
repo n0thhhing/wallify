@@ -753,6 +753,30 @@ struct SettingsBridgeCheck {
         stopIdleAnimation()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
         precondition(idleTestSurface.sublayers?.isEmpty != false)
+        loadMetalTexture(WALLIFY_CAT_TEXTURE, &spritePixel, 1, 1)
+        // Core Animation discards offscreen layer animations after committing.
+        // Exercise the sampled sequence on a real window-backed Metal layer.
+        let petWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+                                 styleMask: .borderless, backing: .buffered, defer: false)
+        petWindow.isReleasedWhenClosed = false
+        let petHost = NSView(frame: petWindow.contentView!.bounds)
+        petHost.wantsLayer = true
+        petHost.layer = idleTestSurface
+        petWindow.contentView = petHost
+        petWindow.orderFront(nil)
+        defer { petWindow.close() }
+        var petCard = WallifyCardRect(x: 8, y: 8, w: 164, h: 164, radius: 26)
+        precondition(startPetAnimation(0, &petCard, 0.2, 2))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        let petRoot = idleTestSurface.sublayers!.first!
+        precondition(petRoot.sublayers!.count == 16 && petRoot.cornerRadius == 26)
+        let sprite = petRoot.sublayers!.first!
+        let petAnimation = sprite.animation(forKey: "contentsRect") as! CAKeyframeAnimation
+        precondition(petAnimation.values!.count == 5 && abs(petAnimation.duration - 5.0 / 6) < 0.0001)
+        precondition(sprite.magnificationFilter == .nearest)
+        stopIdleAnimation()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        precondition(idleTestSurface.sublayers?.isEmpty != false)
     }
 
     static func checkSpotifastBridge() {

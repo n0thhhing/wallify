@@ -30,6 +30,10 @@ test "sprite decoder rejects truncated runs and premultiplies alpha" {
     try std.testing.expectEqual(pixels[0], pixels[1]);
     try std.testing.expectError(error.InvalidSprite, decode(&.{ 130, 200 }, &pixels));
     try std.testing.expectError(error.InvalidSprite, decode(&.{ 131, 200, 100, 50, 128 }, &pixels));
+    try decode(&.{ 2, 1, 2, 3, 255, 255, 255, 255, 0 }, &pixels);
+    try std.testing.expectEqual(@as(u32, 0xff030201), pixels[0]);
+    try std.testing.expectEqual(@as(u32, 0), pixels[1]);
+    try std.testing.expectError(error.InvalidSprite, decode(&.{0}, &pixels));
 }
 
 test "embedded sprite atlases decode to their declared dimensions" {
