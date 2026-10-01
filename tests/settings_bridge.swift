@@ -520,6 +520,19 @@ struct SettingsBridgeCheck {
             }
             return pixels[4 * 8 + 4]
         }
+        for kind in WALLIFY_CINEMATIC...WALLIFY_GLITCH {
+            var effect = composite
+            effect.kind = kind; effect.texture_id = 0; effect.parameter = 0
+            effect.sx = 1; effect.sy = 0; effect.sh = 0.5
+            let command = renderer.queue!.makeCommandBuffer()!
+            withUnsafePointer(to: &effect) {
+                precondition(renderer.encode(command, target: target, commands: $0, count: 1, size: SIMD2(repeating: 8), textures: textures))
+            }
+            command.commit(); command.waitUntilCompleted()
+            precondition(command.status == .completed)
+            let pixel = centerPixel()
+            precondition((pixel >> 24) == 255 && (120...136).contains(Int((pixel >> 16) & 255)))
+        }
         render()
         precondition(centerPixel() == 0xFFFF0000)
         precondition(renderer.stats().static_cache_rebuilds == 1)

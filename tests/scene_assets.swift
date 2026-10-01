@@ -40,9 +40,21 @@ func checkSceneAssets() {
     precondition(artworkBrightness() == 1)
     let playingKey = StaticSceneKey(layout: artworkLayout, state: state, hasArtwork: true, generation: 1)
     state.global_rate = 0
+    precondition(artworkBrightness() == 1) // Pausing must start from the current brightness.
+    state.global_anim_art_t = 0.5
+    precondition(artworkBrightness() > 0.6 && artworkBrightness() < 1)
+    state.global_anim_art_t = 0
     precondition(artworkBrightness() == 0.6)
+    state.art_transition_until = state.animation_time + 0.25
+    for style in UInt8(1)...5 {
+        state.setting_transition = style
+        let scene = Canvas(clip: artworkLayout.card)
+        drawPlayerStatic(scene, card: artworkLayout.card, layout: artworkLayout, state: state, hasArtwork: true)
+        precondition(scene.commands.first { $0.kind == WALLIFY_CINEMATIC + Int32(style) - 1 }!.sh == 0.6)
+    }
+    state.art_transition_until = 0; state.setting_transition = 0
     precondition(playingKey != StaticSceneKey(layout: artworkLayout, state: state, hasArtwork: true, generation: 1))
-    state.global_rate = 1
+    state.global_rate = 1; state.global_anim_art_t = 1
     for mode in UInt8(0)...4 {
         let (w, h) = modeDimensions(mode)
         state.setting_mode = mode; state.mode_from = mode; state.mode_mix = 1

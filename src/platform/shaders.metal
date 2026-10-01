@@ -411,6 +411,10 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
         color = float4(blended_rgb, 1.0f);
     }
 
+    // Artwork effects use sh for brightness; texture commands use it for UV height.
+    if (c.kind >= WALLIFY_CINEMATIC && c.kind <= WALLIFY_GLITCH) {
+        color.rgb *= c.sh;
+    }
     if (c.kind == WALLIFY_GLASS) {
         return color * coverage;
     }

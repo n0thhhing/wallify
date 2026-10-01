@@ -29,11 +29,12 @@ final class Canvas {
     }
     func image(_ texture: Texture, _ rect: WallifyCardRect, _ alpha: Float = 1) { imageTint(texture, rect, SIMD4(1, 1, 1, alpha)) }
     func imageTint(_ texture: Texture, _ rect: WallifyCardRect, _ color: SIMD4<Float>) { add(Int32(WALLIFY_TEXTURE), texture.rawValue, rect, color) }
-    func transition(_ style: UInt8, _ rect: WallifyCardRect, _ mix: Float, _ time: Float, _ color: SIMD3<Float>) {
+    func transition(_ style: UInt8, _ rect: WallifyCardRect, _ mix: Float, _ time: Float, _ color: SIMD3<Float>, brightness: Float = 1) {
         guard style > 0, style <= 5 else { return }
         let index = add(Int32(WALLIFY_CINEMATIC) + Int32(style) - 1, Texture.artwork.rawValue, rect, SIMD4(color.x, color.y, color.z, 1))
         commands[index].parameter = Float(Texture.previousArtwork.rawValue)
         commands[index].sx = mix; commands[index].sy = time
+        commands[index].sh = brightness
     }
     func glass(_ rect: WallifyCardRect, _ color: SIMD4<Float>, _ art: SIMD3<Float>, _ intensity: Float) {
         let index = add(Int32(WALLIFY_GLASS), 0, rect, color)

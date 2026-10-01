@@ -15,6 +15,16 @@ func checkAnimationCoordination() {
         advanceAnimations(&state, now: now, previous: previous, lastDraw: 0, idle: false, compositorActive: active, compositorElapsed: now - previous, layout: SceneLayout(), titleWidth: 0)
     }
     precondition(step(0.1).interval == 1 / 20)
+    state.global_rate = 0
+    precondition(step(0.2, previous: 0.1).draw && state.global_anim_art_t > 0 && state.global_anim_art_t < 1)
+    let fading = state.global_anim_art_t
+    state.global_rate = 1
+    _ = step(0.23, previous: 0.2)
+    precondition(state.global_anim_art_t > fading && state.global_anim_art_t < 1)
+    state.setting_animations = false
+    _ = step(0.24, previous: 0.23)
+    precondition(state.global_anim_art_t == 1)
+    state.setting_animations = true
     state.global_is_dragging = true
     precondition(step(0.2, previous: 0.1).interval == 1 / 60 && state.seek_expansion > 0)
     state.setting_animations = false
