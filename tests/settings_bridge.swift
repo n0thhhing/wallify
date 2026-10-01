@@ -16,6 +16,10 @@ private var contextSelection = Int32(0)
 func contextSelectionStub(_ tag: Int32) { contextSelection = tag }
 @_cdecl("wallify_artwork_downloaded")
 func artworkDownloadedStub(_ available: Bool) {}
+@_cdecl("wallify_clear_artwork")
+func clearArtworkStub() {}
+@_cdecl("wallify_extract_color")
+func extractColorStub() {}
 @_cdecl("wallify_execute_media_command")
 func executeCommandStub(_ command: UInt32) {}
 @_cdecl("wallify_execute_media_seek")
@@ -98,6 +102,7 @@ struct SettingsBridgeCheck {
         checkSpriteCommands()
         checkFrameWakeups()
         checkConfigurationStorage()
+        checkMediaCoordination()
         let model = SettingsModel()
         current.glow = false
         current.media_source = 3

@@ -25,3 +25,6 @@ extern void wallify_execute_media_seek(double target);
 #include "widget_state.h"
 
 extern void widget_debug_window_hide(void);
+
+extern void wallify_clear_artwork(void);
+extern void wallify_extract_color(void);

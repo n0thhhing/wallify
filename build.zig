@@ -65,6 +65,8 @@ pub fn build(b: *std.Build) void {
     swift_settings.addFileArg(b.path("src/media/action_queue.swift"));
     swift_settings.addFileArg(b.path("src/media/playback.swift"));
     swift_settings.addFileArg(b.path("src/media/payload.swift"));
+    swift_settings.addFileArg(b.path("src/media/controller.swift"));
+    swift_settings.addFileArg(b.path("src/media/helper.swift"));
     swift_settings.addFileArg(b.path("src/graphics/raster.swift"));
     swift_settings.addFileArg(b.path("src/graphics/sprites.swift"));
     swift_settings.addFileArg(b.path("src/graphics/motion.swift"));
@@ -224,12 +226,15 @@ pub fn build(b: *std.Build) void {
     swift_check.addFileArg(b.path("src/media/action_queue.swift"));
     swift_check.addFileArg(b.path("src/media/playback.swift"));
     swift_check.addFileArg(b.path("src/media/payload.swift"));
+    swift_check.addFileArg(b.path("src/media/controller.swift"));
+    swift_check.addFileArg(b.path("src/media/helper.swift"));
     swift_check.addFileArg(b.path("src/media/metadata_fetcher.swift"));
     swift_check.addFileArg(b.path("src/graphics/raster.swift"));
     swift_check.addFileArg(b.path("src/graphics/sprites.swift"));
     swift_check.addFileArg(b.path("src/graphics/motion.swift"));
     swift_check.addFileArg(b.path("src/graphics/commands.swift"));
     swift_check.addFileArg(b.path("tests/configuration.swift"));
+    swift_check.addFileArg(b.path("tests/media_coordination.swift"));
     swift_check.addFileArg(b.path("tests/settings_bridge.swift"));
     swift_check.addArg("-o");
     const check_binary = swift_check.addOutputFileArg("settings-bridge-check");
@@ -269,6 +274,7 @@ fn retainSettingsBridge(artifact: *std.Build.Step.Compile) void {
         "_wallify_media_key_event",         "_widget_debug_window_show",
         "_widget_debug_window_hide",        "_wallify_context_menu_selected",
         "_wallify_artwork_downloaded",      "_wallify_execute_media_command",
-        "_wallify_execute_media_seek",
+        "_wallify_execute_media_seek",      "_wallify_clear_artwork",
+        "_wallify_extract_color",
     }) |symbol| artifact.forceUndefinedSymbol(symbol);
 }

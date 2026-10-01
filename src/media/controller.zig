@@ -1,198 +1,66 @@
 const std = @import("std");
-const state = @import("../state.zig");
 const render = @import("../graphics/render.zig");
-const spotify = @import("spotify.zig");
-const spotifast = @import("spotifast.zig");
-const window = @import("../ui/window.zig");
-const media_remote = @import("../platform/media_remote.zig");
-
-extern "c" fn popen(command: [*c]const u8, modes: [*c]const u8) ?*anyopaque;
-extern "c" fn pclose(stream: *anyopaque) c_int;
-extern "c" fn fgets(buffer: [*]u8, size: c_int, stream: *anyopaque) ?[*]u8;
-
-const SPOTIFY_POLL_INTERVAL_MS: u64 = 2000;
-const SPOTIFAST_POLL_INTERVAL_MS: u64 = 1000;
-const QUERY_FAILURE_RETRY_MS: u64 = 2000;
-const ARTWORK_REQUEST_BUFFER_SIZE: usize = 1024;
-const METADATA_LINE_BUFFER_SIZE: usize = 2048;
-const ARTWORK_URL_BUFFER_SIZE: usize = 512;
-const ELAPSED_CHANGE_THRESHOLD: f64 = 1.5;
-const RATE_PLAYING: f64 = 1.0;
-const RATE_STOPPED: f64 = 0.0;
-const RATE_LOCKED: u32 = 1;
-const RATE_LOCK_DURATION: f64 = 1.5;
-const AUTO_SOURCE_RECHECK_US: u64 = 2_000_000;
-
-var cached_auto_source = std.atomic.Value(c_int).init(@intFromEnum(state.MediaSource.now_playing));
-var cached_auto_source_checked_us = std.atomic.Value(u64).init(0);
-
-fn sleep_ms(ms: u64) void {
-    const ts = std.posix.timespec{
-        .sec = @intCast(ms / 1000),
-        .nsec = @intCast((ms % 1000) * 1_000_000),
-    };
-    _ = std.posix.system.nanosleep(&ts, null);
-}
-
-pub const MediaRemoteCommand = media_remote.MediaRemoteCommand;
+const payload = @import("payload.zig");
+pub const MediaRemoteCommand = @import("../platform/media_remote.zig").MediaRemoteCommand;
+pub const SpotifyPayload = payload.Payload;
 
 extern fn wallify_enqueue_media_command(command: u32) callconv(.c) void;
 extern fn wallify_enqueue_media_seek(target: f64) callconv(.c) void;
-
-pub export fn wallify_execute_media_command(command: u32) callconv(.c) void {
-    triggerCommandInner(@enumFromInt(command));
-}
-
-pub export fn wallify_execute_media_seek(target: f64) callconv(.c) void {
-    triggerSeekInner(target);
-}
+extern fn wallify_native_media_command(command: u32) callconv(.c) void;
+extern fn wallify_native_media_seek(target: f64) callconv(.c) void;
+extern fn wallify_native_toggle_playback() callconv(.c) void;
+extern fn wallify_native_media_key(code: c_int) callconv(.c) void;
+extern fn wallify_native_artwork_downloaded(available: bool) callconv(.c) void;
+extern fn wallify_metadata_loop() callconv(.c) void;
 
 pub fn triggerSeekInner(target: f64) void {
-    const active = getActiveSource();
-    if (active == .spotify) {
-        spotify.widget_spotify_seek(target);
-        return;
-    }
-    if (active == .spotifast) {
-        spotifast.widget_spotifast_seek(target);
-        return;
-    }
-    media_remote.setElapsedTime(target);
+    wallify_native_media_seek(target);
 }
-
-pub fn triggerCommandInner(cmd: MediaRemoteCommand) void {
-    const active = getActiveSource();
-    if (active == .spotify) {
-        switch (cmd) {
-            .play => spotify.widget_spotify_control(.play),
-            .pause => spotify.widget_spotify_control(.pause),
-            .toggle_play_pause => spotify.widget_spotify_control(.play_pause),
-            .previous_track => spotify.widget_spotify_control(.previous_track),
-            .next_track => spotify.widget_spotify_control(.next_track),
-            .stop => spotify.widget_spotify_control(.pause),
-        }
-        return;
-    }
-    if (active == .spotifast) {
-        switch (cmd) {
-            .play => spotifast.widget_spotifast_control(.play),
-            .pause => spotifast.widget_spotifast_control(.pause),
-            .toggle_play_pause => spotifast.widget_spotifast_control(.play_pause),
-            .previous_track => spotifast.widget_spotifast_control(.previous_track),
-            .next_track => spotifast.widget_spotifast_control(.next_track),
-            .stop => spotifast.widget_spotifast_control(.pause),
-        }
-        return;
-    }
-    media_remote.sendCommand(cmd);
+pub fn triggerCommandInner(command: MediaRemoteCommand) void {
+    wallify_native_media_command(@intFromEnum(command));
 }
-
-fn getActiveSource() state.MediaSource {
-    const s = state.shared().setting_source;
-    if (s != .auto) return s;
-
-    const now_us = @as(u64, @intFromFloat(window.widget_monotonic_time() * 1_000_000.0));
-    const checked_us = cached_auto_source_checked_us.load(.acquire);
-    if (now_us >= checked_us and now_us - checked_us < AUTO_SOURCE_RECHECK_US) {
-        return @enumFromInt(cached_auto_source.load(.acquire));
-    }
-
-    var tmp_buf: [32]u8 = undefined;
-    const tmp_len = spotifast.widget_query_spotifast(&tmp_buf, tmp_buf.len);
-    const source: state.MediaSource =
-        if (tmp_len > 0 and !std.mem.eql(u8, tmp_buf[0..tmp_len], "CLOSED"))
-            .spotifast
-        else
-            .now_playing;
-
-    cached_auto_source.store(@intFromEnum(source), .release);
-    cached_auto_source_checked_us.store(now_us, .release);
-    return source;
-}
-
 pub fn triggerSeek(target: f64) void {
-    std.log.info("media: queue seek={d:.2}s, source={s}", .{ target, @tagName(getActiveSource()) });
     wallify_enqueue_media_seek(target);
 }
-
-pub fn triggerCommand(cmd: MediaRemoteCommand) void {
-    std.log.info("media: queue command={s}, source={s}", .{
-        @tagName(cmd),
-        @tagName(getActiveSource()),
-    });
-    wallify_enqueue_media_command(@intFromEnum(cmd));
+pub fn triggerCommand(command: MediaRemoteCommand) void {
+    wallify_enqueue_media_command(@intFromEnum(command));
+}
+pub fn togglePlayback() void {
+    wallify_native_toggle_playback();
+}
+pub fn metadataLoop(_: std.Io) void {
+    wallify_metadata_loop();
 }
 
+pub export fn wallify_execute_media_command(command: u32) callconv(.c) void {
+    wallify_native_media_command(command);
+}
+pub export fn wallify_execute_media_seek(target: f64) callconv(.c) void {
+    wallify_native_media_seek(target);
+}
 pub export fn wallify_menu_play_pause() callconv(.c) void {
     togglePlayback();
 }
-
 pub export fn wallify_menu_previous() callconv(.c) void {
     triggerCommand(.previous_track);
 }
-
 pub export fn wallify_menu_next() callconv(.c) void {
     triggerCommand(.next_track);
 }
-
-pub fn togglePlayback() void {
-    const now = window.widget_monotonic_time();
-    std.log.info("media: toggle playback at position={d:.2}s, current_rate={d:.2}", .{
-        state.shared().playback_clock.position(now, state.shared().global_duration),
-        state.shared().global_rate,
-    });
-    const target_rate: f64 = if (state.shared().global_rate > 0) RATE_STOPPED else RATE_PLAYING;
-    const position = state.shared().playback_clock.position(now, state.shared().global_duration);
-    state.shared().playback_state.request(target_rate > 0, now);
-    state.shared().global_rate = target_rate;
-    state.shared().global_elapsed = position;
-    state.shared().playback_clock.sync(position, target_rate, now, state.shared().global_duration, true);
-    triggerCommand(if (target_rate > 0) .play else .pause);
-    state.shared().global_rate_lock = RATE_LOCKED;
-    state.shared().global_rate_lock_until = now + RATE_LOCK_DURATION;
-    state.requestFrame();
+pub export fn wallify_media_key_event(code: c_int) callconv(.c) void {
+    wallify_native_media_key(code);
 }
-
-/// Called from the Swift CGEventTap when a hardware media key is pressed.
-/// keyCode: 16=play-pause, 19=next, 20=previous (NX_KEYTYPE constants).
-/// Routes the command based on setting_media_key_target, bypassing the normal
-/// active-source resolution so the user's explicit override is always honored.
-pub export fn wallify_media_key_event(keyCode: c_int) callconv(.c) void {
-    // Play/pause and track controls honor the same explicit target selection.
-    // The event tap should normally be absent while .off, but keep this safe
-    // if a stale event arrives during teardown.
-    if (state.shared().setting_media_key_target == .off) return;
-
-    if (keyCode == 16) {
-        switch (state.shared().setting_media_key_target) {
-            .active => togglePlayback(),
-            .spotify => spotify.widget_spotify_control(.play_pause),
-            .spotifast => spotifast.widget_spotifast_control(.play_pause),
-            .off => {},
-        }
-        return;
-    }
-
-    const cmd: MediaRemoteCommand = switch (keyCode) {
-        19 => .next_track,
-        20 => .previous_track,
-        else => return,
-    };
-
-    switch (state.shared().setting_media_key_target) {
-        .off => {}, // tap shouldn't be installed when off, but be safe
-        .active => triggerCommand(cmd),
-        .spotify => switch (cmd) {
-            .next_track => spotify.widget_spotify_control(.next_track),
-            .previous_track => spotify.widget_spotify_control(.previous_track),
-            else => {},
-        },
-        .spotifast => switch (cmd) {
-            .next_track => spotifast.widget_spotifast_control(.next_track),
-            .previous_track => spotifast.widget_spotifast_control(.previous_track),
-            else => {},
-        },
-    }
+pub export fn wallify_artwork_downloaded(available: bool) callconv(.c) void {
+    wallify_native_artwork_downloaded(available);
+}
+pub export fn wallify_clear_artwork() callconv(.c) void {
+    render.clearArtwork();
+}
+pub export fn wallify_extract_color() callconv(.c) void {
+    render.extractColor();
+}
+pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
+    return payload.parse(raw, .spotify);
 }
 
 pub fn utf8Prefix(text: []const u8, max_len: usize) []const u8 {
@@ -201,352 +69,6 @@ pub fn utf8Prefix(text: []const u8, max_len: usize) []const u8 {
         while (len > 0 and (text[len] & 0xc0) == 0x80) len -= 1;
     }
     return text[0..len];
-}
-
-const payload = @import("payload.zig");
-pub const SpotifyPayload = payload.Payload;
-
-extern fn wallify_download_artwork(bytes: [*]const u8, count: usize) callconv(.c) void;
-extern fn wallify_cancel_artwork_download() callconv(.c) void;
-
-pub export fn wallify_artwork_downloaded(available: bool) callconv(.c) void {
-    state.shared().global_has_artwork = available;
-    state.shared().artwork_refresh_pending = available;
-    if (available) render.extractColor();
-    state.requestFrame();
-}
-
-pub fn parseSpotifyPayload(raw: []const u8) ?SpotifyPayload {
-    return payload.parse(raw, .spotify);
-}
-
-pub fn metadataLoop(_: std.Io) void {
-    // MediaRemote is a locked private framework. Processes can only access it if their bundle ID starts with `com.apple.`.
-    // We pipe a script with DynaLoader into `/usr/bin/perl` because its `com.apple.perl` bundle ID bypasses the restriction.
-    // If the main Zig process crashes, the pipe breaks and Perl immediately exits ($SIG{PIPE}), avoiding zombie processes.
-    const perl_cmd =
-        "use strict; use warnings; use Cwd qw(abs_path); use DynaLoader; $| = 1; " ++
-        "$SIG{PIPE} = sub { exit(0); }; " ++
-        "my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || (), qw(zig-out/lib/libmetadata_fetcher.dylib ../Frameworks/libmetadata_fetcher.dylib ../Resources/libmetadata_fetcher.dylib ../Resources/zig-out/lib/libmetadata_fetcher.dylib /Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib)) { if ($p && -f $p) { $abs = abs_path($p); last; } } " ++
-        "if (!$abs) { exit(1); } " ++
-        "my $libref = DynaLoader::dl_load_file($abs) or exit(2); " ++
-        "my $sym = DynaLoader::dl_find_symbol($libref, \"mrc_printNowPlayingInfo\") or exit(3); " ++
-        "my $init_sym = DynaLoader::dl_find_symbol($libref, \"mrc_notifications_init\") or exit(4); " ++
-        "my $wait_sym = DynaLoader::dl_find_symbol($libref, \"mrc_wait_for_notification\") or exit(5); " ++
-        "DynaLoader::dl_install_xsub(\"main::fetch\", $sym); " ++
-        "DynaLoader::dl_install_xsub(\"main::init_notifications\", $init_sym); " ++
-        "DynaLoader::dl_install_xsub(\"main::wait_notification\", $wait_sym); " ++
-        "print \"$$\\n\"; " ++
-        "init_notifications(); " ++
-        "my $wake = 1; " ++
-        "$SIG{USR1} = sub { $wake = 1; }; " ++
-        "while (1) { if ($wake) { $wake = 0; fetch(); } else { wait_notification(); fetch(); } }";
-
-    // macOS `mediaremoted` is queried through the helper because the framework is private.
-    // The helper blocks on MediaRemote notifications and fetches immediately when
-    // Now Playing changes. Its native wait has a bounded timeout as a safety net.
-    const command = "PERL_SIGNALS=unsafe perl -e '" ++ perl_cmd ++ "'";
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-
-    var last_art_url: [ARTWORK_URL_BUFFER_SIZE]u8 = undefined;
-    var last_art_url_len: usize = 0;
-    var last_source: ?state.MediaSource = null;
-    var spotify_no_track_misses: u8 = 0;
-
-    while (true) {
-        const active_source = getActiveSource();
-        if (last_source == null or active_source != last_source.?) {
-            std.log.info("media: active source -> {s}", .{@tagName(active_source)});
-            wallify_cancel_artwork_download();
-            last_source = active_source;
-            state.spotify_closed.store(false, .release);
-            state.spotify_has_track.store(false, .release);
-            spotify_no_track_misses = 0;
-            last_art_url_len = 0; // Force Spotify art re-download
-            state.shared().artwork_refresh_pending = true; // Force Now Playing art reload
-            state.shared().global_title_len = 0; // Force title change to trigger updates
-        }
-
-        if (active_source == .spotify or active_source == .spotifast) {
-            _ = arena.reset(.retain_capacity);
-            var res_buf: [ARTWORK_REQUEST_BUFFER_SIZE]u8 = undefined;
-            const res_len = if (active_source == .spotifast)
-                spotifast.widget_query_spotifast(&res_buf, res_buf.len)
-            else
-                spotify.widget_query_spotify(&res_buf, res_buf.len);
-
-            // Query failures do not mean the application closed.
-            if (res_len == 0) {
-                sleep_ms(QUERY_FAILURE_RETRY_MS);
-                continue;
-            }
-            const closed = std.mem.eql(u8, res_buf[0..res_len], "CLOSED");
-            const spotify_app_running = if (active_source == .spotify)
-                spotify.widget_is_spotify_running() != 0
-            else
-                false;
-            const confirmed_closed = closed and (active_source == .spotifast or !spotify_app_running);
-
-            if (closed and active_source == .spotify and spotify_app_running) {
-                // AppleScript can transiently fail while Spotify is still alive.
-                // Do not turn that into the idle view.
-                state.spotify_closed.store(false, .release);
-                std.log.warn("media: Spotify query said CLOSED but the app is still running; retaining current track", .{});
-                sleep_ms(QUERY_FAILURE_RETRY_MS);
-                continue;
-            }
-
-            if (state.spotify_closed.swap(confirmed_closed, .acq_rel) != confirmed_closed) {
-                std.log.info("media: {s} is now {s}", .{
-                    if (active_source == .spotifast) "Spotifast" else "Spotify",
-                    if (confirmed_closed) "closed" else "open",
-                });
-                last_art_url_len = 0;
-                state.requestFrame();
-            }
-            if (confirmed_closed) {
-                wallify_cancel_artwork_download();
-                state.spotify_has_track.store(false, .release);
-                spotify_no_track_misses = 0;
-                const title_span = if (active_source == .spotifast) "Spotifast is Closed" else "Spotify is Closed";
-                const artist_span = "Click to Launch";
-                if (!std.mem.eql(u8, state.shared().global_title[0..state.shared().global_title_len], title_span)) {
-                    @memcpy(state.shared().global_title[0..title_span.len], title_span);
-                    state.shared().global_title_len = title_span.len;
-                    @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
-                    state.shared().global_artist_len = artist_span.len;
-                    state.shared().global_rate = 0.0;
-                    state.shared().global_elapsed = 0.0;
-                    state.shared().global_duration = 0.0;
-                    state.shared().global_has_artwork = false;
-                    render.clearArtwork();
-                    state.requestFrame();
-                }
-                sleep_ms(QUERY_FAILURE_RETRY_MS);
-                continue;
-            }
-
-            if (std.mem.eql(u8, res_buf[0..res_len], "NO_TRACK")) {
-                spotify_no_track_misses +%= 1;
-                if (spotify_no_track_misses < 3 and state.spotify_has_track.load(.acquire)) {
-                    // Keep the current track visible through an isolated no-track response.
-                    sleep_ms(SPOTIFY_POLL_INTERVAL_MS);
-                    continue;
-                }
-                wallify_cancel_artwork_download();
-                state.spotify_has_track.store(false, .release);
-                const title_span = if (active_source == .spotifast) "Spotifast" else "Spotify";
-                const artist_span = "No Track Playing";
-                if (!std.mem.eql(u8, state.shared().global_title[0..state.shared().global_title_len], title_span)) {
-                    @memcpy(state.shared().global_title[0..title_span.len], title_span);
-                    state.shared().global_title_len = title_span.len;
-                    @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
-                    state.shared().global_artist_len = artist_span.len;
-                    state.shared().global_rate = 0.0;
-                    state.shared().global_elapsed = 0.0;
-                    state.shared().global_duration = 0.0;
-                    state.shared().global_has_artwork = false;
-                    render.clearArtwork();
-                    state.requestFrame();
-                }
-                sleep_ms(SPOTIFY_POLL_INTERVAL_MS);
-                continue;
-            }
-
-            const maybe_payload = payload.parse(res_buf[0..res_len], if (active_source == .spotifast) .spotifast else .spotify);
-
-            if (maybe_payload) |item| {
-                // Keep the idle presentation tied to an explicit Spotify track
-                // snapshot. Query failures do not clear this, so transient IPC
-                // hiccups cannot make a playing track look idle.
-                spotify_no_track_misses = 0;
-                if (active_source == .spotify and item.title.len > 0) {
-                    state.spotify_has_track.store(true, .release);
-                }
-                const title_changed = item.title.len != state.shared().global_title_len or !std.mem.eql(u8, item.title, state.shared().global_title[0..state.shared().global_title_len]);
-                const artist_changed = item.artist.len != state.shared().global_artist_len or !std.mem.eql(u8, item.artist, state.shared().global_artist[0..state.shared().global_artist_len]);
-                const now = window.widget_monotonic_time();
-                const accept_state = state.shared().playback_state.accept(item.playing, state.shared().global_rate > 0, now, title_changed);
-                if (now >= state.shared().global_rate_lock_until or title_changed) {
-                    state.shared().global_rate_lock = 0;
-                    state.shared().global_rate_lock_until = 0;
-                }
-                const rate = if (item.playing) RATE_PLAYING else RATE_STOPPED;
-                const rate_changed = rate != state.shared().global_rate;
-                const elapsed_changed = @abs(item.elapsed - state.shared().global_elapsed) > ELAPSED_CHANGE_THRESHOLD;
-
-                if (title_changed or artist_changed or rate_changed or elapsed_changed) {
-                    if (title_changed or artist_changed or rate_changed) {
-                        std.log.info("media: {s} — {s} | playing={} | position={d:.2}/{d:.2}s", .{
-                            item.title,
-                            item.artist,
-                            item.playing,
-                            item.elapsed,
-                            item.duration,
-                        });
-                    }
-                    if (title_changed) {
-                        const title_span = utf8Prefix(item.title, state.shared().global_title.len);
-                        @memcpy(state.shared().global_title[0..title_span.len], title_span);
-                        state.shared().global_title_len = title_span.len;
-                    }
-
-                    if (artist_changed) {
-                        const artist_span = utf8Prefix(item.artist, state.shared().global_artist.len);
-                        @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
-                        state.shared().global_artist_len = artist_span.len;
-                    }
-
-                    if (accept_state and !state.shared().global_is_dragging and (state.shared().global_rate_lock == 0 or title_changed)) {
-                        state.shared().playback_clock.sync(item.elapsed, rate, window.widget_monotonic_time(), item.duration, title_changed);
-                        state.shared().global_rate = rate;
-                        state.shared().global_elapsed = item.elapsed;
-                    }
-                    state.shared().global_duration = item.duration;
-
-                    if (item.artwork_url.len > 0) {
-                        const art_changed = item.artwork_url.len != last_art_url_len or !std.mem.eql(u8, item.artwork_url, last_art_url[0..last_art_url_len]);
-                        if (art_changed) {
-                            std.log.info("media: artwork changed, url_length={d}", .{item.artwork_url.len});
-                            @memcpy(last_art_url[0..item.artwork_url.len], item.artwork_url);
-                            last_art_url_len = item.artwork_url.len;
-
-                            wallify_download_artwork(item.artwork_url.ptr, item.artwork_url.len);
-                        }
-                    } else if (title_changed) {
-                        wallify_cancel_artwork_download();
-                        state.shared().global_has_artwork = false;
-                        last_art_url_len = 0;
-                    }
-
-                    state.requestFrame();
-                }
-            }
-            if (active_source == .spotify) {
-                // Sleep until Spotify signals a playback change, with a bounded
-                // fallback refresh so state cannot become stale if a notification is missed.
-                _ = spotify.widget_spotify_wait_for_event(SPOTIFY_POLL_INTERVAL_MS);
-            } else {
-                // Spotifast has no equivalent event stream, so use a low-rate refresh.
-                sleep_ms(SPOTIFAST_POLL_INTERVAL_MS);
-            }
-        } else {
-            const stream = popen(command, "r") orelse {
-                sleep_ms(SPOTIFAST_POLL_INTERVAL_MS);
-                continue;
-            };
-            var line: [METADATA_LINE_BUFFER_SIZE]u8 = undefined;
-
-            var perl_pid: ?std.posix.pid_t = null;
-            if (fgets(&line, line.len, stream) != null) {
-                const len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;
-                const pid_str = std.mem.trim(u8, line[0..len], " \r\n");
-                perl_pid = std.fmt.parseInt(std.posix.pid_t, pid_str, 10) catch null;
-            }
-
-            // Spotify now wakes the Perl helper directly from its distributed
-            // notification callback; no polling watcher thread is necessary.
-            if (perl_pid) |pid| {
-                spotify.widget_spotify_set_helper_pid(@intCast(pid));
-            }
-
-            var empty_polls: usize = 0;
-            var empty_art_polls: usize = 0;
-            while (fgets(&line, line.len, stream) != null) {
-                if (getActiveSource() != .now_playing) break;
-
-                _ = arena.reset(.retain_capacity);
-                const line_len = std.mem.indexOfScalar(u8, &line, 0) orelse line.len;
-                const raw = std.mem.trim(u8, line[0..line_len], " \r\n");
-
-                if (raw.len == 0) {
-                    empty_polls += 1;
-                    if (empty_polls >= 3) {
-                        if (state.shared().global_title_len > 0 or state.shared().global_rate > 0 or state.shared().global_has_artwork) {
-                            state.shared().global_title_len = 0;
-                            state.shared().global_artist_len = 0;
-                            state.shared().global_rate = 0.0;
-                            state.shared().global_elapsed = 0.0;
-                            state.shared().global_duration = 0.0;
-                            state.shared().global_has_artwork = false;
-                            render.clearArtwork();
-                            state.requestFrame();
-                        }
-                    }
-                    continue;
-                }
-                empty_polls = 0;
-
-                const item = payload.parse(raw, .now_playing) orelse continue;
-                const title_span = utf8Prefix(item.title, state.shared().global_title.len);
-                const artist_span = utf8Prefix(item.artist, state.shared().global_artist.len);
-                const rate = item.rate;
-                const elapsed = item.elapsed;
-                const duration = item.duration;
-
-                if (title_span.len == 0) continue;
-                const title_changed = title_span.len != state.shared().global_title_len or !std.mem.eql(u8, title_span, state.shared().global_title[0..state.shared().global_title_len]);
-                const artist_changed = artist_span.len != state.shared().global_artist_len or !std.mem.eql(u8, artist_span, state.shared().global_artist[0..state.shared().global_artist_len]);
-                const now = window.widget_monotonic_time();
-                const accept_state = state.shared().playback_state.accept(rate > 0, state.shared().global_rate > 0, now, title_changed);
-                if (now >= state.shared().global_rate_lock_until or title_changed) {
-                    state.shared().global_rate_lock = 0;
-                    state.shared().global_rate_lock_until = 0;
-                }
-                const rate_changed = rate != state.shared().global_rate;
-                const elapsed_changed = elapsed != state.shared().global_elapsed;
-
-                if (title_changed or artist_changed or rate_changed or elapsed_changed or (state.shared().artwork_refresh_pending and item.has_artwork)) {
-                    if (title_changed) {
-                        @memcpy(state.shared().global_title[0..title_span.len], title_span);
-                        state.shared().global_title_len = title_span.len;
-                    }
-
-                    if (artist_changed) {
-                        @memcpy(state.shared().global_artist[0..artist_span.len], artist_span);
-                        state.shared().global_artist_len = artist_span.len;
-                    }
-
-                    if (accept_state and !state.shared().global_is_dragging and (state.shared().global_rate_lock == 0 or title_changed)) {
-                        state.shared().playback_clock.sync(elapsed, rate, window.widget_monotonic_time(), duration, title_changed);
-                        state.shared().global_rate = rate;
-                        state.shared().global_elapsed = elapsed;
-                    }
-                    state.shared().global_duration = duration;
-
-                    if (title_changed or artist_changed) {
-                        state.shared().artwork_refresh_pending = true;
-                        empty_art_polls = 0;
-                    }
-                    const artwork_available = item.has_artwork;
-                    if (artwork_available and state.shared().artwork_refresh_pending) {
-                        state.shared().artwork_refresh_pending = false;
-                        if (std.posix.system.rename("/tmp/mrc_artwork", "/tmp/art.raw") == 0) {
-                            state.shared().global_has_artwork = true;
-                            render.extractColor();
-                        } else {
-                            // rename fails if metadata_fetcher bypassed writing (e.g. same album art hash)
-                            // In this case, /tmp/art.raw already has the correct image!
-                            state.shared().global_has_artwork = true;
-                            render.extractColor();
-                        }
-                    } else if (!artwork_available and state.shared().artwork_refresh_pending) {
-                        empty_art_polls += 1;
-                        if (empty_art_polls >= 30) {
-                            state.shared().artwork_refresh_pending = false;
-                            state.shared().global_has_artwork = false;
-                            render.clearArtwork();
-                        }
-                    }
-                    state.requestFrame();
-                }
-            }
-            spotify.widget_spotify_set_helper_pid(-1);
-            _ = pclose(stream);
-            sleep_ms(SPOTIFY_POLL_INTERVAL_MS); // Restart the helper if its stream closes.
-        }
-    }
 }
 
 test "utf8Prefix preserves short strings and chops safely on boundaries" {
