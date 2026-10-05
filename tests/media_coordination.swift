@@ -20,6 +20,10 @@ func checkMediaCoordination() {
     func apply(_ reply: String, _ now: Double, running: Bool = false) {
         _ = media.apply(Array(reply.utf8), source: 1, spotifyRunning: running, now: now)
     }
+    apply("CLOSED", 8)
+    precondition(widgetTitle() == "Spotify is Closed" && spotifyIsIdle())
+    apply("Track|||Artist|||paused|||42|||180|||", 9)
+    precondition(widgetTitle() == "Track" && !spotifyIsIdle())
     state.pointee.global_is_dragging = false
     apply("café|||Artist|||playing|||42|||180|||https://example.com/a", 10)
     precondition(widgetTitle() == "café" && state.pointee.global_rate == 1 && stateFlag(1, 0, false))
@@ -36,7 +40,7 @@ func checkMediaCoordination() {
     apply("NO_TRACK", 16); apply("NO_TRACK", 17)
     precondition(widgetTitle() == "café")
     apply("NO_TRACK", 18)
-    precondition(widgetTitle() == "Spotify" && state.pointee.global_duration == 0 && clears == 2)
+    precondition(widgetTitle() == "Spotify" && state.pointee.global_duration == 0 && clears == 3)
     precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_state.pending == -1)
     state.pointee.setting_source = 0
     apply("Late reply|||Old source|||playing|||99|||180", 19)
@@ -47,7 +51,7 @@ func checkMediaCoordination() {
     for t in [21.0, 22.0] { _ = media.apply([], source: 0, now: t) }
     precondition(widgetTitle() == "Title")
     _ = media.apply([], source: 0, now: 23)
-    precondition(widgetTitle().isEmpty && clears == 4 && cancellations >= 2)
+    precondition(widgetTitle().isEmpty && clears == 5 && cancellations >= 2)
     precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_clock.elapsed == 0)
     _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: 24)
     for t in 25...54 { _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: Double(t)) }

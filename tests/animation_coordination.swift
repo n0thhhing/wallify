@@ -67,6 +67,17 @@ func checkAnimationCoordination() {
         precondition(returning.seek_expansion.isFinite && returning.seek_velocity.isFinite)
     }
     precondition(returning.seek_expansion == 0 && returning.seek_velocity == 0 && settled.interval == 0)
+    // Waking from sleep starts with dt == 0; an idle fade still needs another frame.
+    for target in [true, false] {
+        var waking = returning
+        waking.idle_mix = target ? 0 : 1
+        let first = advanceAnimations(&waking, now: 10, previous: 10, lastDraw: 10, idle: target,
+            compositorActive: true, compositorElapsed: 0, layout: SceneLayout(), titleWidth: 0)
+        precondition(first.interval == 1 / 60)
+        _ = advanceAnimations(&waking, now: 10.1, previous: 10, lastDraw: 10, idle: target,
+            compositorActive: true, compositorElapsed: 0.1, layout: SceneLayout(), titleWidth: 0)
+        precondition(waking.idle_mix > 0 && waking.idle_mix < 1)
+    }
     var nativePhase = state
     nativePhase.cat_time = 1
     _ = advanceAnimations(&nativePhase, now: 10, previous: 10, lastDraw: 10, idle: false,

@@ -935,7 +935,9 @@ struct SettingsBridgeCheck {
         precondition(lines[artwork - 1] == "try" && lines[artwork + 1] == "end try")
         precondition(spotifyQueryScript.contains("set tArt to \"\""))
         precondition(spotifyQueryScript.contains("set {tName, tArtist, tState, tPos, tDur}"))
-        precondition(spotifyQueryScript.contains("return \"NO_TRACK\"") && spotifyQueryScript.contains("return \"CLOSED\""))
+        precondition(spotifyQueryScript.contains("tell application id \"com.spotify.client\""))
+        precondition(spotifyQueryScript.contains("if code is -1728 then return \"NO_TRACK\""))
+        precondition(spotifyQueryScript.contains("error message number code"))
         for command: Int32 in 0...4 {
             let script = spotifyControlScript(command)!
             precondition(script.contains("tell application \"Spotify\""))

@@ -27,7 +27,8 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     state.animation_time += dt
     let idleTarget: Double = idle ? 1 : 0, oldIdle = state.idle_mix
     state.idle_mix = state.setting_animations ? oldIdle + min(dt * 2.5, max(-dt * 2.5, idleTarget - oldIdle)) : idleTarget
-    if oldIdle != state.idle_mix { result.draw = true; high = state.setting_animations }
+    if oldIdle != state.idle_mix { result.draw = true }
+    if state.idle_mix != idleTarget { high = state.setting_animations }
     if state.idle_mix > 0 && state.cat_pet_until > 0 && state.animation_time < state.cat_pet_until + 0.1 { result.draw = true }
     if compositorActive { state.cat_time += compositorElapsed }
     if state.idle_mix > 0 && state.setting_idle_style != 0 && state.setting_animations {

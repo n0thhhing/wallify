@@ -113,8 +113,7 @@ public func seekSpotify(_ position: Double) {
 }
 
 let spotifyQueryScript = """
-if application "Spotify" is running then
-  tell application "Spotify"
+  tell application id "com.spotify.client"
     try
       set {tName, tArtist, tState, tPos, tDur} to {name of current track, artist of current track, player state as string, player position as string, duration of current track}
       set tDur to (tDur / 1000.0) as string
@@ -123,13 +122,11 @@ if application "Spotify" is running then
         set tArt to artwork url of current track
       end try
       return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
-    on error
-      return "NO_TRACK"
+    on error message number code
+      if code is -1728 then return "NO_TRACK"
+      error message number code
     end try
   end tell
-else
-  return "CLOSED"
-end if
 """
 
 // Only the metadata worker uses this cached script.
@@ -148,8 +145,18 @@ func copySpotifyResult(_ result: String, to buffer: UnsafeMutablePointer<UInt8>,
 public func querySpotify(_ buffer: UnsafeMutablePointer<UInt8>?, _ capacity: UInt) -> UInt {
     guard let buffer = buffer, capacity > 0 else { return 0 }
     return autoreleasepool {
+        // A cached script can retain an application target across quit/relaunch.
+        guard isSpotifyRunning() != 0 else {
+            cachedSpotifyQuery = nil
+            return copySpotifyResult("CLOSED", to: buffer, capacity: capacity)
+        }
         if cachedSpotifyQuery == nil { cachedSpotifyQuery = NSAppleScript(source: spotifyQueryScript) }
-        guard let result = cachedSpotifyQuery?.executeAndReturnError(nil).stringValue else { return 0 }
+        var error: NSDictionary?
+        guard let result = cachedSpotifyQuery?.executeAndReturnError(&error).stringValue else {
+            NSLog("spotify: metadata query failed: %@", error ?? [:])
+            cachedSpotifyQuery = nil
+            return 0
+        }
         return copySpotifyResult(result, to: buffer, capacity: capacity)
     }
 }
