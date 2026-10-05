@@ -40,7 +40,7 @@ ${BOLD}OPTIONS:${RESET}
   -d, --debug            Build in Debug mode (faster compilation, runtime asserts)
   -r, --release          Build in ReleaseFast mode (default, optimized)
   -f, --foreground, -l   Run in foreground; stream logs/stdout directly to terminal
-      --cli             Display the widget inside Kitty (drag to move, q to quit)
+      --cli             Display in a terminal supporting Kitty graphics (drag to move, q to quit)
   -w, --watch             Watch source files and automatically rebuild/relaunch on changes
   -t, --test             Run test suite before building & launching
   -C, --clean            Deep clean build cache & temporary artwork files before build

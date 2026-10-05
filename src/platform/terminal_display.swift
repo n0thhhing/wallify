@@ -8,12 +8,14 @@ let terminalMode = CommandLine.arguments.contains("--cli")
 
 enum TerminalEvent: Equatable {
     case key(UInt8), mouse(Int, Int, Int, Bool)
+    case graphics(Int, String), deviceAttributes
 }
 
 struct TerminalInput {
     private var bytes = [UInt8]()
     private var controlString = false
     private var escaped = false
+    private var controlBytes = [UInt8]()
 
     mutating func feed(_ incoming: [UInt8]) -> [TerminalEvent] {
         bytes += incoming
@@ -21,13 +23,25 @@ struct TerminalInput {
         while offset < bytes.count {
             let byte = bytes[offset]
             if controlString {
-                if byte == 7 || escaped && byte == 92 { controlString = false }
+                if byte == 7 || escaped && byte == 92 {
+                    if escaped && !controlBytes.isEmpty { controlBytes.removeLast() }
+                    if controlBytes.first == 71 {
+                        let reply = String(decoding: controlBytes.dropFirst(), as: UTF8.self).split(separator: ";", maxSplits: 1)
+                        if reply.count == 2,
+                           let field = reply[0].split(separator: ",").first(where: { $0.hasPrefix("i=") }),
+                           let id = Int(field.dropFirst(2)) { events.append(.graphics(id, String(reply[1]))) }
+                    }
+                    controlString = false; controlBytes.removeAll()
+                } else {
+                    controlBytes.append(byte)
+                    if controlBytes.count > 4096 { controlBytes.removeAll() }
+                }
                 escaped = byte == 27; offset += 1; continue
             }
             if byte != 27 { events.append(.key(byte)); offset += 1; continue }
             guard offset + 1 < bytes.count else { break }
             if [95, 80, 93].contains(bytes[offset + 1]) {
-                controlString = true; escaped = false; offset += 2; continue
+                controlString = true; escaped = false; controlBytes.removeAll(); offset += 2; continue
             }
             guard bytes[offset + 1] == 91 else { offset += 2; continue }
             guard let end = bytes[(offset + 2)...].firstIndex(where: { (64...126).contains($0) }) else { break }
@@ -37,7 +51,8 @@ struct TerminalInput {
                    (0...255).contains(button), (1...1_000_000).contains(x), (1...1_000_000).contains(y) {
                     events.append(.mouse(button, x - 1, y - 1, bytes[end] == 109))
                 }
-            } else if bytes[end] == 68 { events.append(.key(112)) }
+            } else if bytes[end] == 99 && bytes[offset + 2] == 63 { events.append(.deviceAttributes) }
+            else if bytes[end] == 68 { events.append(.key(112)) }
             else if bytes[end] == 67 { events.append(.key(110)) }
             offset = end + 1
         }
@@ -47,6 +62,32 @@ struct TerminalInput {
     }
 }
 
+func kittyPassthrough(_ command: String, tmux: Bool) -> String {
+    tmux ? "\u{1b}Ptmux;\(command.replacingOccurrences(of: "\u{1b}", with: "\u{1b}\u{1b}"))\u{1b}\\" : command
+}
+
+func queryTerminalGraphics(tmux: Bool) throws -> Bool {
+    let id = Int(UInt32.random(in: 3...UInt32.max))
+    let query = "\u{1b}_Gi=\(id),s=1,v=1,a=q,t=d,f=24;AAAA\u{1b}\\\u{1b}[c"
+    try FileHandle.standardOutput.write(contentsOf: Data(kittyPassthrough(query, tmux: tmux).utf8))
+    let deadline = monotonicTime() + 2
+    var parser = TerminalInput(), descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
+    while monotonicTime() < deadline {
+        let result = poll(&descriptor, 1, Int32(max(1, (deadline - monotonicTime()) * 1000)))
+        if result < 0 { if errno == EINTR { continue }; return false }
+        if result == 0 { return false }
+        var bytes = [UInt8](repeating: 0, count: 4096)
+        let count = Darwin.read(STDIN_FILENO, &bytes, bytes.count)
+        if count < 0 && errno == EINTR { continue }
+        guard count > 0 else { return false }
+        for event in parser.feed(Array(bytes.prefix(count))) {
+            if case .graphics(let replyID, let status) = event, replyID == id { return status == "OK" }
+            if event == .deviceAttributes { return false }
+        }
+    }
+    return false
+}
+
 func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> String {
     let payload = Array(png.base64EncodedString().utf8)
     var result = ""
@@ -54,7 +95,7 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         let end = min(start + 4096, payload.count), more = end < payload.count ? 1 : 0
         let header = start == 0 ? "a=T,f=100,i=\(id),p=1,C=1,q=2,c=\(columns),r=\(rows),m=\(more)" : "m=\(more),q=2"
         let command = "\u{1b}_G\(header);\(String(decoding: payload[start..<end], as: UTF8.self))\u{1b}\\"
-        result += tmux ? "\u{1b}Ptmux;\(command.replacingOccurrences(of: "\u{1b}", with: "\u{1b}\u{1b}"))\u{1b}\\" : command
+        result += kittyPassthrough(command, tmux: tmux)
     }
     return result
 }
@@ -83,16 +124,21 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
 
     func start() throws {
         guard isatty(STDIN_FILENO) == 1, isatty(STDOUT_FILENO) == 1 else {
-            throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey: "--cli requires an interactive Kitty terminal."])
-        }
-        let environment = ProcessInfo.processInfo.environment
-        guard environment["KITTY_WINDOW_ID"] != nil || environment["TERM"]?.contains("kitty") == true else {
-            throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey: "--cli uses Kitty's graphics protocol; run it in Kitty."])
+            throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey: "--cli requires an interactive terminal supporting the Kitty graphics protocol."])
         }
         guard tcgetattr(STDIN_FILENO, &original) == 0 else { throw POSIXError(.ENOTTY) }
         var raw = original
         cfmakeraw(&raw)
         guard tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0 else { throw POSIXError(.ENOTTY) }
+        do {
+            guard try queryTerminalGraphics(tmux: tmux) else {
+                throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey:
+                    "Terminal did not confirm Kitty graphics protocol support. In tmux, enable allow-passthrough."])
+            }
+        } catch {
+            _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
+            throw error
+        }
         active = true
         atexit { MainActor.assumeIsolated { TerminalDisplay.current?.restore() } }
         var size = winsize()
@@ -126,9 +172,9 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         guard active else { return }
         active = false
         for source in sources { source.cancel() }
-        _ = tcsetattr(STDIN_FILENO, TCSANOW, &original)
+        _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
         let deletion = "\u{1b}_Ga=d,d=I,i=1,q=2\u{1b}\\\u{1b}_Ga=d,d=I,i=2,q=2\u{1b}\\"
-        try? write((tmux ? "\u{1b}Ptmux;\(deletion.replacingOccurrences(of: "\u{1b}", with: "\u{1b}\u{1b}"))\u{1b}\\" : deletion) +
+        try? write(kittyPassthrough(deletion, tmux: tmux) +
             "\u{1b}[?1016l\u{1b}[?1003l\u{1b}[?1006l\u{1b}[?25h\u{1b}[?1049l")
     }
 
@@ -234,7 +280,7 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         let deletion = "\u{1b}_Ga=d,d=I,i=\(imageID == 1 ? 2 : 1),q=2\u{1b}\\"
         do {
             try write("\u{1b}[\(row + 1);\(column + 1)H" + frame +
-                (tmux ? "\u{1b}Ptmux;\(deletion.replacingOccurrences(of: "\u{1b}", with: "\u{1b}\u{1b}"))\u{1b}\\" : deletion))
+                kittyPassthrough(deletion, tmux: tmux))
         } catch { finish() }
     }
 }
