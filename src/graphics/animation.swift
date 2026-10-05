@@ -14,7 +14,8 @@ struct AnimationStep {
 }
 
 func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous: Double, lastDraw: Double,
-                       idle: Bool, compositorActive: Bool, compositorElapsed: Double, layout: SceneLayout, titleWidth: Double) -> AnimationStep {
+                       idle: Bool, compositorActive: Bool, compositorElapsed: Double, layout: SceneLayout, titleWidth: Double,
+                       waveformAvailable: Bool = false) -> AnimationStep {
     var result = AnimationStep(), high = false, visual = false, ambient = false
     var idleInterval: Double = 0
     if state.animation_time < state.art_transition_until { result.draw = true; visual = true }
@@ -25,6 +26,12 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     }
     let dt = min(0.1, max(0, now - previous)) * animationSpeed(state.setting_speed)
     state.animation_time += dt
+    let waveformTarget: Double = state.setting_waveform && state.setting_animations && state.global_rate > 0 &&
+        state.global_duration > 0 && !idle && layout.progressVisible(state.setting_hide_progress) && waveformAvailable ? 1 : 0
+    let oldWaveform = state.waveform_mix
+    state.waveform_mix = state.setting_animations ? oldWaveform + min(dt * 4, max(-dt * 4, waveformTarget - oldWaveform)) : waveformTarget
+    if oldWaveform != state.waveform_mix { result.draw = true }
+    if state.waveform_mix != waveformTarget { visual = state.setting_animations }
     let idleTarget: Double = idle ? 1 : 0, oldIdle = state.idle_mix
     state.idle_mix = state.setting_animations ? oldIdle + min(dt * 2.5, max(-dt * 2.5, idleTarget - oldIdle)) : idleTarget
     if oldIdle != state.idle_mix { result.draw = true }
@@ -181,7 +188,8 @@ public func runAnimationWorker() {
         let idle = spotifyIsIdle()
         // Start newly requested motion at frame zero, while preserving native pet elapsed time.
         let step = advanceAnimations(&state.pointee, now: now, previous: rested ? now : previousTime, lastDraw: lastDraw, idle: idle,
-            compositorActive: idleCompositor.active, compositorElapsed: idleCompositor.elapsed(now - previousTime), layout: sceneLayout, titleWidth: marqueeWidth)
+            compositorActive: idleCompositor.active, compositorElapsed: idleCompositor.elapsed(now - previousTime), layout: sceneLayout, titleWidth: marqueeWidth,
+            waveformAvailable: state.pointee.setting_waveform && state.pointee.global_rate > 0 && audioWaveform.textureAvailable())
         previousTime = now; rested = false
         if let (w, h) = step.resize { resizeMetalWidget(w, h) }
         if step.move { moveWidgetPanel(state.pointee.widget_margin_left, state.pointee.widget_margin_top); settingsPositionChanged() }

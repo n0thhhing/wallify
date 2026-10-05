@@ -14,10 +14,11 @@ func checkWaveform() {
     precondition(attenuated.withUnsafeBufferPointer { waveformPixels($0) }.allSatisfy { ($0 & 255) > 200 })
     var state = WallifyWidgetState(); state.global_duration = 100; state.setting_waveform = true
     state.setting_mode = 2; state.mode_from = 2; state.mode_mix = 1
+    state.waveform_mix = 1
     var layout = SceneLayout(); layout.update(width: 540, height: 180, state: state)
     for elapsed in [0.0, 50, 150] {
         let canvas = Canvas(clip: layout.card)
-        drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state, waveform: true)
+        drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state)
         let waves = canvas.commands.filter { $0.kind == Int32(WALLIFY_WAVEFORM) }
         precondition(waves.count == (elapsed > 0 ? 1 : 0))
         if let wave = waves.first {
@@ -27,8 +28,16 @@ func checkWaveform() {
         }
     }
     let fallback = Canvas(clip: layout.card)
-    drawPlayerProgress(fallback, elapsed: 50, layout: layout, state: state, waveform: false)
+    state.waveform_mix = 0
+    drawPlayerProgress(fallback, elapsed: 50, layout: layout, state: state)
     precondition(fallback.commands.count == 2 && fallback.commands.allSatisfy { $0.kind != Int32(WALLIFY_WAVEFORM) })
+    state.waveform_mix = 0.5 // A paused waveform fades using the last uploaded texture.
+    let transition = Canvas(clip: layout.card)
+    drawPlayerProgress(transition, elapsed: 50, layout: layout, state: state)
+    precondition(transition.commands.count == 3)
+    precondition(transition.commands[1].alpha == 0.5 && transition.commands[1].dh == 3)
+    precondition(transition.commands[2].kind == Int32(WALLIFY_WAVEFORM) && transition.commands[2].alpha == 0.5)
+    precondition(transition.commands[2].dh == 7.5 && transition.commands[2].dw == transition.commands[1].dw)
     let renderer = metalRenderer
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 64, height: 12, mipmapped: false)
     descriptor.storageMode = .shared; descriptor.usage = .renderTarget

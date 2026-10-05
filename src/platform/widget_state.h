@@ -57,6 +57,7 @@ typedef struct {
     uint8_t setting_source;
     bool setting_debug;
     double idle_mix;
+    double waveform_mix;
     double cat_pet_until;
     double cat_time;
     double pointer_x;

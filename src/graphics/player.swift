@@ -40,8 +40,7 @@ func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayo
 }
 
 func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, state: WallifyWidgetState) {
-    drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state,
-        waveform: state.setting_waveform && state.global_rate > 0 && state.setting_animations && audioWaveform.textureAvailable())
+    drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state)
     if layout.controlsVisible(state.setting_show_controls) {
         let hover = [state.hover_amount.0, state.hover_amount.1, state.hover_amount.2]
         for index in 0..<3 where hover[index] > 0.001 { canvas.fill(layout.buttonBounds(index), SIMD4(1, 1, 1, Float(hover[index] * 31 / 255))) }
@@ -49,22 +48,26 @@ func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, s
     drawPlayerLabels(canvas, elapsed: elapsed, layout: layout, state: state)
 }
 
-func drawPlayerProgress(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, state: WallifyWidgetState, waveform: Bool) {
+func drawPlayerProgress(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, state: WallifyWidgetState) {
     let g = layout.geometry
     if layout.progressVisible(state.setting_hide_progress) {
         let base: Double = state.setting_progress_thickness == 0 ? 3 : state.setting_progress_thickness == 2 ? 8 : 5
-        let height = (waveform ? max(12, base) : base) + 4 * state.seek_expansion
+        let mix = smoothTransition(state.waveform_mix)
+        let height = base + (max(12, base) - base) * mix + 4 * state.seek_expansion
         let bar = cardRect(g.bar_x, g.bar_y - (height - g.bar_h) / 2, g.bar_w, height, height / 2)
         let trackHeight = base + 4 * state.seek_expansion
         canvas.fill(cardRect(bar.x, bar.y + (height - trackHeight) / 2, bar.w, trackHeight, trackHeight / 2), SIMD4(0.176, 0.176, 0.176, 1))
         if state.global_duration > 0 {
             var progress = bar; progress.w *= min(1, max(0, elapsed / state.global_duration))
             if progress.w > 0 {
-                if waveform {
-                    progress.radius = 1
-                    canvas.add(Int32(WALLIFY_WAVEFORM), Texture.waveform.rawValue, progress, SIMD4(1, 1, 1, 1))
+                if mix < 1 {
+                    let normal = cardRect(progress.x, bar.y + (height - trackHeight) / 2, progress.w, trackHeight, trackHeight / 2)
+                    canvas.fill(normal, SIMD4(1, 1, 1, Float(1 - mix)))
                 }
-                else { canvas.fill(progress, SIMD4(1, 1, 1, 1)) }
+                if mix > 0 {
+                    progress.radius = 1
+                    canvas.add(Int32(WALLIFY_WAVEFORM), Texture.waveform.rawValue, progress, SIMD4(1, 1, 1, Float(mix)))
+                }
             }
         }
     }

@@ -67,6 +67,25 @@ func checkAnimationCoordination() {
         precondition(returning.seek_expansion.isFinite && returning.seek_velocity.isFinite)
     }
     precondition(returning.seek_expansion == 0 && returning.seek_velocity == 0 && settled.interval == 0)
+    var waveform = returning
+    waveform.setting_waveform = true; waveform.global_rate = 1; waveform.global_duration = 100
+    for i in 0..<3 {
+        _ = advanceAnimations(&waveform, now: Double(i + 1) * 0.1, previous: Double(i) * 0.1,
+            lastDraw: 0, idle: false, compositorActive: false, compositorElapsed: 0,
+            layout: SceneLayout(), titleWidth: 0, waveformAvailable: true)
+    }
+    precondition(waveform.waveform_mix == 1)
+    waveform.global_rate = 0
+    let pause = advanceAnimations(&waveform, now: 1, previous: 1, lastDraw: 1,
+        idle: false, compositorActive: false, compositorElapsed: 0, layout: SceneLayout(), titleWidth: 0)
+    precondition(pause.interval > 0 && waveform.waveform_mix == 1)
+    _ = advanceAnimations(&waveform, now: 1.1, previous: 1, lastDraw: 1,
+        idle: false, compositorActive: false, compositorElapsed: 0, layout: SceneLayout(), titleWidth: 0)
+    precondition(waveform.waveform_mix > 0 && waveform.waveform_mix < 1)
+    waveform.setting_animations = false
+    _ = advanceAnimations(&waveform, now: 1.1, previous: 1.1, lastDraw: 1,
+        idle: false, compositorActive: false, compositorElapsed: 0, layout: SceneLayout(), titleWidth: 0)
+    precondition(waveform.waveform_mix == 0)
     // Waking from sleep starts with dt == 0; an idle fade still needs another frame.
     for target in [true, false] {
         var waking = returning
