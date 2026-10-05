@@ -27,7 +27,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Run tests
-        run: ./scripts/build.sh -O Debug --test
+        run: |
+          bash tests/build_cache.sh
+          ./scripts/build.sh -O Debug --test
 
       - name: Build optional Inspector
         run: ./scripts/build.sh -O Debug --debug-inspector

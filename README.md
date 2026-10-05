@@ -88,6 +88,8 @@ bash scripts/package-app.sh
 
 Build output lives under `build/`. Use ReleaseFast for performance measurements; Debug retains runtime assertions.
 
+Builds skip unchanged targets and reuse Swift's incremental dependency graph when sources change. Source contents, headers, compiler options, and the selected toolchain invalidate the relevant outputs. `--test` always runs the checks, even when the test binary is already current. Delete `build/` for a clean rebuild.
+
 Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, texture upload counters, and periodic renderer statistics. Native lifecycle logs also report cache rebuilds, texture uploads/swaps, resize requests, and visibility changes.
 
 Debug builds can enable the Dear ImGui Inspector with `--debug-inspector`. It includes Widget, Renderer, Performance, Input, Layout, and Console / Events tabs. The Performance tab exposes scheduler tier, occlusion state, static-scene cache status and rebuilds, renderer timing, draw-call averages, and texture memory.
