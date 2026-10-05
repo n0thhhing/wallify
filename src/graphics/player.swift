@@ -12,7 +12,7 @@ func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayo
         let size = Double(metalGlowExtent(132)) * g.art_size / 132
         let glow = cardRect(g.art_x + (g.art_size - size) / 2, g.art_y + (g.art_size - size) / 2, size, size)
         let intensity = state.setting_intensity == 0 ? 0.5 : state.setting_intensity == 2 ? 1.5 : 1
-        var alpha = Float(0.5 * ease * intensity * (state.setting_native_glass ? 0.45 : 1))
+        var alpha = Float(0.5 * ease * intensity * (state.setting_native_glass ? 0.45 : 0.5))
         if state.setting_transition != 0 && mix < 1 { alpha *= 1 + 0.35 * Float(sin(mix * .pi)) }
         if mix < 1 { canvas.add(Int32(WALLIFY_GLOW), Texture.previousGlow.rawValue, glow, SIMD4(1, 1, 1, alpha * Float(1 - mix))) }
         canvas.add(Int32(WALLIFY_GLOW), Texture.glow.rawValue, glow, SIMD4(1, 1, 1, alpha * Float(mix)))

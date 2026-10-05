@@ -48,6 +48,19 @@ func checkSceneAssets() {
     state.global_duration = 200; state.global_anim_art_t = 1; state.global_rate = 1
     state.setting_dim = true; state.setting_transition = 0; state.global_has_artwork = true
     let artworkLayout = SceneLayout()
+    state.setting_glow = true; state.setting_native_glass = false
+    for intensity in UInt8(0)...2 {
+        state.setting_intensity = intensity
+        let scene = Canvas(clip: artworkLayout.card)
+        drawPlayerStatic(scene, card: artworkLayout.card, layout: artworkLayout, state: state, hasArtwork: true)
+        let expected: Float = intensity == 0 ? 0.125 : intensity == 2 ? 0.375 : 0.25
+        precondition(abs(scene.commands.first { $0.kind == WALLIFY_GLOW }!.alpha - expected) < 0.0001)
+    }
+    state.setting_intensity = 1; state.setting_native_glass = true
+    let glassGlow = Canvas(clip: artworkLayout.card)
+    drawPlayerStatic(glassGlow, card: artworkLayout.card, layout: artworkLayout, state: state, hasArtwork: true)
+    precondition(abs(glassGlow.commands.first { $0.kind == WALLIFY_GLOW }!.alpha - 0.225) < 0.0001)
+    state.setting_native_glass = false
     func artworkBrightness() -> Float {
         let scene = Canvas(clip: artworkLayout.card)
         drawPlayerStatic(scene, card: artworkLayout.card, layout: artworkLayout, state: state, hasArtwork: true)
