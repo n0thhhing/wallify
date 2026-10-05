@@ -1,6 +1,9 @@
 import Foundation
 
 func checkTerminalProtocol() {
+    precondition(terminalPixelSize(width: 540, height: 180, scale: 1) == (540, 180))
+    precondition(terminalPixelSize(width: 540, height: 180, scale: 2) == (1080, 360))
+    precondition(terminalPixelSize(width: 540.25, height: 180.25, scale: 2) == (1081, 361))
     var input = TerminalInput()
     func feed(_ text: String) -> [TerminalEvent] { input.feed(Array(text.utf8)) }
     precondition(feed("\u{1b}[<0;12;").isEmpty)

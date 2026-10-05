@@ -6,6 +6,10 @@ import UniformTypeIdentifiers
 
 let terminalMode = CommandLine.arguments.contains("--cli")
 
+func terminalPixelSize(width: Double, height: Double, scale: Double) -> (width: Int, height: Int) {
+    (max(1, Int(ceil(width * scale))), max(1, Int(ceil(height * scale))))
+}
+
 enum TerminalEvent: Equatable {
     case key(UInt8), mouse(Int, Int, Int, Bool)
     case graphics(Int, String), deviceAttributes
@@ -113,6 +117,7 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
     private var moved = false
     private let tmux = ProcessInfo.processInfo.environment["TMUX"] != nil
     private var pixelMouse = false
+    private let scale = Double(NSScreen.main?.backingScaleFactor ?? 1)
 
     private func dimensions() -> (columns: Int, rows: Int, cellWidth: Double, cellHeight: Double) {
         var size = winsize()
@@ -205,8 +210,9 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         sceneLock.lock()
         defer { sceneLock.unlock() }
         let state = widgetStatePointer(), layout = sceneLayout, geometry = layout.inputGeometry(state.pointee)
-        let columns = max(1, Int(ceil(layout.width / cells.cellWidth)))
-        let rows = max(1, Int(ceil(layout.height / cells.cellHeight)))
+        let pixels = terminalPixelSize(width: layout.width, height: layout.height, scale: scale)
+        let columns = max(1, Int(ceil(Double(pixels.width) / cells.cellWidth)))
+        let rows = max(1, Int(ceil(Double(pixels.height) / cells.cellHeight)))
         column = min(column, max(0, cells.columns - columns)); row = min(row, max(0, cells.rows - rows))
         let localX = (pixelX - Double(column) * cells.cellWidth) * layout.width / (Double(columns) * cells.cellWidth)
         let localY = (pixelY - Double(row) * cells.cellHeight) * layout.height / (Double(rows) * cells.cellHeight)
@@ -250,14 +256,14 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
     func present(_ renderer: MetalRenderer, size: SIMD2<Float>, statics: UnsafePointer<DrawCommand>, staticCount: Int,
                  dynamics: UnsafePointer<DrawCommand>, dynamicCount: Int, textures: [MTLTexture?]) {
         guard active, let device = renderer.device, let command = renderer.queue?.makeCommandBuffer() else { return }
-        let width = Int(ceil(size.x)), height = Int(ceil(size.y))
+        let (width, height) = terminalPixelSize(width: Double(size.x), height: Double(size.y), scale: scale)
         if target?.width != width || target?.height != height {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
             descriptor.storageMode = .shared; descriptor.usage = [.renderTarget, .shaderRead]
             target = device.makeTexture(descriptor: descriptor)
         }
         guard let target, renderer.encodeScene(command, target: target, staticCommands: statics, staticCount: staticCount,
-            dynamicCommands: dynamics, dynamicCount: dynamicCount, size: size, scale: 1, textures: textures) else { return }
+            dynamicCommands: dynamics, dynamicCount: dynamicCount, size: size, scale: CGFloat(scale), textures: textures) else { return }
         command.commit(); command.waitUntilCompleted()
         guard command.status == .completed else { return }
         var pixels = Data(count: width * height * 4)
