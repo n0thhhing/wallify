@@ -28,6 +28,7 @@ DO_DMG=false
 DO_KILL_ONLY=false
 DO_SETTINGS=false
 DO_WATCH=false
+DO_CLI=false
 
 show_help() {
     printf "%b\n" "${BOLD}${APP_NAME} Development & Launch Utility${RESET}
@@ -39,6 +40,7 @@ ${BOLD}OPTIONS:${RESET}
   -d, --debug            Build in Debug mode (faster compilation, runtime asserts)
   -r, --release          Build in ReleaseFast mode (default, optimized)
   -f, --foreground, -l   Run in foreground; stream logs/stdout directly to terminal
+      --cli             Display the widget inside Kitty (drag to move, q to quit)
   -w, --watch             Watch source files and automatically rebuild/relaunch on changes
   -t, --test             Run test suite before building & launching
   -C, --clean            Deep clean build cache & temporary artwork files before build
@@ -76,10 +78,16 @@ while [[ $# -gt 0 ]]; do
         -s|--settings) DO_SETTINGS=true; shift ;;
         -i|--install) DO_INSTALL=true; shift ;;
         --dmg) DO_DMG=true; shift ;;
+        --cli) DO_CLI=true; shift ;;
         -h|--help) show_help; exit 0 ;;
         *) echo -e "${RED}Unknown option: $1${RESET}"; show_help; exit 1 ;;
     esac
 done
+
+if [[ "$DO_CLI" == true && ( "$DO_WATCH" == true || "$DO_RELAUNCH" == true ) ]]; then
+    echo "--cli cannot be combined with --watch or --relaunch." >&2
+    exit 1
+fi
 
 # Kill-only shortcut
 if [[ "$DO_KILL_ONLY" == true ]]; then
@@ -240,6 +248,12 @@ if [[ "$DO_DMG" == true ]]; then
 fi
 
 ./scripts/package-app.sh ${PACKAGE_FLAGS[@]+"${PACKAGE_FLAGS[@]}"}
+
+if [[ "$DO_CLI" == true ]]; then
+    CLI_ARGS=(--cli)
+    [[ "$DO_SETTINGS" == true ]] && CLI_ARGS+=(--settings)
+    exec "$APP_EXEC" "${CLI_ARGS[@]}" 2>/tmp/wallify-cli.log
+fi
 
 # 5. Stop running instance safely before starting new one
 if pgrep -x "$APP_NAME" >/dev/null 2>&1; then

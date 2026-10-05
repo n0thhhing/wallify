@@ -3,7 +3,7 @@ import Foundation
 func animationSpeed(_ value: UInt8) -> Double { value == 0 ? 0.7 : value == 2 ? 1.4 : 1 }
 
 func idleCompositorEligible(_ state: WallifyWidgetState) -> Bool {
-    state.idle_mix == 1 && state.setting_animations && state.setting_idle_style != 0 &&
+    !terminalMode && state.idle_mix == 1 && state.setting_animations && state.setting_idle_style != 0 &&
     !state.mode_transition_active && !state.panel_snap_active && !state.global_panel_dragging && state.animation_time >= state.cat_pet_until
 }
 

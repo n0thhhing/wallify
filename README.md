@@ -23,6 +23,7 @@ A native macOS music widget written in Swift, with AppKit controls, SwiftUI Sett
 ```sh
 ./run                    # Build ReleaseFast, package, and launch Wallify.app
 ./run -f                 # Foreground — stream logs to terminal
+./run --cli              # Display inside Kitty; drag to move within the terminal
 ./run -d                 # Debug build with runtime assertions
 ./run -t                 # Run test suite before launching
 ./run -k                 # Stop running instance
@@ -32,6 +33,8 @@ A native macOS music widget written in Swift, with AppKit controls, SwiftUI Sett
 ```
 
 After building, open `build/Wallify.app` from Finder. Drag to move, right-click for the full Settings panel, use the on-screen buttons and seek bar to control playback. The music-note menu-bar item provides quick playback, appearance, media-source, widget-mode, idle-style, transition, frame, Settings, and Inspector controls. Quit from that same menu.
+
+Terminal mode requires Kitty and uses its graphics and mouse protocols, following the terminal support on `main` (`2e3f389`). It shares the Swift renderer, media sources, waveform transitions, companions, and saved preferences. Drag the card to move within the terminal without snapping; click playback buttons or the seek bar as usual. Space toggles playback, left/right arrows (or `p`/`n`) change tracks, `1`–`5` change form factor, `m` cycles media sources, `s` opens Settings, and `q` or Ctrl+C exits. Terminal glass uses the rendered background. Desktop position is preserved, and CLI launch leaves the desktop instance running. Logs go to `/tmp/wallify-cli.log`. Inside tmux, enable `allow-passthrough` for Kitty graphics.
 
 ## Configuration
 

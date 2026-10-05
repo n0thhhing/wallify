@@ -9,6 +9,7 @@ struct WallifyApp {
         preparePlatform()
         initializeApplication()
         loadConfiguration()
+        if terminalMode { TerminalDisplay.current = TerminalDisplay() }
         let state = widgetStatePointer(), (width, height) = modeDimensions(widgetStatePointer().pointee.setting_mode)
         state.pointee.mode_from = state.pointee.setting_mode
         state.pointee.mode_mix = 1; state.pointee.mode_transition_active = false
@@ -20,8 +21,13 @@ struct WallifyApp {
             exit(1)
         }
         NSLog("Wallify: Swift widget ready, mode=%d source=%d", state.pointee.setting_mode, state.pointee.setting_source)
+        do { try TerminalDisplay.current?.start() }
+        catch {
+            FileHandle.standardOutput.write(Data(("Wallify: \(error.localizedDescription)\n").utf8))
+            exit(1)
+        }
         #if DEBUG_INSPECTOR
-        showInspector()
+        if !terminalMode { showInspector() }
         #endif
         initializeFrameWakeups()
         requestWidgetFrame()

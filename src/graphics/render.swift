@@ -38,7 +38,8 @@ public func drawSwiftUIFrame() {
     do { try sceneAssets.initialize() }
     catch { NSLog("Wallify: scene assets failed: %@", error.localizedDescription); return }
     sceneAssets.refreshArtwork()
-    let state = widgetStatePointer().pointee
+    var state = widgetStatePointer().pointee
+    if terminalMode { state.setting_native_glass = false }
     if state.idle_mix > 0 {
         do { try sceneAssets.ensurePet(state.setting_idle_style) }
         catch { NSLog("Wallify: pet sprite failed: %@", error.localizedDescription); return }

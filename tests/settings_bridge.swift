@@ -97,6 +97,7 @@ private let idleTestSurface = CAMetalLayer()
 @main
 struct SettingsBridgeCheck {
     @MainActor static func main() {
+        checkTerminalProtocol()
         checkMetalRenderer()
         checkWaveform()
         checkPerformanceSample()

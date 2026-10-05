@@ -77,8 +77,9 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
         else if state.marquee_offset <= 0 { state.marquee_offset = 0; state.marquee_direction = 1 }
         result.draw = true; visual = true
     } else { state.marquee_offset = 0; state.marquee_direction = 1 }
-    let auroraTarget: Double = !state.setting_native_glass && state.setting_aurora && state.idle_mix < 0.5 && state.global_has_artwork ? 1 : 0
-    if !state.setting_animations || state.setting_native_glass { state.aurora_mix = auroraTarget }
+    let nativeGlass = state.setting_native_glass && !terminalMode
+    let auroraTarget: Double = !nativeGlass && state.setting_aurora && state.idle_mix < 0.5 && state.global_has_artwork ? 1 : 0
+    if !state.setting_animations || nativeGlass { state.aurora_mix = auroraTarget }
     else if abs(state.aurora_mix - auroraTarget) > 0.001 {
         state.aurora_mix += (auroraTarget - state.aurora_mix) * (1 - exp(-dt * 3.5)); result.draw = true; ambient = true
     } else { state.aurora_mix = auroraTarget }

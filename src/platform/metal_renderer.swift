@@ -233,6 +233,7 @@ final class MetalRenderer: @unchecked Sendable {
         profiling = ProcessInfo.processInfo.environment["WALLIFY_PROFILE"] != nil
         NSLog("Wallify: create %dx%d at %d,%d profiling=%@", width, height, left, top, profiling ? "on" : "off")
         resize(width: width, height: height)
+        if terminalMode { return true }
         let panel = Unmanaged<NSPanel>.fromOpaque(createWidgetPanel(width, height)).takeRetainedValue()
         let view = Unmanaged<NSView>.fromOpaque(createWidgetView(width, height)).takeRetainedValue()
         let surface = CAMetalLayer()
@@ -290,6 +291,11 @@ final class MetalRenderer: @unchecked Sendable {
             lock.unlock()
             var submitted = false
             defer { if !submitted { inFlight.signal() } }
+            if let terminal = TerminalDisplay.current {
+                terminal.present(self, size: size, statics: presentStatic, staticCount: statics,
+                    dynamics: presentDynamic, dynamicCount: dynamics, textures: presentTextures)
+                return
+            }
             guard dynamics > 0, let surface = surface, let panel = panel else { return }
             let drawableSize = CGSize(width: CGFloat(size.x) * surface.contentsScale, height: CGFloat(size.y) * surface.contentsScale)
             if surface.drawableSize != drawableSize { surface.drawableSize = drawableSize }
