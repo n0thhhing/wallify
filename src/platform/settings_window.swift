@@ -101,32 +101,39 @@ private struct SettingsView: View {
         switch page {
         case "General":
             section("Widget") {
-                picker("Form Factor", "Choose the widget footprint.", 14, \.widget_mode,
+                picker("Widget Size", "Choose the widget footprint.", 14, \.widget_mode,
                        ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
                 picker("Media Source", "Choose where Wallify reads playback information.", 13, \.media_source,
                        ["Now Playing", "Spotify", "Spotifast", "Auto"])
             }
-            section("Idle") {
+            section("When Music Stops") {
                 picker("When Music Stops", "Paused tracks stay visible. Choose what happens when no track is available.", 26, \.stopped_behavior,
                        ["Show Companion", "Keep Last Track", "Hide Widget"])
-                picker("Idle Companion", "Shown when nothing is playing.", 15, \.idle_style,
+                picker("Companion", model.snapshot.stopped_behavior == 0 ? "Shown when nothing is playing." : "Choose Show Companion above to enable this setting.", 15, \.idle_style,
                        ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
                     .disabled(model.snapshot.stopped_behavior != 0)
-                picker("Track Transition", "Effect used when artwork changes.", 16, \.track_transition,
-                       ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"])
             }
             section("Media Keys") {
                 picker("Media Key Target", "Route F7, F8 and F9 through Wallify.", 18, \.media_key_target,
                        ["Off", "Active", "Spotify", "Spotifast"])
             }
+            section("Startup") {
+                if #available(macOS 13, *) {
+                    Toggle("Launch at Login", isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) }))
+                    Button("Open Login Items Settings") { SMAppService.openSystemSettingsLoginItems() }
+                    if let error = model.loginError { Text(error).foregroundColor(.red) }
+                } else {
+                    Text("Launch at Login requires macOS 13 or later.").foregroundColor(.secondary)
+                }
+            }
         case "Appearance":
             section("Material") {
                 toggle("Native Glass", "Use the macOS glass material.", 5, \.native_glass)
                 toggle("Artwork Glow", "Use album artwork to create ambient color.", 0, \.glow)
-                picker("Glow Intensity", "Control the strength of the ambient glow.", 11, \.glow_intensity,
+                picker("Glow Intensity", model.snapshot.glow ? "Control the strength of the ambient glow." : "Enable Artwork Glow to adjust its intensity.", 11, \.glow_intensity,
                        ["Low", "Normal", "High"]).disabled(!model.snapshot.glow)
-                toggle("Aurora", "Animated background gradient.", 1, \.aurora).disabled(model.snapshot.native_glass)
-                picker("Custom Border", "Border strength for the custom material.", 10, \.frame_strength,
+                toggle("Aurora", model.snapshot.native_glass ? "Turn off Native Glass to use the animated background." : "Animated background gradient.", 1, \.aurora).disabled(model.snapshot.native_glass)
+                picker("Custom Border", model.snapshot.native_glass ? "Turn off Native Glass to adjust the custom border." : "Border strength for the custom material.", 10, \.frame_strength,
                        ["Off", "Subtle", "Strong"]).disabled(model.snapshot.native_glass)
             }
             section("Artwork") {
@@ -137,14 +144,17 @@ private struct SettingsView: View {
             }
             section("Motion") {
                 toggle("Animations", "Animate resizing and state changes.", 2, \.animations)
-                picker("Animation Speed", "Control the speed of transitions.", 12, \.animation_speed,
+                picker("Track Transition", model.snapshot.animations ? "Effect used when artwork changes." : "Enable Animations to see transition effects.", 16, \.track_transition,
+                       ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"])
+                    .disabled(!model.snapshot.animations)
+                picker("Animation Speed", model.snapshot.animations ? "Control the speed of transitions." : "Enable Animations to adjust their speed.", 12, \.animation_speed,
                        ["Slow", "Normal", "Fast"]).disabled(!model.snapshot.animations)
                 toggle("Dim When Paused", "Lower artwork brightness while paused.", 3, \.dim_paused)
             }
         case "Playback":
             section("Visibility") {
                 toggle("Hide Track Text", "Hide the title and artist labels.", 6, \.hide_text)
-                toggle("Clickable Track and Artist Names", "Open track links and artist searches when clicking their names.", 24, \.clickable_names)
+                toggle("Clickable Track and Artist Names", model.snapshot.hide_text ? "Turn off Hide Track Text to make names clickable." : "Open track links and artist searches when clicking their names.", 24, \.clickable_names)
                     .disabled(model.snapshot.hide_text)
                 toggle("Hide Progress Bar", "Hide the playback progress bar.", 7, \.hide_progress)
                 toggle("Playback Controls", "Show previous, play/pause and next.", 8, \.show_controls)
@@ -154,6 +164,10 @@ private struct SettingsView: View {
                 if #available(macOS 14.2, *) {
                     toggle("System Audio Waveform", "Show live audio along the progress bar. Requires system audio capture permission; audio is never saved.", 23, \.waveform)
                         .disabled(model.snapshot.hide_progress || !model.snapshot.animations)
+                    if model.snapshot.hide_progress || !model.snapshot.animations {
+                        Text("To use Waveform, show the progress bar in Playback and enable Animations in Appearance.")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                     Text(model.snapshot.waveform ? audioWaveform.status : "Off").font(.caption).foregroundColor(.secondary)
                     if model.snapshot.waveform {
                         Button("Open Capture Permissions") {
@@ -176,11 +190,30 @@ private struct SettingsView: View {
                                 model.renderer.scene_ms, model.renderer.gpu_ms,
                                 Double(model.renderer.texture_bytes) / 1048576))
                 } else {
-                    Text("Timing disabled • run WALLIFY_PROFILE=1 ./run -d -f for CPU/GPU measurements")
+                    Text("Performance measurements are off.")
                         .foregroundColor(.secondary)
                 }
-                Button("Open Inspector") { wallify_open_inspector() }
                 Button("Refresh") { model.refresh() }
+            }
+            DisclosureGroup("Advanced") {
+                VStack(alignment: .leading, spacing: 20) {
+                    section("Diagnostics") {
+                        toggle("Debug Console", "Show live Wallify runtime and diagnostics.", 4, \.debug_hud)
+                        Button("Open Inspector") { wallify_open_inspector() }
+                        Text("For CPU/GPU measurements, run from the project folder:")
+                            .font(.caption).foregroundColor(.secondary)
+                        Text("WALLIFY_PROFILE=1 ./run -d -f")
+                            .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                    }
+                    section("Configuration") {
+                        Text(configURL.path).font(.caption).textSelection(.enabled)
+                        HStack {
+                            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
+                            Button("Open Config") { NSWorkspace.shared.open(configURL) }
+                        }
+                    }
+                }
+                .padding(.top, 12)
             }
         default:
             section("Position") {
@@ -196,25 +229,6 @@ private struct SettingsView: View {
                 Text("Margins: \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid: \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
                 Text("Drag within this display, or use Move to Display. Placement is remembered separately for each monitor.").foregroundColor(.secondary)
                 Button("Reset Position") { wallify_settings_reset_position(); model.refresh() }
-            }
-            section("Diagnostics") {
-                toggle("Debug Console", "Show live Wallify runtime and diagnostics.", 4, \.debug_hud)
-            }
-            section("System") {
-                if #available(macOS 13, *) {
-                    Toggle("Launch at Login", isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) }))
-                    Button("Open Login Items Settings") { SMAppService.openSystemSettingsLoginItems() }
-                    if let error = model.loginError { Text(error).foregroundColor(.red) }
-                } else {
-                    Text("Launch at Login requires macOS 13 or later.").foregroundColor(.secondary)
-                }
-            }
-            section("Configuration") {
-                Text(configURL.path).font(.caption).textSelection(.enabled)
-                HStack {
-                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
-                    Button("Open Config") { NSWorkspace.shared.open(configURL) }
-                }
             }
         }
     }
