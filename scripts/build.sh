@@ -53,14 +53,16 @@ print(path)
 PY
 }
 
-COMMON=(-swift-version 5 -module-cache-path /tmp/wallify-swift-modules -target "$(uname -m)-apple-macosx12.0")
+COMMON=(-swift-version 5 -module-cache-path /tmp/wallify-swift-modules -target "$(uname -m)-apple-macosx12.0" -sdk "$(xcrun --show-sdk-path)")
+TEST_COMMON=("${COMMON[@]}")
 HEADERS=()
 while IFS= read -r header; do HEADERS+=("$header"); done < <(find src -name '*.h' -type f | sort)
 SOURCES=()
 while IFS= read -r source; do
     case "$source" in */metadata_fetcher.swift|*/native_bindings.swift|*/wallify.swift) ;; *) SOURCES+=("$source") ;; esac
 done < <(find src -name '*.swift' -type f | sort)
-build_if_needed build/lib/libmetadata_fetcher.dylib src/media/metadata_fetcher.swift -- xcrun swiftc "${COMMON[@]}" "$OPT" -emit-library -module-name MetadataFetcher -no-toolchain-stdlib-rpath -Xlinker -install_name -Xlinker @rpath/libmetadata_fetcher.dylib src/media/metadata_fetcher.swift -o build/lib/libmetadata_fetcher.dylib
+HELPER_COMMAND=(xcrun swiftc "${COMMON[@]}" "$OPT" -emit-library -module-name MetadataFetcher -no-toolchain-stdlib-rpath -Xlinker -install_name -Xlinker @rpath/libmetadata_fetcher.dylib src/media/metadata_fetcher.swift -o build/lib/libmetadata_fetcher.dylib)
+build_if_needed build/lib/libmetadata_fetcher.dylib src/media/metadata_fetcher.swift -- "${HELPER_COMMAND[@]}"
 build_if_needed build/objects/shaders.air src/platform/gpu.h src/platform/shaders.metal -- xcrun -sdk macosx metal -fmodules-cache-path=/tmp/wallify-metal-modules -c -include src/platform/gpu.h src/platform/shaders.metal -o build/objects/shaders.air
 build_if_needed build/bin/default.metallib build/objects/shaders.air -- xcrun -sdk macosx metallib build/objects/shaders.air -o build/bin/default.metallib
 for asset in assets/sprites/bin/*.bin; do
@@ -85,12 +87,17 @@ APP_SOURCES=("${SOURCES[@]}" src/native_bindings.swift src/wallify.swift)
 APP_MAP="$(swift_output_map "build/objects/swift-$MODE-$INSPECTOR" "${APP_SOURCES[@]}")"
 APP_INPUTS=("${APP_SOURCES[@]}" "${HEADERS[@]}" "$APP_MAP")
 for object in ${OBJECTS[@]+"${OBJECTS[@]}"}; do [[ "$object" != *.o ]] || APP_INPUTS+=("$object"); done
-build_if_needed build/bin/wallify "${APP_INPUTS[@]}" -- xcrun swiftc "${COMMON[@]}" "$OPT" -incremental -enable-batch-mode -output-file-map "$APP_MAP" -import-objc-header src/platform/settings_bridge.h "${APP_SOURCES[@]}" ${OBJECTS[@]+"${OBJECTS[@]}"} -o build/bin/wallify
+APP_COMMAND=(xcrun swiftc "${COMMON[@]}" "$OPT" -incremental -enable-batch-mode -output-file-map "$APP_MAP" -import-objc-header src/platform/settings_bridge.h "${APP_SOURCES[@]}" ${OBJECTS[@]+"${OBJECTS[@]}"} -o build/bin/wallify)
+# Editor metadata must exist even on cached builds and when tests are not run.
+# Use the real command arrays so bridge imports and source membership cannot drift.
+TEST_SOURCES=("${SOURCES[@]}" src/media/metadata_fetcher.swift tests/*.swift)
+TEST_MAP="$(swift_output_map "build/objects/tests-$MODE" "${TEST_SOURCES[@]}")"
+TEST_COMMAND=(xcrun swiftc "${TEST_COMMON[@]}" "$OPT" -incremental -enable-batch-mode -output-file-map "$TEST_MAP" -import-objc-header src/platform/settings_bridge.h "${TEST_SOURCES[@]}" -o build/bin/settings-bridge-check)
+python3 scripts/editor-commands.py "${APP_COMMAND[@]}" -- "${HELPER_COMMAND[@]}" -- "${TEST_COMMAND[@]}"
+build_if_needed build/bin/wallify "${APP_INPUTS[@]}" -- "${APP_COMMAND[@]}"
 if [[ "$TEST" == true ]]; then
     # Test callbacks deliberately replace the application's native bindings.
-    TEST_SOURCES=("${SOURCES[@]}" src/media/metadata_fetcher.swift tests/*.swift)
-    TEST_MAP="$(swift_output_map "build/objects/tests-$MODE" "${TEST_SOURCES[@]}")"
-    build_if_needed build/bin/settings-bridge-check "${TEST_SOURCES[@]}" "${HEADERS[@]}" "$TEST_MAP" -- xcrun swiftc -swift-version 5 "$OPT" -module-cache-path /tmp/wallify-swift-modules -incremental -enable-batch-mode -output-file-map "$TEST_MAP" -import-objc-header src/platform/settings_bridge.h "${TEST_SOURCES[@]}" -o build/bin/settings-bridge-check
+    build_if_needed build/bin/settings-bridge-check "${TEST_SOURCES[@]}" "${HEADERS[@]}" "$TEST_MAP" -- "${TEST_COMMAND[@]}"
     /usr/bin/perl tests/helper-loader.pl build/lib/libmetadata_fetcher.dylib
     build/bin/settings-bridge-check --metallib "$PWD/build/bin/default.metallib"
     build/bin/settings-bridge-check --settings --metallib "$PWD/build/bin/default.metallib"

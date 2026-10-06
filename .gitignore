@@ -3,6 +3,7 @@
 .zig-local-cache/
 zig-out/
 build/
+compile_commands.json
 
 # macOS system files & logs
 .DS_Store

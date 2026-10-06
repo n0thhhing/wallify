@@ -91,6 +91,13 @@ bash scripts/package-app.sh
 
 Build output lives under `build/`. Use ReleaseFast for performance measurements; Debug retains runtime assertions.
 
+Every build also writes an ignored `compile_commands.json` at the repository
+root. SourceKit-LSP uses it to see the complete Swift targets and the C bridging
+header defining types such as `DrawCommand`. Open the repository folder in your
+editor, run the build once, and restart the Swift language server if existing
+diagnostics persist. Zed's Debug and Profile configurations use the same build
+script and `build/bin/wallify` executable.
+
 Builds skip unchanged targets and reuse Swift's incremental dependency graph when sources change. Source contents, headers, compiler options, and the selected toolchain invalidate the relevant outputs. `--test` always runs the checks, even when the test binary is already current. Delete `build/` for a clean rebuild.
 
 Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, texture upload counters, and periodic renderer statistics. Native lifecycle logs also report cache rebuilds, texture uploads/swaps, resize requests, and visibility changes.

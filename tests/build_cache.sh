@@ -4,7 +4,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH="$(mktemp -d /tmp/wallify-build-cache.XXXXXX)"
 trap 'rm -rf "$SCRATCH"' EXIT
 mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,assets/sprites/bin,tests,tools}
-cp "$ROOT/scripts/build.sh" "$SCRATCH/scripts/"
+cp "$ROOT/scripts/build.sh" "$ROOT/scripts/editor-commands.py" "$SCRATCH/scripts/"
 touch "$SCRATCH/src/media/metadata_fetcher.swift" "$SCRATCH/src/native_bindings.swift" "$SCRATCH/src/wallify.swift" "$SCRATCH/src/player.swift"
 touch "$SCRATCH/src/platform/settings_bridge.h" "$SCRATCH/src/platform/gpu.h" "$SCRATCH/src/platform/shaders.metal"
 touch "$SCRATCH/assets/sprites/bin/cat.bin" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
@@ -37,7 +37,22 @@ expect() { diff -u <(printf '%s\n' "$@" | sed '/^$/d') "$BUILD_LOG"; }
 build
 expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
 cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
+python3 - <<'PY'
+import json
+from pathlib import Path
+entries = {entry['file']: entry for entry in json.loads(Path('compile_commands.json').read_text())}
+assert set(entries) == {str(path) for folder in ('src', 'tests') for path in Path(folder).rglob('*.swift')}
+app = entries['src/player.swift']['arguments']
+assert app[app.index('-import-objc-header') + 1] == 'src/platform/settings_bridge.h'
+assert 'src/native_bindings.swift' in app and 'tests/check.swift' not in app
+assert 'src/platform/settings_bridge.h' not in entries['src/media/metadata_fetcher.swift']['arguments']
+test = entries['tests/check.swift']['arguments']
+assert 'src/player.swift' in test and 'src/media/metadata_fetcher.swift' in test
+assert 'src/native_bindings.swift' not in test and 'src/wallify.swift' not in test
+PY
+rm compile_commands.json
 build; expect
+test -f compile_commands.json
 printf 'sprite change' >> assets/sprites/bin/cat.bin
 build; expect
 cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
@@ -67,6 +82,13 @@ printf '#!/bin/sh\nexit 0\n' > scripts/fetch-imgui.sh
 build -O Debug --debug-inspector
 expect build/objects/imgui.cpp.o build/objects/imgui_draw.cpp.o build/objects/imgui_tables.cpp.o build/objects/imgui_widgets.cpp.o build/objects/imgui_impl_osx.mm.o build/objects/imgui_impl_metal.mm.o build/objects/debug_imgui.mm.o build/bin/wallify
 build -O Debug --debug-inspector; expect
+python3 - <<'PY'
+import json
+from pathlib import Path
+entries = {entry['file']: entry for entry in json.loads(Path('compile_commands.json').read_text())}
+assert 'DEBUG_INSPECTOR' in entries['src/player.swift']['arguments']
+assert 'DEBUG_INSPECTOR' not in entries['tests/check.swift']['arguments']
+PY
 echo '// change' >> src/platform/gpu.h
 build -O Debug --debug-inspector
 expect build/objects/shaders.air build/bin/default.metallib build/objects/debug_imgui.mm.o build/bin/wallify
