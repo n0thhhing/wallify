@@ -1,0 +1,5 @@
+# Keep vendor diagnostics out of the editor; compiler checks still run normally.
+If:
+  PathMatch: [third_party/.*, build/vendor/.*]
+Diagnostics:
+  Suppress: '*'
