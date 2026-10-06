@@ -4,6 +4,18 @@
 
 A native macOS music widget written in Swift, with AppKit controls, SwiftUI Settings, and a Metal renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
 
+## Previews
+
+Native macOS screen captures from the app, cropped from the October 5 recording.
+
+**Playback with artwork, controls, and live waveform**
+
+<img src="docs/previews/playback.png" alt="Wallify playing a track with album artwork, title, artist, audio waveform, time labels, and playback controls" width="800">
+
+**Animated raccoon companion**
+
+<img src="docs/previews/companion.gif" alt="Wallify's sleeping raccoon companion with animated breathing and floating sleep marks" width="800">
+
 ## Features
 
 - **Native glass** — true `NSVisualEffectView` blur matching macOS desktop widgets (Battery, Clock, etc.)
