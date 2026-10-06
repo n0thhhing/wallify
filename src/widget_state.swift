@@ -28,6 +28,7 @@ private let widgetState: UnsafeMutablePointer<WallifyWidgetState> = {
     value.aurora_mix = 0.0
     value.setting_hide_text = false
     value.setting_clickable_names = false
+    value.media_stopped = true
     value.setting_hide_progress = false
     value.setting_show_controls = true
     value.setting_show_timestamps = true
@@ -148,9 +149,11 @@ public func spotifyIsIdle() -> Bool {
     sceneLock.lock()
     defer { sceneLock.unlock() }
     let value = widgetState.pointee
-    guard value.setting_source == 1 else { return false }
-    if stateFlag(0, 0, false) { return true }
-    return value.global_rate <= 0 && !stateFlag(1, 0, false) && (value.global_title_len == 0 || placeholderTitle(widgetTitle()))
+    return value.setting_stopped_behavior == 0 && value.media_stopped
+}
+
+func stoppedWidgetHidden(_ state: WallifyWidgetState) -> Bool {
+    state.media_stopped && state.setting_stopped_behavior == 2
 }
 
 func modeDimensions(_ mode: UInt8) -> (Double, Double) {

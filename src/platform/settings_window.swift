@@ -107,8 +107,11 @@ private struct SettingsView: View {
                        ["Now Playing", "Spotify", "Spotifast", "Auto"])
             }
             section("Idle") {
+                picker("When Music Stops", "Paused tracks stay visible. Choose what happens when no track is available.", 26, \.stopped_behavior,
+                       ["Show Companion", "Keep Last Track", "Hide Widget"])
                 picker("Idle Companion", "Shown when nothing is playing.", 15, \.idle_style,
                        ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
+                    .disabled(model.snapshot.stopped_behavior != 0)
                 picker("Track Transition", "Effect used when artwork changes.", 16, \.track_transition,
                        ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"])
             }

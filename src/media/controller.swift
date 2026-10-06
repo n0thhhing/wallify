@@ -181,29 +181,35 @@ final class MediaCoordinator {
         _ = stateFlag(0, 1, false)
         _ = stateFlag(1, 1, false)
         noTrackMisses = 0; emptyPolls = 0; emptyArtPolls = 0; artworkURL = []
-        clearTrack()
+        clearTrack(preserveLast: false)
         widgetStatePointer().pointee.artwork_refresh_pending = true
     }
 
-    private func clearTrack(title: String = "", artist: String = "") {
+    private func clearTrack(title: String = "", artist: String = "", preserveLast: Bool = true) {
         let state = widgetStatePointer()
-        updateTrackText(Array(title.utf8), Array(artist.utf8), state: state)
+        let keep = preserveLast && state.pointee.global_title_len > 0 && !placeholderTitle(widgetTitle())
+        state.pointee.media_stopped = true
+        // Retain the last real track and its uploaded art even in companion mode.
+        // Switching idle choices after playback stops can then reveal that track.
+        if !keep { updateTrackText(Array(title.utf8), Array(artist.utf8), state: state) }
         state.pointee.global_rate = 0
-        state.pointee.global_elapsed = 0
-        state.pointee.global_duration = 0
-        state.pointee.global_has_artwork = false
-        state.pointee.playback_clock = WallifyPlaybackClock()
+        if !keep {
+            state.pointee.global_elapsed = 0; state.pointee.global_duration = 0
+            state.pointee.global_has_artwork = false
+            clearArtwork()
+        }
+        synchronizePlayback(&state.pointee.playback_clock, state.pointee.global_elapsed, 0, monotonicTime(), state.pointee.global_duration, true)
         state.pointee.playback_state = WallifyPlaybackIntent(pending: -1, deadline: 0, confirmed_since: -1)
         state.pointee.global_rate_lock = 0; state.pointee.global_rate_lock_until = 0
         state.pointee.global_is_dragging = false
-        clearArtwork()
+        refreshStoppedPresentation()
         requestWidgetFrame()
     }
 
     // Returns the retry interval for empty/CLOSED/NO_TRACK replies.
     func apply(_ bytes: [UInt8], source: UInt8, spotifyRunning: Bool = false, now: Double) -> Double? {
         sceneLock.lock()
-        defer { sceneLock.unlock() }
+        defer { refreshStoppedPresentation(); sceneLock.unlock() }
         let state = widgetStatePointer()
         guard self.source == source, state.pointee.setting_source == source || state.pointee.setting_source == 3 else { return nil }
         if source != 0 {
@@ -217,7 +223,7 @@ final class MediaCoordinator {
             if closed {
                 cancel(); _ = stateFlag(1, 1, false); noTrackMisses = 0
                 let title = source == 2 ? "Spotifast is Closed" : "Spotify is Closed"
-                if widgetTitle() != title { clearTrack(title: title, artist: "Click to Launch") }
+                if !state.pointee.media_stopped || state.pointee.global_title_len == 0 || placeholderTitle(widgetTitle()) && widgetTitle() != title { clearTrack(title: title, artist: "Click to Launch") }
                 return 2
             }
             if bytes == Array("NO_TRACK".utf8) {
@@ -225,12 +231,12 @@ final class MediaCoordinator {
                 if noTrackMisses < 3 && stateFlag(1, 0, false) { return 2 }
                 cancel(); _ = stateFlag(1, 1, false)
                 let title = source == 2 ? "Spotifast" : "Spotify"
-                if widgetTitle() != title { clearTrack(title: title, artist: "No Track Playing") }
+                if !state.pointee.media_stopped || state.pointee.global_title_len == 0 || placeholderTitle(widgetTitle()) && widgetTitle() != title { clearTrack(title: title, artist: "No Track Playing") }
                 return 2
             }
         } else if bytes.isEmpty {
             emptyPolls = min(3, emptyPolls + 1)
-            if emptyPolls >= 3 && (state.pointee.global_title_len > 0 || state.pointee.global_rate > 0 || state.pointee.global_has_artwork) {
+            if emptyPolls >= 3 && !state.pointee.media_stopped {
                 clearTrack()
             }
             return nil
@@ -251,8 +257,10 @@ final class MediaCoordinator {
         let art = text(item.artwork)
         let artChanged = source != 0 && art != artworkURL
         let incomingArtwork = source == 0 && item.has_artwork && FileManager.default.fileExists(atPath: artworkSource.path)
+        let wasStopped = state.pointee.media_stopped
+        state.pointee.media_stopped = false
         guard titleChanged || artistChanged || item.rate != state.pointee.global_rate || elapsedChanged ||
-              item.duration != state.pointee.global_duration || artChanged || incomingArtwork ||
+              item.duration != state.pointee.global_duration || artChanged || incomingArtwork || wasStopped ||
               (state.pointee.artwork_refresh_pending && (source == 0 || item.has_artwork)) else { return nil }
         updateTrackText(title, artist, state: state)
         if accept && !state.pointee.global_is_dragging && (state.pointee.global_rate_lock == 0 || titleChanged) {

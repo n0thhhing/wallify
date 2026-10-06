@@ -96,6 +96,7 @@ final class WidgetView: NSView {
 @MainActor
 final class WidgetPanel: NSPanel {
     static weak var current: WidgetPanel?
+    var hiddenForStoppedMusic = false
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
@@ -108,6 +109,31 @@ final class WidgetPanel: NSPanel {
 
     @objc func occlusionChanged(_ notification: Notification) {
         wallify_set_window_visible(occlusionState.contains(.visible) ? 1 : 0)
+    }
+}
+
+func refreshStoppedPresentation() {
+    DispatchQueue.main.async { updateStoppedPresentation() }
+}
+
+@MainActor func updateStoppedPresentation() {
+    guard !terminalMode, let panel = WidgetPanel.current else { return }
+    sceneLock.lock()
+    let hidden = stoppedWidgetHidden(widgetStatePointer().pointee)
+    sceneLock.unlock()
+    guard panel.hiddenForStoppedMusic != hidden else { return }
+    panel.hiddenForStoppedMusic = hidden
+    if hidden {
+        panel.orderOut(nil)
+        widget_hide_snap_outline()
+        stopIdleAnimation()
+        wallify_set_window_visible(0)
+    } else {
+        panel.orderFrontRegardless()
+        // The animation worker sleeps while occluded. Metadata must restore
+        // visibility and wake it independently, or a hidden widget never returns.
+        wallify_set_window_visible(1)
+        requestWidgetFrame()
     }
 }
 

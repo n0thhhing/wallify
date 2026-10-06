@@ -10,7 +10,8 @@ private let boolSettingKeys: [Int32: WritableKeyPath<WallifyWidgetState, Bool>] 
 private let intSettingKeys: [Int32: (WritableKeyPath<WallifyWidgetState, UInt8>, Int32)] = [
     10: (\.setting_frame, 2), 11: (\.setting_intensity, 2), 12: (\.setting_speed, 2),
     13: (\.setting_source, 3), 16: (\.setting_transition, 5), 17: (\.setting_font_scale, 2),
-    18: (\.setting_media_key_target, 3), 21: (\.setting_artwork_radius, 2), 22: (\.setting_progress_thickness, 2)
+    18: (\.setting_media_key_target, 3), 21: (\.setting_artwork_radius, 2), 22: (\.setting_progress_thickness, 2),
+    26: (\.setting_stopped_behavior, 2)
 ]
 
 @_cdecl("wallify_native_apply_bool")
@@ -51,6 +52,7 @@ public func applyWidgetInt(_ key: Int32, _ value: Int32) {
         state.pointee[keyPath: path] = UInt8(max(0, min(maximum, value)))
         if key == 18 { updateMediaKeyTap(Int32(state.pointee.setting_media_key_target)) }
     } else { return }
+    if key == 26 { refreshStoppedPresentation() }
     saveConfiguration()
     requestWidgetFrame()
 }
@@ -74,6 +76,8 @@ public func restoreWidgetDefaults() {
     for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7, 23, 24, 25].contains(key) }
     for (key, (path, _)) in intSettingKeys { state.pointee[keyPath: path] = [13, 18].contains(key) ? 0 : 1 }
     state.pointee.setting_idle_style = 1
+    state.pointee.setting_stopped_behavior = 0
+    refreshStoppedPresentation()
     audioWaveform.update(active: false)
     beginWidgetMode(2, Double(wallify_width()), Double(wallify_height()), true)
     widget_debug_window_hide()
@@ -103,15 +107,17 @@ private let enumNames: [[[String]]] = [
     [["spotify", "0"], ["cat", "pixel_cat", "1"], ["banana_cat", "banana", "2"], ["raccoon", "3"]],
     [["default", "0"], ["cinematic", "1"], ["ripple", "liquid_ripple", "2"], ["flip", "card_flip", "3"], ["vinyl", "vinyl_spin", "4"], ["glitch", "cyber_glitch", "5"]],
     [["small"], ["normal"], ["large"]],
-    [["off"], ["active"], ["spotify"], ["spotifast"]]
+    [["off"], ["active"], ["spotify"], ["spotifast"]],
+    [["companion", "0"], ["keep_last_track", "keep", "1"], ["hide", "2"]]
 ]
-private let enumDefaults: [UInt8] = [1, 1, 1, 0, 2, 1, 1, 1, 0]
+private let enumDefaults: [UInt8] = [1, 1, 1, 0, 2, 1, 1, 1, 0, 0]
 private let enumSettings: [(String, WritableKeyPath<WallifyWidgetState, UInt8>, Int)] = [
     ("frame_strength", \.setting_frame, 0), ("glow_intensity", \.setting_intensity, 1),
     ("animation_speed", \.setting_speed, 2), ("media_source", \.setting_source, 3),
     ("widget_mode", \.setting_mode, 4), ("idle_style", \.setting_idle_style, 5),
     ("track_transition", \.setting_transition, 6), ("font_scale", \.setting_font_scale, 7),
-    ("media_key_target", \.setting_media_key_target, 8)
+    ("media_key_target", \.setting_media_key_target, 8),
+    ("stopped_behavior", \.setting_stopped_behavior, 9)
 ]
 
 func parseSettingEnum(_ kind: Int, _ raw: String) -> UInt8 {
@@ -267,6 +273,9 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
     
     # Mascot shown when player is inactive [cat, banana_cat, raccoon, spotify]
     idle_style = \(values["idle_style"]!)
+
+    # When music stops (paused tracks remain visible) [companion, keep_last_track, hide]
+    stopped_behavior = \(values["stopped_behavior"]!)
     
     # Artwork transition on track changes [cinematic, ripple, flip, vinyl, glitch, default]
     track_transition = \(values["track_transition"]!)
@@ -343,6 +352,7 @@ public func widgetSettingsSnapshot(_ output: UnsafeMutablePointer<WallifySetting
     value.hide_text = state.setting_hide_text
     value.clickable_names = state.setting_clickable_names
     value.position_locked = state.setting_position_locked
+    value.stopped_behavior = Int32(state.setting_stopped_behavior)
     value.hide_progress = state.setting_hide_progress
     value.show_controls = state.setting_show_controls
     value.show_timestamps = state.setting_show_timestamps

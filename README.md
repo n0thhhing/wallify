@@ -70,6 +70,7 @@ track_transition    = cinematic     # default | cinematic | ripple | flip | viny
 hide_text           = false         # Hide track title and artist labels
 clickable_names     = false         # Enable track links and artist searches
 position_locked     = false         # Prevent accidental dragging
+stopped_behavior    = companion     # companion | keep_last_track | hide
 hide_progress       = false         # Hide the progress/seek bar
 font_scale          = normal        # small | normal | large
 media_key_target    = off           # off | active | spotify | spotifast

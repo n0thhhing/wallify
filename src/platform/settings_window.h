@@ -27,6 +27,7 @@ typedef struct {
     bool hide_text;
     bool clickable_names;
     bool position_locked;
+    int stopped_behavior; // 0: companion, 1: keep last track, 2: hide
     bool hide_progress;
     bool show_controls;
     bool show_timestamps;

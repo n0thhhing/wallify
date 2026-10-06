@@ -36,6 +36,8 @@ typedef struct {
     bool setting_hide_text;
     bool setting_clickable_names;
     bool setting_position_locked;
+    uint8_t setting_stopped_behavior;
+    bool media_stopped;
     bool setting_hide_progress;
     bool setting_show_controls;
     bool setting_show_timestamps;

@@ -201,6 +201,7 @@ struct SettingsBridgeCheck {
         defer { state.pointee = original; _ = stateFlag(0, 1, closed); _ = stateFlag(1, 1, playing) }
         state.pointee.setting_source = 1; state.pointee.setting_hide_text = false
         state.pointee.setting_clickable_names = true
+        state.pointee.media_stopped = false
         _ = stateFlag(0, 1, false); _ = stateFlag(1, 1, true)
         updateTrackText(Array("Track".utf8), Array("Artist".utf8), state: state)
         let links = view.accessibilityChildren() as! [NSAccessibilityElement]
@@ -239,6 +240,12 @@ struct SettingsBridgeCheck {
         precondition(lastPointer?.0 == -1 && lastPointer?.1 == -1 && lastPointer?.2 == 0)
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
+        state.pointee.setting_stopped_behavior = 2; state.pointee.media_stopped = true
+        updateStoppedPresentation()
+        precondition(!panel.isVisible && (panel as! WidgetPanel).hiddenForStoppedMusic)
+        state.pointee.media_stopped = false
+        updateStoppedPresentation()
+        precondition(panel.isVisible && !(panel as! WidgetPanel).hiddenForStoppedMusic && visible == 1)
         panel.orderOut(nil)
     }
 

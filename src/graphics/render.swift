@@ -54,6 +54,11 @@ public func drawSwiftUIFrame() {
     }
     sceneLayout.update(width: Double(metalWidgetWidth()), height: Double(metalWidgetHeight()), state: state)
     let layout = sceneLayout, card = layout.card
+    if stoppedWidgetHidden(state) {
+        stopIdleAnimation()
+        if terminalMode { presentMetalScene(Float(layout.width), Float(layout.height), nil, 0, nil, 0) }
+        return
+    }
     if state.setting_waveform {
         audioWaveform.update(active: state.global_rate > 0 && state.global_duration > 0 && state.setting_animations &&
             state.idle_mix < 1 && layout.progressVisible(state.setting_hide_progress) && stateFlag(3, 0, false))

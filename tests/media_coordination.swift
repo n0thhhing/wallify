@@ -40,19 +40,25 @@ func checkMediaCoordination() {
     apply("NO_TRACK", 16); apply("NO_TRACK", 17)
     precondition(widgetTitle() == "café")
     apply("NO_TRACK", 18)
-    precondition(widgetTitle() == "Spotify" && state.pointee.global_duration == 0 && clears == 3)
+    precondition(widgetTitle() == "café" && state.pointee.global_duration == 181 && clears == 2 && state.pointee.media_stopped)
+    state.pointee.setting_stopped_behavior = 1
+    precondition(!spotifyIsIdle() && !stoppedWidgetHidden(state.pointee))
+    state.pointee.setting_stopped_behavior = 2
+    precondition(stoppedWidgetHidden(state.pointee))
+    state.pointee.setting_stopped_behavior = 0
+    precondition(spotifyIsIdle())
     precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_state.pending == -1)
     state.pointee.setting_source = 0
     apply("Late reply|||Old source|||playing|||99|||180", 19)
-    precondition(widgetTitle() == "Spotify" && state.pointee.global_rate == 0)
+    precondition(widgetTitle() == "café" && state.pointee.global_rate == 0)
     media.select(0)
     _ = media.apply(Array("Title|||Artist|||0|||1|||5|||30".utf8), source: 0, now: 20)
     precondition(widgetTitle() == "Title" && state.pointee.global_rate == 1)
     for t in [21.0, 22.0] { _ = media.apply([], source: 0, now: t) }
     precondition(widgetTitle() == "Title")
     _ = media.apply([], source: 0, now: 23)
-    precondition(widgetTitle().isEmpty && clears == 5 && cancellations >= 2)
-    precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_clock.elapsed == 0)
+    precondition(widgetTitle() == "Title" && state.pointee.media_stopped && clears == 3 && cancellations >= 2)
+    precondition(state.pointee.playback_clock.rate == 0 && state.pointee.playback_clock.elapsed == 5)
     _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: 24)
     for t in 25...54 { _ = media.apply(Array("No artwork|||Artist|||0|||0|||5|||30".utf8), source: 0, now: Double(t)) }
     precondition(!state.pointee.artwork_refresh_pending)

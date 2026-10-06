@@ -21,6 +21,7 @@ struct WallifyApp {
             exit(1)
         }
         NSLog("Wallify: Swift widget ready, mode=%d source=%d", state.pointee.setting_mode, state.pointee.setting_source)
+        refreshStoppedPresentation()
         do { try TerminalDisplay.current?.start() }
         catch {
             FileHandle.standardOutput.write(Data(("Wallify: \(error.localizedDescription)\n").utf8))
