@@ -1,4 +1,13 @@
-# Raccoon sprite
+# Sprite assets
+
+`bin/` holds the checked-in RLE atlases used at runtime: Pixel Cat, Banana
+Cat, and Raccoon. Keep these beside the sprite artwork rather than under
+`src/`, which contains application code. The build copies them into
+`build/resources/assets/`; packaging copies them into the app's
+`Contents/Resources/assets/`. The runtime also checks `bin/` here when
+running directly from the repository.
+
+## Raccoon
 
 `raccoon.png` contains five horizontal 110×68 RGBA frames, drawn at native
 size with nearest-neighbor texture sampling, matching the Pixel Cat's width.
@@ -22,7 +31,7 @@ Regenerate the atlas and embedded binary with Python and Pillow:
 
 ```sh
 python3 scripts/prepare-raccoon.py
-python3 scripts/encode-sprite.py assets/sprites/raccoon.png src/assets/bin/raccoon_pixels.bin
+python3 scripts/encode-sprite.py assets/sprites/raccoon.png assets/sprites/bin/raccoon_pixels.bin
 ```
 
 The binary uses the same RGBA run format as the cat and banana atlases.

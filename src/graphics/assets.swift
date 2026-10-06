@@ -5,7 +5,7 @@ func assetURL(_ name: String) -> URL? {
     let executable = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
     let candidates = [Bundle.main.resourceURL?.appendingPathComponent("assets/\(name)"),
                       executable.appendingPathComponent("../resources/assets/\(name)"),
-                      URL(fileURLWithPath: "src/assets/bin/\(name)")]
+                      URL(fileURLWithPath: "assets/sprites/bin/\(name)")]
     return candidates.compactMap { $0 }.first { FileManager.default.fileExists(atPath: $0.path) }
 }
 

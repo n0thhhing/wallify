@@ -63,7 +63,7 @@ done < <(find src -name '*.swift' -type f | sort)
 build_if_needed build/lib/libmetadata_fetcher.dylib src/media/metadata_fetcher.swift -- xcrun swiftc "${COMMON[@]}" "$OPT" -emit-library -module-name MetadataFetcher -no-toolchain-stdlib-rpath -Xlinker -install_name -Xlinker @rpath/libmetadata_fetcher.dylib src/media/metadata_fetcher.swift -o build/lib/libmetadata_fetcher.dylib
 build_if_needed build/objects/shaders.air src/platform/gpu.h src/platform/shaders.metal -- xcrun -sdk macosx metal -fmodules-cache-path=/tmp/wallify-metal-modules -c -include src/platform/gpu.h src/platform/shaders.metal -o build/objects/shaders.air
 build_if_needed build/bin/default.metallib build/objects/shaders.air -- xcrun -sdk macosx metallib build/objects/shaders.air -o build/bin/default.metallib
-for asset in src/assets/bin/*.bin; do
+for asset in assets/sprites/bin/*.bin; do
     build_if_needed "build/resources/assets/$(basename "$asset")" "$asset" -- cp "$asset" build/resources/assets/
 done
 OBJECTS=()

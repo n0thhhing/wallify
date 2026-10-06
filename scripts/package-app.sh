@@ -95,7 +95,7 @@ cp build/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Frameworks/"
 
 # 4. Copy Metal shaders & assets
 cp build/bin/default.metallib "$APP_DIR/Contents/Resources/default.metallib"
-cp src/assets/bin/*.bin "$APP_DIR/Contents/Resources/assets/"
+cp assets/sprites/bin/*.bin "$APP_DIR/Contents/Resources/assets/"
 if [[ -f assets/spotify_icon.png ]]; then
     cp assets/spotify_icon.png "$APP_DIR/Contents/Resources/assets/"
 fi

@@ -3,11 +3,11 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH="$(mktemp -d /tmp/wallify-build-cache.XXXXXX)"
 trap 'rm -rf "$SCRATCH"' EXIT
-mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,src/assets/bin,tests,tools}
+mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,assets/sprites/bin,tests,tools}
 cp "$ROOT/scripts/build.sh" "$SCRATCH/scripts/"
 touch "$SCRATCH/src/media/metadata_fetcher.swift" "$SCRATCH/src/native_bindings.swift" "$SCRATCH/src/wallify.swift" "$SCRATCH/src/player.swift"
 touch "$SCRATCH/src/platform/settings_bridge.h" "$SCRATCH/src/platform/gpu.h" "$SCRATCH/src/platform/shaders.metal"
-touch "$SCRATCH/src/assets/bin/cat.bin" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
+touch "$SCRATCH/assets/sprites/bin/cat.bin" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
 cat > "$SCRATCH/tools/xcrun" <<'PY'
 #!/usr/bin/env python3
 import hashlib, os, pathlib, sys
@@ -36,7 +36,11 @@ build() { : > "$BUILD_LOG"; bash scripts/build.sh "$@" > /dev/null; }
 expect() { diff -u <(printf '%s\n' "$@" | sed '/^$/d') "$BUILD_LOG"; }
 build
 expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
+cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
 build; expect
+printf 'sprite change' >> assets/sprites/bin/cat.bin
+build; expect
+cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
 echo '// change' >> src/wallify.swift
 build; expect build/bin/wallify
 echo '// change' >> src/media/metadata_fetcher.swift
