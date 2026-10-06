@@ -1,12 +1,12 @@
 import Foundation
 import Darwin
 
-// The surprising bit: Perl is the host, but Swift still does the metadata work.
-// Apple's Perl bundle identity lets the loaded dylib query MediaRemote in this
-// setup. Keep the loader in a child process rather than moving its private API
-// calls into the widget. DynaLoader installs the dylib's exported entry points
-// as Perl subs; stdout is then a PID handshake followed by one payload per line.
-// Keep diagnostic output off stdout, or the parent will read it as metadata.
+// Perl is the host, but Swift still does the metadata work. Apple's Perl bundle
+// identity lets the loaded dylib query MediaRemote in this setup. Keep the loader
+// in a child process rather than moving its private API calls into the widget.
+// DynaLoader installs the dylib's exported entry points as Perl subs; stdout is
+// then a PID handshake followed by one payload per line. Keep diagnostic output
+// off stdout, or the parent will read it as metadata.
 let nowPlayingHelperScript = #"""
 use strict;
 use warnings;
