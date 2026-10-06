@@ -98,6 +98,11 @@ for source in third_party/imgui/*.cpp third_party/imgui/backends/*.h; do
     [[ "$source" != */backends/*.h ]] || language=objective-c++
     NATIVE_COMMANDS+=(-- "${CXX_COMMON[@]}" -Ithird_party/imgui -Ithird_party/imgui/backends -x "$language" -c "$source")
 done
+for header in "${HEADERS[@]}"; do
+    # Matching .swift basenames otherwise make clangd infer Swift flags for .h.
+    # Objective-C++ also covers settings_window.h's AppKit declarations.
+    NATIVE_COMMANDS+=(-- "${CXX_COMMON[@]}" -x objective-c++ -c "$header")
+done
 APP_SOURCES=("${SOURCES[@]}" src/native_bindings.swift src/wallify.swift)
 APP_MAP="$(swift_output_map "build/objects/swift-$MODE-$INSPECTOR" "${APP_SOURCES[@]}")"
 APP_INPUTS=("${APP_SOURCES[@]}" "${HEADERS[@]}" "$APP_MAP")

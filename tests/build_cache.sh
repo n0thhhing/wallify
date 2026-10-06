@@ -60,6 +60,10 @@ vendor = entries['third_party/imgui/imgui.cpp']['arguments']
 assert '-Ithird_party/imgui' in vendor and '-Ibuild/vendor/imgui' not in vendor
 metal = entries['third_party/imgui/backends/imgui_impl_metal.h']['arguments']
 assert metal[metal.index('-x') + 1] == 'objective-c++'
+for header in Path('src').rglob('*.h'):
+    native = entries[str(header)]['arguments']
+    assert native[0].endswith('/clang++') and '-Onone' not in native
+    assert native[native.index('-x') + 1] == 'objective-c++'
 PY
 rm compile_commands.json
 build; expect
