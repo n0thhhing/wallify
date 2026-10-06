@@ -55,6 +55,7 @@ PY
 
 COMMON=(-swift-version 5 -module-cache-path /tmp/wallify-swift-modules -target "$(uname -m)-apple-macosx12.0" -sdk "$(xcrun --show-sdk-path)")
 TEST_COMMON=("${COMMON[@]}")
+CXX_COMMON=(xcrun "$(xcrun --find clang++)" -mmacosx-version-min=12.0 -std=c++17 -fobjc-arc -fmodules -Wno-deprecated-declarations -isysroot "$(xcrun --show-sdk-path)")
 HEADERS=()
 while IFS= read -r header; do HEADERS+=("$header"); done < <(find src -name '*.h' -type f | sort)
 SOURCES=()
@@ -69,20 +70,34 @@ for asset in assets/sprites/bin/*.bin; do
     build_if_needed "build/resources/assets/$(basename "$asset")" "$asset" -- cp "$asset" build/resources/assets/
 done
 OBJECTS=()
+NATIVE_COMMANDS=()
+IMGUI_HEADERS=()
 if [[ "$INSPECTOR" == true ]]; then
     bash ./scripts/fetch-imgui.sh
     COMMON+=(-D DEBUG_INSPECTOR)
-    IMGUI_HEADERS=()
     while IFS= read -r header; do IMGUI_HEADERS+=("$header"); done < <(find build/vendor/imgui -name '*.h' -type f | sort)
-    for source in build/vendor/imgui/{imgui,imgui_draw,imgui_tables,imgui_widgets}.cpp build/vendor/imgui/backends/{imgui_impl_osx,imgui_impl_metal}.mm src/ui/debug_imgui.mm; do
-        object="build/objects/$(basename "$source").o"
+fi
+for source in build/vendor/imgui/{imgui,imgui_draw,imgui_tables,imgui_widgets}.cpp build/vendor/imgui/backends/{imgui_impl_osx,imgui_impl_metal}.mm src/ui/debug_imgui.mm; do
+    object="build/objects/$(basename "$source").o"
+    command=("${CXX_COMMON[@]}" -Ibuild/vendor/imgui -Ibuild/vendor/imgui/backends -c "$source" -o "$object")
+    NATIVE_COMMANDS+=(-- "${command[@]}")
+    if [[ "$INSPECTOR" == true ]]; then
         inputs=("$source" "${IMGUI_HEADERS[@]}")
         if [[ "$source" == src/* ]]; then inputs+=("${HEADERS[@]}"); fi
-        build_if_needed "$object" "${inputs[@]}" -- xcrun clang++ -mmacosx-version-min=12.0 -std=c++17 -fobjc-arc -fmodules -Wno-deprecated-declarations -Ibuild/vendor/imgui -Ibuild/vendor/imgui/backends -c "$source" -o "$object"
+        build_if_needed "$object" "${inputs[@]}" -- "${command[@]}"
         OBJECTS+=("$object")
-    done
+    fi
+done
+if [[ "$INSPECTOR" == true ]]; then
     OBJECTS+=(-lc++ -framework MetalKit -framework GameController)
 fi
+# The checked-in ImGui snapshot is browsable too, but is not linked into the app.
+for source in third_party/imgui/*.cpp third_party/imgui/backends/*.h; do
+    [[ -f "$source" ]] || continue
+    language=c++
+    [[ "$source" != */backends/*.h ]] || language=objective-c++
+    NATIVE_COMMANDS+=(-- "${CXX_COMMON[@]}" -Ithird_party/imgui -Ithird_party/imgui/backends -x "$language" -c "$source")
+done
 APP_SOURCES=("${SOURCES[@]}" src/native_bindings.swift src/wallify.swift)
 APP_MAP="$(swift_output_map "build/objects/swift-$MODE-$INSPECTOR" "${APP_SOURCES[@]}")"
 APP_INPUTS=("${APP_SOURCES[@]}" "${HEADERS[@]}" "$APP_MAP")
@@ -93,7 +108,7 @@ APP_COMMAND=(xcrun swiftc "${COMMON[@]}" "$OPT" -incremental -enable-batch-mode 
 TEST_SOURCES=("${SOURCES[@]}" src/media/metadata_fetcher.swift tests/*.swift)
 TEST_MAP="$(swift_output_map "build/objects/tests-$MODE" "${TEST_SOURCES[@]}")"
 TEST_COMMAND=(xcrun swiftc "${TEST_COMMON[@]}" "$OPT" -incremental -enable-batch-mode -output-file-map "$TEST_MAP" -import-objc-header src/platform/settings_bridge.h "${TEST_SOURCES[@]}" -o build/bin/settings-bridge-check)
-python3 scripts/editor-commands.py "${APP_COMMAND[@]}" -- "${HELPER_COMMAND[@]}" -- "${TEST_COMMAND[@]}"
+python3 scripts/editor-commands.py "${APP_COMMAND[@]}" -- "${HELPER_COMMAND[@]}" -- "${TEST_COMMAND[@]}" "${NATIVE_COMMANDS[@]}"
 build_if_needed build/bin/wallify "${APP_INPUTS[@]}" -- "${APP_COMMAND[@]}"
 if [[ "$TEST" == true ]]; then
     # Test callbacks deliberately replace the application's native bindings.

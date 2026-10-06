@@ -3,15 +3,19 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH="$(mktemp -d /tmp/wallify-build-cache.XXXXXX)"
 trap 'rm -rf "$SCRATCH"' EXIT
-mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,assets/sprites/bin,tests,tools}
+mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,assets/sprites/bin,tests,tools,third_party/imgui/backends}
 cp "$ROOT/scripts/build.sh" "$ROOT/scripts/editor-commands.py" "$SCRATCH/scripts/"
 touch "$SCRATCH/src/media/metadata_fetcher.swift" "$SCRATCH/src/native_bindings.swift" "$SCRATCH/src/wallify.swift" "$SCRATCH/src/player.swift"
 touch "$SCRATCH/src/platform/settings_bridge.h" "$SCRATCH/src/platform/gpu.h" "$SCRATCH/src/platform/shaders.metal"
 touch "$SCRATCH/assets/sprites/bin/cat.bin" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
+touch "$SCRATCH/third_party/imgui/imgui.cpp" "$SCRATCH/third_party/imgui/backends/imgui_impl_metal.h"
 cat > "$SCRATCH/tools/xcrun" <<'PY'
 #!/usr/bin/env python3
 import hashlib, os, pathlib, sys
 args = sys.argv[1:]
+if args[:2] == ['--find', 'clang++']:
+    print(os.environ.get('FAKE_TOOLCHAIN', 'test-toolchain') + '/clang++')
+    sys.exit(0)
 if args[0] == '--find' or args[0].startswith('--show-sdk') or '--version' in args:
     print(os.environ.get('FAKE_TOOLCHAIN', 'test-toolchain'))
     sys.exit(0)
@@ -41,7 +45,7 @@ python3 - <<'PY'
 import json
 from pathlib import Path
 entries = {entry['file']: entry for entry in json.loads(Path('compile_commands.json').read_text())}
-assert set(entries) == {str(path) for folder in ('src', 'tests') for path in Path(folder).rglob('*.swift')}
+assert {file for file in entries if file.endswith('.swift')} == {str(path) for folder in ('src', 'tests') for path in Path(folder).rglob('*.swift')}
 app = entries['src/player.swift']['arguments']
 assert app[app.index('-import-objc-header') + 1] == 'src/platform/settings_bridge.h'
 assert 'src/native_bindings.swift' in app and 'tests/check.swift' not in app
@@ -49,6 +53,13 @@ assert 'src/platform/settings_bridge.h' not in entries['src/media/metadata_fetch
 test = entries['tests/check.swift']['arguments']
 assert 'src/player.swift' in test and 'src/media/metadata_fetcher.swift' in test
 assert 'src/native_bindings.swift' not in test and 'src/wallify.swift' not in test
+native = entries['src/ui/debug_imgui.mm']['arguments']
+assert native[0].endswith('/clang++') and '-std=c++17' in native and '-fobjc-arc' in native
+assert '-isysroot' in native and '-Ibuild/vendor/imgui' in native
+vendor = entries['third_party/imgui/imgui.cpp']['arguments']
+assert '-Ithird_party/imgui' in vendor and '-Ibuild/vendor/imgui' not in vendor
+metal = entries['third_party/imgui/backends/imgui_impl_metal.h']['arguments']
+assert metal[metal.index('-x') + 1] == 'objective-c++'
 PY
 rm compile_commands.json
 build; expect

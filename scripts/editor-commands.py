@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Expose the build's Swift compiler invocations to SourceKit-LSP."""
+"""Expose Swift and native compiler invocations to SourceKit-LSP and clangd."""
 import json
 from pathlib import Path
 import sys
@@ -13,10 +13,13 @@ for argument in sys.argv[1:]:
 
 entries = {}
 for command in commands:
-    assert command[:2] == ["xcrun", "swiftc"], command
-    arguments = ["swiftc", *command[2:]]
+    assert command[0] == "xcrun" and Path(command[1]).name in ("swiftc", "clang++"), command
+    arguments = command[1:]
     for source in arguments:
-        if source.endswith(".swift"):
+        if source.endswith((".swift", ".cpp", ".mm", ".h")) and not source.startswith("-"):
+            # A Swift bridging header is an option value, not a separate input.
+            if arguments[0] == "swiftc" and not source.endswith(".swift"):
+                continue
             # App settings win for shared sources; tests keep their own callbacks
             # and @main entry point instead of importing the application's ones.
             entries.setdefault(source, {"directory": str(Path.cwd()), "file": source,

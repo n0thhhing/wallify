@@ -93,8 +93,12 @@ Build output lives under `build/`. Use ReleaseFast for performance measurements;
 
 Every build also writes an ignored `compile_commands.json` at the repository
 root. SourceKit-LSP uses it to see the complete Swift targets and the C bridging
-header defining types such as `DrawCommand`. Open the repository folder in your
-editor, run the build once, and restart the Swift language server if existing
+header defining types such as `DrawCommand`. Native entries also give clangd
+the C++17, SDK, ARC, and ImGui include settings for the Inspector and the
+checked-in ImGui snapshot, even on builds without the Inspector. Run
+`./scripts/build.sh -O Debug --debug-inspector` once in a fresh checkout to
+fetch the pinned ImGui headers and backends. Open the repository folder in your
+editor, run the build once, and restart its language servers if existing
 diagnostics persist. Zed's Debug and Profile configurations use the same build
 script and `build/bin/wallify` executable.
 
