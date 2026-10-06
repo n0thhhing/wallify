@@ -77,11 +77,11 @@ private struct SettingsView: View {
             .background(.regularMaterial)
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text(page).font(.title2.bold()).accessibilityAddTraits(.isHeader)
                     pageContent
                 }
-                .padding(24)
+                .padding(20)
                 .frame(maxWidth: 650, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
@@ -106,7 +106,7 @@ private struct SettingsView: View {
                 picker("Media Source", "Choose where Wallify reads playback information.", 13, \.media_source,
                        ["Now Playing", "Spotify", "Spotifast", "Auto"])
             }
-            section("When Music Stops") {
+            section("Idle Behavior") {
                 picker("When Music Stops", "Paused tracks stay visible. Choose what happens when no track is available.", 26, \.stopped_behavior,
                        ["Show Companion", "Keep Last Track", "Hide Widget"])
                 picker("Companion", model.snapshot.stopped_behavior == 0 ? "Shown when nothing is playing." : "Choose Show Companion above to enable this setting.", 15, \.idle_style,
@@ -243,8 +243,8 @@ private struct SettingsView: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 14, content: content)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(8)
+            VStack(alignment: .leading, spacing: 10, content: content)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(4)
         } label: { Text(title).accessibilityAddTraits(.isHeader) }
     }
 
