@@ -181,6 +181,7 @@ private struct SettingsView: View {
             }
         default:
             section("Position") {
+                toggle("Lock Position", "Prevent accidental dragging. Playback controls remain usable.", 25, \.position_locked)
                 Text("Margins: \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid: \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
                 Text("Drag the widget to change its position.").foregroundColor(.secondary)
                 Button("Reset Position") { wallify_settings_reset_position(); model.refresh() }

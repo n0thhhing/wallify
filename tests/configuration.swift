@@ -34,6 +34,7 @@ func checkConfigurationStorage() {
     native_glass = yes
     show_controls = invalid
     clickable_names = true
+    position_locked = true
     widget_mode = 1
     media_source = fastpotify
     widget_grid_x = 255
@@ -42,6 +43,7 @@ func checkConfigurationStorage() {
     """, into: &value)
     precondition(!value.setting_glow && value.setting_native_glass && value.setting_show_controls)
     precondition(value.setting_clickable_names)
+    precondition(value.setting_position_locked)
     precondition(value.setting_mode == 2 && value.setting_source == 2)
     precondition(value.widget_grid_x == 20 && value.widget_margin_left == 3608 && value.widget_margin_top == 368)
     precondition(value.setting_artwork_radius == 1)

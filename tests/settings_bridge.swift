@@ -64,6 +64,7 @@ func boolStub(_ key: Int32, _ value: Bool) {
     case 2: current.animations = value
     case 3: current.dim_paused = value
     case 5: current.native_glass = value
+    case 25: current.position_locked = value
     default: break
     }
 }

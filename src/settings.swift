@@ -5,7 +5,7 @@ private let boolSettingKeys: [Int32: WritableKeyPath<WallifyWidgetState, Bool>] 
     4: \.setting_debug, 5: \.setting_native_glass, 6: \.setting_hide_text,
     7: \.setting_hide_progress, 8: \.setting_show_controls, 9: \.setting_show_timestamps,
     19: \.setting_artwork_border, 20: \.setting_compact_gradient, 23: \.setting_waveform,
-    24: \.setting_clickable_names
+    24: \.setting_clickable_names, 25: \.setting_position_locked
 ]
 private let intSettingKeys: [Int32: (WritableKeyPath<WallifyWidgetState, UInt8>, Int32)] = [
     10: (\.setting_frame, 2), 11: (\.setting_intensity, 2), 12: (\.setting_speed, 2),
@@ -19,6 +19,12 @@ public func applyWidgetBool(_ key: Int32, _ value: Bool) {
     defer { sceneLock.unlock() }
     guard let path = boolSettingKeys[key] else { return }
     widgetStatePointer().pointee[keyPath: path] = value
+    if key == 25 && value {
+        let state = widgetStatePointer()
+        state.pointee.global_panel_dragging = false
+        state.pointee.panel_snap_active = false; state.pointee.panel_save_after_snap = false
+        DispatchQueue.main.async { widget_hide_snap_outline() }
+    }
     if !value && [2, 23].contains(key) || value && key == 7 { audioWaveform.update(active: false) }
     if key == 4 { if value { widget_debug_window_show() } else { widget_debug_window_hide() } }
     saveConfiguration()
@@ -65,7 +71,7 @@ public func restoreWidgetDefaults() {
     sceneLock.lock()
     defer { sceneLock.unlock() }
     let state = widgetStatePointer()
-    for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7, 23, 24].contains(key) }
+    for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7, 23, 24, 25].contains(key) }
     for (key, (path, _)) in intSettingKeys { state.pointee[keyPath: path] = [13, 18].contains(key) ? 0 : 1 }
     state.pointee.setting_idle_style = 1
     audioWaveform.update(active: false)
@@ -83,7 +89,8 @@ private let boolSettings: [(String, WritableKeyPath<WallifyWidgetState, Bool>)] 
     ("hide_text", \.setting_hide_text), ("hide_progress", \.setting_hide_progress),
     ("show_controls", \.setting_show_controls), ("show_timestamps", \.setting_show_timestamps),
     ("artwork_border", \.setting_artwork_border), ("compact_gradient", \.setting_compact_gradient),
-    ("waveform", \.setting_waveform), ("clickable_names", \.setting_clickable_names)
+    ("waveform", \.setting_waveform), ("clickable_names", \.setting_clickable_names),
+    ("position_locked", \.setting_position_locked)
 ]
 
 // Config mode integers predate the five-mode UI; numeric 1 must remain 3×1.
@@ -269,6 +276,9 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
 
     # Open track and artist links when clicking their names [true, false]
     clickable_names = \(values["clickable_names"]!)
+
+    # Prevent dragging the widget [true, false]
+    position_locked = \(values["position_locked"]!)
     
     # Hide progress/scrubber bar [true, false]
     hide_progress = \(values["hide_progress"]!)
@@ -332,6 +342,7 @@ public func widgetSettingsSnapshot(_ output: UnsafeMutablePointer<WallifySetting
     value.grid_y = Int32(state.widget_grid_y)
     value.hide_text = state.setting_hide_text
     value.clickable_names = state.setting_clickable_names
+    value.position_locked = state.setting_position_locked
     value.hide_progress = state.setting_hide_progress
     value.show_controls = state.setting_show_controls
     value.show_timestamps = state.setting_show_timestamps

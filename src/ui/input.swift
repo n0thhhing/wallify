@@ -13,6 +13,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
                    snap: (Int32, Int32) -> WallifyPanelSnap) -> [PointerAction] {
     guard x.isFinite, y.isFinite, mouse.x.isFinite, mouse.y.isFinite, now.isFinite else { return [] }
     var actions = [PointerAction]()
+    if state.pointee.setting_position_locked { state.pointee.global_panel_dragging = false }
     state.pointee.pointer_x = x; state.pointee.pointer_y = y
     let click = kind == 1, release = kind == 2
     if kind == 3 {
@@ -40,7 +41,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
         if state.pointee.global_duration > 0 && target == 4 {
             state.pointee.global_is_dragging = true; changed = true
         }
-        if contains(geometry.card) && !(5...9).contains(target) && !state.pointee.global_is_dragging {
+        if !state.pointee.setting_position_locked && contains(geometry.card) && !(5...9).contains(target) && !state.pointee.global_is_dragging {
             state.pointee.global_panel_dragging = true
             state.pointee.widget_drag_start_mouse_x = mouse.x; state.pointee.widget_drag_start_mouse_y = mouse.y
             state.pointee.widget_drag_start_margin_left = state.pointee.widget_margin_left

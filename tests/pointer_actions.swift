@@ -12,6 +12,9 @@ func checkPointerActions() {
                         WallifyCardRect(x: 324, y: 112, w: 40, h: 40, radius: 20),
                         WallifyCardRect(x: 375, y: 117, w: 30, h: 30, radius: 15))
     geometry.controls_visible = true; geometry.progress_visible = true
+    state.pointee.setting_position_locked = true
+    precondition(pointerLockedCheck(geometry: geometry, state: state))
+    state.pointee.setting_position_locked = false
     state.pointee.global_is_dragging = false; state.pointee.global_panel_dragging = false
     state.pointee.global_duration = 200; state.pointee.global_rate = 1
     func pointer(_ x: Double, _ y: Double, _ kind: Int32, mouse: NSPoint = .zero, idle: Bool = false,
@@ -103,4 +106,16 @@ func checkPointerActions() {
     precondition(search.absoluteString == "https://open.spotify.com/search/Caf%C3%A9%20%2F%20%231%20Bj%C3%B6rk%20%26%20Friends")
     precondition(mediaLabelSearchURL(title: "Song", artist: "Björk", artistOnly: true)?.lastPathComponent == "Björk")
     precondition(mediaLabelSearchURL(title: "Song", artist: "", artistOnly: true) == nil)
+}
+
+private func pointerLockedCheck(geometry: WallifyInputGeometry, state: UnsafeMutablePointer<WallifyWidgetState>) -> Bool {
+    state.pointee.global_panel_dragging = false; state.pointee.global_is_dragging = false
+    func pointer(_ x: Double, _ y: Double, _ kind: Int32) -> [PointerAction] {
+        reducePointer(x, y, kind: kind, mouse: .zero, now: 10, width: 540, height: 180, geometry: geometry, state: state, idle: false) { _, _ in WallifyPanelSnap() }
+    }
+    let background = pointer(60, 60, 1)
+    guard !background.contains(.startDrag), !state.pointee.global_panel_dragging else { return false }
+    _ = pointer(60, 60, 2)
+    _ = pointer(344, 132, 1)
+    return pointer(344, 132, 2).contains(.toggle)
 }

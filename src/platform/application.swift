@@ -49,7 +49,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private var toggles: [Int: NSMenuItem] = [:]
     private var choices: [Int: [NSMenuItem]] = [:]
     private let toggleFields: [Int: KeyPath<WallifySettingsSnapshot, Bool>] = [
-        0: \.glow, 1: \.aurora, 2: \.animations, 5: \.native_glass, 3: \.dim_paused
+        0: \.glow, 1: \.aurora, 2: \.animations, 5: \.native_glass, 3: \.dim_paused, 25: \.position_locked
     ]
     private let choiceFields: [Int: KeyPath<WallifySettingsSnapshot, Int32>] = [
         13: \.media_source, 14: \.widget_mode, 15: \.idle_style,
@@ -74,7 +74,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         let quick = submenu("Quick Controls")
         for (key, title) in [(1, "Aurora"), (0, "Artwork Glow"), (2, "Animations"),
-                             (5, "Native Glass"), (3, "Dim Paused Artwork")] {
+                             (5, "Native Glass"), (3, "Dim Paused Artwork"), (25, "Lock Position")] {
             let item = NSMenuItem(title: title, action: #selector(toggle(_:)), keyEquivalent: "")
             item.target = self
             item.tag = key

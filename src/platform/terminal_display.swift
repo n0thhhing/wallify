@@ -210,6 +210,7 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         sceneLock.lock()
         defer { sceneLock.unlock() }
         let state = widgetStatePointer(), layout = sceneLayout, geometry = layout.inputGeometry(state.pointee)
+        if state.pointee.setting_position_locked { drag = nil }
         let pixels = terminalPixelSize(width: layout.width, height: layout.height, scale: scale)
         let columns = max(1, Int(ceil(Double(pixels.width) / cells.cellWidth)))
         let rows = max(1, Int(ceil(Double(pixels.height) / cells.cellHeight)))
@@ -237,7 +238,7 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
             [geometry.buttons.0, geometry.buttons.1, geometry.buttons.2].contains(where: contains)
         let progress = geometry.progress_visible && !spotifyIsIdle() && state.pointee.global_duration > 0 && contains(geometry.bar)
         let label = !spotifyIsIdle() && (contains(geometry.title) || contains(geometry.artist))
-        if pressed && contains(geometry.card) && !controls && !progress && !label {
+        if !state.pointee.setting_position_locked && pressed && contains(geometry.card) && !controls && !progress && !label {
             drag = (Int(pixelX / cells.cellWidth), Int(pixelY / cells.cellHeight), column, row); moved = false; return
         }
         let actions = reducePointer(localX, localY, kind: release ? 2 : pressed ? 1 : 0,
