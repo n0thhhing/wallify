@@ -11,6 +11,7 @@ typedef struct {
 } WallifyPanelSnap;
 
 typedef struct {
+    char build_identity[256];
     int32_t glow, aurora, animations, dim, native_glass;
     int32_t hide_text, hide_progress, show_controls, timestamps;
     int32_t artwork_border, compact_gradient;

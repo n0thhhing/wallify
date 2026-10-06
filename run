@@ -129,11 +129,7 @@ if [[ "$DO_TEST" == true ]]; then
 fi
 
 source_snapshot() {
-    find . \
-        -type d \( -name .git -o -name build \) -prune -o \
-        -type f -exec stat -f '%m:%z:%N' {} + 2>/dev/null |
-        shasum -a 256 |
-        awk '{print $1}'
+    python3 scripts/build-tools.py watch
 }
 
 if [[ "$DO_WATCH" == true ]]; then
@@ -180,7 +176,7 @@ if [[ "$DO_WATCH" == true ]]; then
     fi
 
     echo -e "${BOLD}${CYAN}==>${RESET} ${BOLD}Watch mode enabled${RESET}"
-    echo -e "  ${DIM}Rebuilds when files outside .git/build/vendor/build change.${RESET}"
+    echo -e "  ${DIM}Watches src, assets, config, scripts, tests, and run; ignores docs and generated output.${RESET}"
 
     if [[ ${#WATCH_INITIAL_ARGS[@]} -gt 0 ]]; then
         if ! "$0" "${WATCH_INITIAL_ARGS[@]}"; then

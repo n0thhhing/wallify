@@ -52,6 +52,10 @@ func hideInspector() {
     defer { sceneLock.unlock() }
     let state = widgetStatePointer().pointee, layout = sceneLayout, desktop = DesktopInteraction.shared
     var result = WallifyDebugSnapshot()
+    withUnsafeMutableBytes(of: &result.build_identity) { destination in
+        let bytes = Array(WallifyBuildIdentity.label.utf8.prefix(destination.count - 1))
+        destination.copyBytes(from: bytes)
+    }
     let boolFields: [(WritableKeyPath<WallifyDebugSnapshot, Int32>, Bool)] = [
         (\.glow, state.setting_glow), (\.aurora, state.setting_aurora), (\.animations, state.setting_animations),
         (\.dim, state.setting_dim), (\.native_glass, state.setting_native_glass), (\.hide_text, state.setting_hide_text),

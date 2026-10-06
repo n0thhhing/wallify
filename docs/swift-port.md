@@ -16,7 +16,20 @@ The retired Zig implementation and build files have been removed. The optional d
 bash scripts/package-app.sh
 ```
 
-Artifacts are written under `build/`; the signed app is `build/Wallify.app`. Swift checks exercise real AppKit windows, menus, Metal submission and GPU readback, sprite decoding, configuration, source changes, helper cleanup, playback intent, seeking, dragging, snapping, scheduler budgets, and artwork publication. The Perl loader check verifies the helper's exported entry points.
+Artifacts are written under `build/variants/<mode>[-Inspector]-<architecture>/`;
+compatibility links under `build/bin` and `build/lib` select the last successful
+build. The signed app remains `build/Wallify.app`. Swift checks exercise real
+AppKit windows, menus, Metal submission and GPU readback, sprite decoding,
+configuration, source changes, helper cleanup, playback intent, seeking, dragging,
+snapping, scheduler budgets, and artwork publication. The Perl loader check
+verifies the helper's exported entry points.
+
+Run `bash tests/build_cache.sh` to check configuration-cache switching, editor
+commands, build identity changes, cached packaging, failed-verification recovery,
+bundle corruption recovery, and watch filtering in an isolated `/tmp` fixture.
+CI runs these checks before native tests and verifies an unchanged signed package
+is reused. Package tests stub the compiler and signer but use the real native
+filesystem swap; native builds and packaging separately verify the actual tools.
 
 Saved preferences retain XDG precedence, the macOS Application Support path, legacy aliases, and the bare-executable working-directory fallback. Rebuilding does not replace saved preferences.
 

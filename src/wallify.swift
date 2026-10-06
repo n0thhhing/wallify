@@ -6,6 +6,7 @@ struct WallifyApp {
         #if DEBUG_INSPECTOR
         wallify_debug_console_install()
         #endif
+        NSLog("Wallify: build %@", WallifyBuildIdentity.label)
         preparePlatform()
         initializeApplication()
         loadConfiguration()

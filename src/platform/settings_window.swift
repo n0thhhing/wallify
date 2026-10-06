@@ -198,6 +198,7 @@ private struct SettingsView: View {
             DisclosureGroup("Advanced") {
                 VStack(alignment: .leading, spacing: 20) {
                     section("Diagnostics") {
+                        Text(WallifyBuildIdentity.label).font(.caption).textSelection(.enabled)
                         toggle("Debug Console", "Show live Wallify runtime and diagnostics.", 4, \.debug_hud)
                         Button("Open Inspector") { wallify_open_inspector() }
                         Text("For CPU/GPU measurements, run from the project folder:")

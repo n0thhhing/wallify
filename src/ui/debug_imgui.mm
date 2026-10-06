@@ -271,6 +271,7 @@ static void drawRuntime(const WallifyDebugSnapshot& s) {
 
     ImGui::SeparatorText("Live State");
     if (beginProperties("runtime_live_state")) {
+        propertyText("Build", s.build_identity);
         propertyReadout("Window", "#%lld", (long long)s.window_number);
         propertyReadout("Layer", "%lld", (long long)s.window_layer);
         propertyReadout("Frame", "%.0f, %.0f  %.0f × %.0f",

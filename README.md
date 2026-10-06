@@ -31,7 +31,8 @@ A native macOS music widget written in Swift, with AppKit controls, SwiftUI Sett
 ./run -t                 # Run test suite before launching
 ./run -k                 # Stop running instance
 ./run -c                 # Clean before building
-./run -R                 # Relaunch only (no rebuild)
+./run -R                 # Build, package, and restart through the LaunchAgent
+./run -w                 # Rebuild and restart when source/build inputs change
 ./run -h                 # Show all options
 ```
 
@@ -108,7 +109,12 @@ widget_debug        = false         # Show snapping diagnostics HUD
 bash scripts/package-app.sh
 ```
 
-Build output lives under `build/`. Use ReleaseFast for performance measurements; Debug retains runtime assertions.
+Build output lives under `build/variants/<mode>[-Inspector]-<architecture>/`.
+Debug, ReleaseFast, and Inspector builds keep separate binaries, resources,
+and incremental objects. `build/current` selects the last successful build;
+`build/bin`, `build/lib`, and `build/resources` remain compatibility links.
+Failed compilation or tests do not select a new configuration. Use ReleaseFast
+for performance measurements; Debug retains runtime assertions.
 
 Every build also writes an ignored `compile_commands.json` at the repository
 root. SourceKit-LSP uses it to see the complete Swift targets and the C bridging
@@ -121,7 +127,22 @@ editor, run the build once, and restart its language servers if existing
 diagnostics persist. Zed's Debug and Profile configurations use the same build
 script and `build/bin/wallify` executable.
 
-Builds skip unchanged targets and reuse Swift's incremental dependency graph when sources change. Source contents, headers, compiler options, and the selected toolchain invalidate the relevant outputs. `--test` always runs the checks, even when the test binary is already current. Delete `build/` for a clean rebuild.
+Builds skip unchanged targets and reuse Swift's incremental dependency graph when sources change. Source contents, headers, compiler options, and the selected toolchain invalidate the relevant outputs. Switching configurations preserves their caches. `--test` always runs the checks, even when the test binary is already current. Delete `build/` for a clean rebuild.
+
+Packaging uses the selected configuration; `scripts/package-app.sh -O ReleaseFast`
+or `-O Debug` explicitly builds and selects one (Debug packaging includes the
+Inspector). Unchanged package inputs and an intact bundle skip copying and
+signing. Changed inputs are copied into a temporary bundle, signed, verified,
+then published with a native atomic swap. Failures before publication leave the
+previous app intact. A changed or incomplete bundle invalidates the package cache.
+
+Watch mode scans `src`, `assets`, `config`, `scripts`, `tests`, and `run`, using
+nanosecond modification times and file sizes. Docs, build output, editor files,
+and logs do not trigger rebuilds. Build logs, startup logs, Settings → Performance
+→ Advanced → Diagnostics, and the Inspector show configuration, architecture,
+commit, modified-worktree status, and whether the Inspector is included. This
+identity is also packaged as `Contents/Resources/build-info.json`. Restart the
+app to compare its running identity with the latest build.
 
 Set `WALLIFY_PROFILE=1` to enable scene-preparation timing, GPU frame timing, texture upload counters, and periodic renderer statistics. Native lifecycle logs also report cache rebuilds, texture uploads/swaps, resize requests, and visibility changes.
 

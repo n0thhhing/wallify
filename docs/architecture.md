@@ -18,7 +18,7 @@ Wallify is a macOS Swift application. `src/wallify.swift` prepares configuration
 | `config/` | Terminal configuration; local widget preferences are ignored by Git. |
 | `third_party/` | Checked-in external source; the optional Inspector builds from the pinned ImGui checkout in `build/vendor/`. |
 | `docs/` | Architecture, performance notes, and Swift port verification. |
-| `build/` | Generated binaries, compiler intermediates, copied resources, and app bundles; ignored by Git. |
+| `build/` | Separate configuration/architecture variants, selected-output links, app bundles, and vendor cache; ignored by Git. |
 
 Keep rendering policy in `graphics/` and OS mechanisms in `platform/`: for
 example, `graphics/idle_compositor.swift` decides when a native pet can run,
@@ -107,3 +107,18 @@ not been reproduced, so the bitmap change is a precaution, not a confirmed fix.
 ## Build
 
 `scripts/build.sh` invokes Xcode Swift, Clang, and Metal compilers. No Zig compiler is required. Packaging embeds the helper, shaders, and sprites, generates `Info.plist`, signs the app, and verifies its signature. See [Swift port verification](swift-port.md) for commands and checks.
+
+Each mode/Inspector/architecture combination owns a directory under
+`build/variants`. Only a successful build (and requested tests) updates the
+`build/current` symlink; stable `bin`, `lib`, and `resources` links follow it.
+Generated `BuildIdentity.swift` embeds the same identity as `build-info.json`
+without a timestamp that would invalidate every cached build.
+
+`scripts/build-tools.py` provides filesystem operations shared by the shell
+scripts: identity generation, selected-output links, watch snapshots, and package
+digests/publication. Packaging pins the selected variant, hashes its inputs and
+the signed output, and skips unchanged bundles. A staging bundle is signed and
+verified before Darwin's `renamex_np(RENAME_SWAP)` publishes it atomically. An
+unsupported swap fails with the old app intact. A second input hash rejects
+changes that arrive during packaging; staging and the displaced old bundle are
+cleaned afterward. The package cache is outside the signed app.

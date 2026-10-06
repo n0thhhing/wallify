@@ -25,6 +25,9 @@ import Foundation
     precondition(snapshot.idle_style == 3 && snapshot.native_glass && snapshot.media_source == 1 && snapshot.clickable_names)
     precondition(withUnsafeBytes(of: snapshot.title) { String(decoding: $0.prefix(10), as: UTF8.self) } == "Track 🎵")
     let debug = inspectorSnapshot()
+    precondition(withUnsafeBytes(of: debug.build_identity) {
+        String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self)
+    } == WallifyBuildIdentity.label)
     precondition(debug.title_len == 10 && debug.native_glass == 1 && debug.source == 1)
     precondition(debug.layout_width == sceneLayout.width && debug.duration == pointer.pointee.global_duration)
     pointer.pointee.setting_position_locked = true

@@ -4,7 +4,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH="$(mktemp -d /tmp/wallify-build-cache.XXXXXX)"
 trap 'rm -rf "$SCRATCH"' EXIT
 mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,assets/sprites/bin,tests,tools,third_party/imgui/backends}
-cp "$ROOT/scripts/build.sh" "$ROOT/scripts/editor-commands.py" "$SCRATCH/scripts/"
+cp "$ROOT/scripts/build.sh" "$ROOT/scripts/editor-commands.py" "$ROOT/scripts/build-tools.py" "$SCRATCH/scripts/"
 touch "$SCRATCH/src/media/metadata_fetcher.swift" "$SCRATCH/src/native_bindings.swift" "$SCRATCH/src/wallify.swift" "$SCRATCH/src/player.swift"
 touch "$SCRATCH/src/platform/settings_bridge.h" "$SCRATCH/src/platform/gpu.h" "$SCRATCH/src/platform/shaders.metal"
 touch "$SCRATCH/assets/sprites/bin/cat.bin" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
@@ -34,10 +34,19 @@ else:
     output.write_text(hashlib.sha256(inputs).hexdigest())
 PY
 chmod +x "$SCRATCH/tools/xcrun"
+cat > "$SCRATCH/tools/git" <<'SH'
+#!/bin/sh
+case "$1" in
+    rev-parse) echo "${FAKE_COMMIT:-123456789abc}" ;;
+    status) [ "${FAKE_DIRTY:-0}" != 1 ] || echo ' M src/player.swift' ;;
+    *) exit 1 ;;
+esac
+SH
+chmod +x "$SCRATCH/tools/git"
 export PATH="$SCRATCH/tools:$PATH" BUILD_LOG="$SCRATCH/commands.log"
 cd "$SCRATCH"
 build() { : > "$BUILD_LOG"; bash scripts/build.sh "$@" > /dev/null; }
-expect() { diff -u <(printf '%s\n' "$@" | sed '/^$/d') "$BUILD_LOG"; }
+expect() { diff -u <(printf '%s\n' "$@" | sed '/^$/d') <(sed -E 's@build/variants/[^/]+/@build/@g' "$BUILD_LOG"); }
 build
 expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
 cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
@@ -45,7 +54,7 @@ python3 - <<'PY'
 import json
 from pathlib import Path
 entries = {entry['file']: entry for entry in json.loads(Path('compile_commands.json').read_text())}
-assert {file for file in entries if file.endswith('.swift')} == {str(path) for folder in ('src', 'tests') for path in Path(folder).rglob('*.swift')}
+assert {file for file in entries if file.endswith('.swift') and not file.startswith('build/')} == {str(path) for folder in ('src', 'tests') for path in Path(folder).rglob('*.swift')}
 app = entries['src/player.swift']['arguments']
 assert app[app.index('-import-objc-header') + 1] == 'src/platform/settings_bridge.h'
 assert 'src/native_bindings.swift' in app and 'tests/check.swift' not in app
@@ -81,7 +90,13 @@ build --test; expect build/bin/settings-bridge-check
 build --test; expect
 echo '// change' >> tests/check.swift
 build --test; expect build/bin/settings-bridge-check
-build -O Debug; expect build/lib/libmetadata_fetcher.dylib build/bin/wallify
+build -O Debug; expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
+DEBUG_ROOT="$(readlink build/current)"
+build; expect
+RELEASE_ROOT="$(readlink build/current)"
+[[ "$DEBUG_ROOT" != "$RELEASE_ROOT" ]]
+[[ -f "build/$DEBUG_ROOT/bin/wallify" && -f "build/$RELEASE_ROOT/bin/wallify" ]]
+build -O Debug; expect
 rm build/bin/wallify
 build -O Debug; expect build/bin/wallify
 echo '// new' > src/new.swift
@@ -95,7 +110,7 @@ mkdir -p src/ui
 touch src/ui/debug_imgui.mm
 printf '#!/bin/sh\nexit 0\n' > scripts/fetch-imgui.sh
 build -O Debug --debug-inspector
-expect build/objects/imgui.cpp.o build/objects/imgui_draw.cpp.o build/objects/imgui_tables.cpp.o build/objects/imgui_widgets.cpp.o build/objects/imgui_impl_osx.mm.o build/objects/imgui_impl_metal.mm.o build/objects/debug_imgui.mm.o build/bin/wallify
+expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/objects/imgui.cpp.o build/objects/imgui_draw.cpp.o build/objects/imgui_tables.cpp.o build/objects/imgui_widgets.cpp.o build/objects/imgui_impl_osx.mm.o build/objects/imgui_impl_metal.mm.o build/objects/debug_imgui.mm.o build/bin/wallify
 build -O Debug --debug-inspector; expect
 python3 - <<'PY'
 import json
@@ -107,11 +122,77 @@ PY
 echo '// change' >> src/platform/gpu.h
 build -O Debug --debug-inspector
 expect build/objects/shaders.air build/bin/default.metallib build/objects/debug_imgui.mm.o build/bin/wallify
-build -O Debug; expect build/bin/wallify
+build -O Debug; expect build/objects/shaders.air build/bin/default.metallib build/bin/wallify
 echo '// change' >> src/wallify.swift
 if FAIL_BUILD=1 build -O Debug; then echo 'Failed build unexpectedly succeeded'; exit 1; fi
 [[ ! -f build/bin/wallify.sha256 ]]
 build -O Debug; expect build/bin/wallify
 FAKE_TOOLCHAIN=new build -O Debug
 expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
-echo 'Build cache checks passed'
+build -O Debug
+expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
+FAKE_COMMIT=abcdef123456 build -O Debug; expect build/bin/wallify
+FAKE_DIRTY=1 build -O Debug; expect build/bin/wallify
+python3 - <<'PY'
+import json
+info = json.load(open('build/current/build-info.json'))
+assert info['modified'] and '(modified)' in info['label']
+PY
+build -O Debug; expect build/bin/wallify
+python3 - <<'PY'
+import json, os
+from pathlib import Path
+root = Path('build/current').resolve()
+info = json.loads((root / 'build-info.json').read_text())
+assert info['configuration'] == 'Debug' and info['inspector'] is False
+assert info['architecture'] == os.uname().machine
+assert info['label'] in (root / 'BuildIdentity.swift').read_text()
+PY
+
+# Packaging uses fake signing but real filesystem publication. A failed verify
+# must retain the previous bundle, and unchanged inputs must not sign again.
+cp "$ROOT/scripts/package-app.sh" "$ROOT/scripts/Wallify.entitlements" scripts/
+cat > tools/codesign <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "$SIGN_LOG"
+if [ "$1" = --verify ] && [ "${FAIL_VERIFY:-0}" = 1 ]; then exit 1; fi
+SH
+chmod +x tools/codesign
+export SIGN_LOG="$SCRATCH/sign.log"
+package() { : > "$SIGN_LOG"; bash scripts/package-app.sh > /dev/null 2>&1; }
+package
+[[ -s "$SIGN_LOG" ]]
+cp build/Wallify.app/Contents/Resources/assets/cat.bin "$SCRATCH/previous-sprite"
+package
+[[ ! -s "$SIGN_LOG" ]]
+echo 'new artwork' >> assets/sprites/bin/cat.bin
+if FAIL_VERIFY=1 package; then echo 'Failed verification unexpectedly succeeded'; exit 1; fi
+cmp "$SCRATCH/previous-sprite" build/Wallify.app/Contents/Resources/assets/cat.bin
+[[ -z "$(find build -maxdepth 1 -name '.package.*' -print)" ]]
+package
+cmp assets/sprites/bin/cat.bin build/Wallify.app/Contents/Resources/assets/cat.bin
+[[ -s "$SIGN_LOG" ]]
+package
+[[ ! -s "$SIGN_LOG" ]]
+echo 'tampered' >> build/Wallify.app/Contents/Resources/assets/cat.bin
+package
+[[ -s "$SIGN_LOG" ]]
+cmp assets/sprites/bin/cat.bin build/Wallify.app/Contents/Resources/assets/cat.bin
+
+# Docs, generated output, and log files cannot trigger a watch rebuild.
+cp "$ROOT/run" run
+mkdir -p docs config
+snapshot="$(python3 scripts/build-tools.py watch)"
+echo 'docs' > docs/settings.md
+echo 'output' > build/generated.txt
+echo 'log' > src/debug.log
+[[ "$snapshot" == "$(python3 scripts/build-tools.py watch)" ]]
+echo 'source' > src/watch.swift
+[[ "$snapshot" != "$(python3 scripts/build-tools.py watch)" ]]
+snapshot="$(python3 scripts/build-tools.py watch)"
+echo 'preferences' > config/widget-settings.conf
+[[ "$snapshot" != "$(python3 scripts/build-tools.py watch)" ]]
+snapshot="$(python3 scripts/build-tools.py watch)"
+rm config/widget-settings.conf
+[[ "$snapshot" != "$(python3 scripts/build-tools.py watch)" ]]
+echo 'Build cache, packaging, and watch checks passed'

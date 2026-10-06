@@ -16,6 +16,9 @@ RESET="\033[0m"
 APP_NAME="Wallify"
 BUNDLE_ID="com.wallify.widget"
 APP_DIR="$PWD/build/${APP_NAME}.app"
+FINAL_APP="$APP_DIR"
+STAGING_DIR=""
+trap '[[ -z "$STAGING_DIR" ]] || rm -rf "$STAGING_DIR"' EXIT
 ENTITLEMENTS="$PWD/scripts/Wallify.entitlements"
 
 DO_BUILD=false
@@ -57,7 +60,13 @@ done
 echo -e "${BOLD}${BLUE}==>${RESET} ${BOLD}Packaging ${APP_NAME}.app...${RESET}"
 
 # 1. Build project if requested or if binaries are missing
-if [[ "$DO_BUILD" == true ]] || [[ ! -f "build/bin/wallify" ]] || [[ ! -f "build/lib/libmetadata_fetcher.dylib" ]] || [[ ! -f "build/bin/default.metallib" ]]; then
+NEEDS_BUILD="$DO_BUILD"
+for required in build/current/build-info.json build/bin/wallify build/bin/wallify.sha256 \
+                build/lib/libmetadata_fetcher.dylib build/lib/libmetadata_fetcher.dylib.sha256 \
+                build/bin/default.metallib build/bin/default.metallib.sha256; do
+    [[ -f "$required" ]] || NEEDS_BUILD=true
+done
+if [[ "$NEEDS_BUILD" == true ]]; then
     echo -e "  ${CYAN}•${RESET} Compiling binaries via Swift (-O ${OPTIMIZE})..."
     # Ensure macOS SDK path is discovered properly
     if ! xcrun --show-sdk-path >/dev/null 2>&1; then
@@ -72,44 +81,58 @@ if [[ "$DO_BUILD" == true ]] || [[ ! -f "build/bin/wallify" ]] || [[ ! -f "build
     ./scripts/build.sh "${BUILD_ARGS[@]}"
 fi
 
+# Pin one successful configuration so another build cannot change our inputs
+# halfway through copying the app.
+BUILD_ROOT="$(cd build/current && pwd)"
+python3 - "$BUILD_ROOT/build-info.json" <<'PY'
+import json, sys
+print("  Build: " + json.load(open(sys.argv[1]))["label"])
+PY
+
 # Sanity check required binaries
-for bin in "build/bin/wallify" "build/lib/libmetadata_fetcher.dylib" "build/bin/default.metallib"; do
+for bin in "$BUILD_ROOT/bin/wallify" "$BUILD_ROOT/lib/libmetadata_fetcher.dylib" "$BUILD_ROOT/bin/default.metallib"; do
     if [[ ! -f "$bin" ]]; then
         echo -e "${RED}Error: Required build artifact missing: $bin${RESET}" >&2
         exit 1
     fi
 done
 
-# 2. Clean & create app bundle layout
-rm -rf "$APP_DIR"
-mkdir -p "$APP_DIR/Contents/MacOS" \
-         "$APP_DIR/Contents/Frameworks" \
-         "$APP_DIR/Contents/Resources/assets"
+PACKAGE_SIGNATURE="$(python3 scripts/build-tools.py package-signature "$BUILD_ROOT")"
+if python3 scripts/build-tools.py cached "$FINAL_APP" "$PACKAGE_SIGNATURE"; then
+    echo "  Up to date: $FINAL_APP (copying and signing skipped)"
+else
+    # Stage beside the destination so publication can use an atomic filesystem swap.
+    STAGING_DIR="$(mktemp -d "$PWD/build/.package.XXXXXX")"
+    APP_DIR="$STAGING_DIR/$APP_NAME.app"
+    mkdir -p "$APP_DIR/Contents/MacOS" \
+             "$APP_DIR/Contents/Frameworks" \
+             "$APP_DIR/Contents/Resources/assets"
 
-# 3. Copy binaries & libraries
-cp build/bin/wallify "$APP_DIR/Contents/MacOS/Wallify"
-chmod +x "$APP_DIR/Contents/MacOS/Wallify"
+    # 3. Copy binaries & libraries
+    cp "$BUILD_ROOT/bin/wallify" "$APP_DIR/Contents/MacOS/Wallify"
+    chmod +x "$APP_DIR/Contents/MacOS/Wallify"
 
-# Place dynamic libraries in Frameworks
-cp build/lib/libmetadata_fetcher.dylib "$APP_DIR/Contents/Frameworks/"
+    # Place dynamic libraries in Frameworks
+    cp "$BUILD_ROOT/lib/libmetadata_fetcher.dylib" "$APP_DIR/Contents/Frameworks/"
 
-# 4. Copy Metal shaders & assets
-cp build/bin/default.metallib "$APP_DIR/Contents/Resources/default.metallib"
-cp assets/sprites/bin/*.bin "$APP_DIR/Contents/Resources/assets/"
-if [[ -f assets/spotify_icon.png ]]; then
-    cp assets/spotify_icon.png "$APP_DIR/Contents/Resources/assets/"
-fi
-if [[ -f config/widget-settings.conf ]]; then
-    cp config/widget-settings.conf "$APP_DIR/Contents/Resources/widget-settings.conf"
-fi
+    # 4. Copy Metal shaders & assets
+    cp "$BUILD_ROOT/bin/default.metallib" "$APP_DIR/Contents/Resources/default.metallib"
+    cp "$BUILD_ROOT/build-info.json" "$APP_DIR/Contents/Resources/build-info.json"
+    cp assets/sprites/bin/*.bin "$APP_DIR/Contents/Resources/assets/"
+    if [[ -f assets/spotify_icon.png ]]; then
+        cp assets/spotify_icon.png "$APP_DIR/Contents/Resources/assets/"
+    fi
+    if [[ -f config/widget-settings.conf ]]; then
+        cp config/widget-settings.conf "$APP_DIR/Contents/Resources/widget-settings.conf"
+    fi
 
-# 5. Ensure AppIcon.icns exists
-if [[ -f assets/AppIcon.icns ]]; then
-    cp assets/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
-fi
+    # 5. Ensure AppIcon.icns exists
+    if [[ -f assets/AppIcon.icns ]]; then
+        cp assets/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
+    fi
 
-# 6. Generate comprehensive Info.plist
-cat > "$APP_DIR/Contents/Info.plist" <<PLIST
+    # 6. Generate comprehensive Info.plist
+    cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -150,22 +173,32 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# 7. Code signing with entitlements and hardened runtime options
-echo -e "  ${CYAN}•${RESET} Signing binaries & bundle..."
-SIGN_ARGS=(--force --sign -)
-if [[ -f "$ENTITLEMENTS" ]]; then
-    SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
+    # 7. Code signing with entitlements and hardened runtime options
+    echo -e "  ${CYAN}•${RESET} Signing binaries & bundle..."
+    SIGN_ARGS=(--force --sign -)
+    if [[ -f "$ENTITLEMENTS" ]]; then
+        SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
+    fi
+
+    # Sign frameworks and executable
+    codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libmetadata_fetcher.dylib"
+    codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/MacOS/Wallify"
+    # Sign top-level bundle
+    codesign --deep "${SIGN_ARGS[@]}" "$APP_DIR"
+
+    # Verify signature
+    codesign --verify --deep --strict "$APP_DIR"
+    echo -e "  ${GREEN}✓${RESET} Bundle signed and verified successfully."
+    if [[ "$(python3 scripts/build-tools.py package-signature "$BUILD_ROOT")" != "$PACKAGE_SIGNATURE" ]]; then
+        echo "Build inputs changed while packaging; previous app preserved. Retry packaging." >&2
+        exit 1
+    fi
+    python3 scripts/build-tools.py publish "$APP_DIR" "$FINAL_APP"
+    APP_DIR="$FINAL_APP"
+    python3 scripts/build-tools.py stamp "$APP_DIR" "$PACKAGE_SIGNATURE"
+    rm -rf "$STAGING_DIR"
+    STAGING_DIR=""
 fi
-
-# Sign frameworks and executable
-codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/libmetadata_fetcher.dylib"
-codesign "${SIGN_ARGS[@]}" "$APP_DIR/Contents/MacOS/Wallify"
-# Sign top-level bundle
-codesign --deep "${SIGN_ARGS[@]}" "$APP_DIR"
-
-# Verify signature
-codesign --verify --deep --strict "$APP_DIR"
-echo -e "  ${GREEN}✓${RESET} Bundle signed and verified successfully."
 
 # 8. Optional: Install to /Applications
 if [[ "$DO_INSTALL" == true ]]; then
