@@ -83,6 +83,10 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
     let scale = state.setting_font_scale == 0 ? 0.85 : state.setting_font_scale == 2 ? 1.15 : 1
     let title = state.global_title_len > 0 ? withUnsafeBytes(of: state.global_title) { String(decoding: $0.prefix(state.global_title_len), as: UTF8.self) } : "Not Playing"
     let artist = trackArtist(state), secondary = SIMD4<Float>(Float(max(145, state.extracted_r)) / 255, Float(max(145, state.extracted_g)) / 255, Float(max(145, state.extracted_b)) / 255, 1)
+    if (8...9).contains(state.global_hover_target) {
+        let rect = layout.labelBounds(state.global_hover_target == 9, state: state)
+        canvas.fill(cardRect(rect.x, rect.y + rect.h - 1, rect.w, 1), state.global_hover_target == 9 ? secondary : primaryTextColor)
+    }
     if compact > 0.84 {
         textCache.draw(canvas, title, g.text_x, g.title_y, g.text_width, 15 * scale, 1, true, primaryTextColor, state.marquee_offset, false, false)
         textCache.draw(canvas, artist, g.text_x, g.artist_y, g.text_width, 11 * scale, 1, false, secondary)

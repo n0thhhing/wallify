@@ -2,6 +2,30 @@ import AppKit
 
 let spotifyBundleIdentifier = "com.spotify.client"
 
+func spotifyTrackURL(_ identifier: String) -> URL? {
+    let parts = identifier.split(separator: ":", omittingEmptySubsequences: false)
+    guard parts.count == 3, parts[0] == "spotify", ["track", "episode"].contains(parts[1]),
+          parts[2].utf8.count == 22, parts[2].utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) }) else { return nil }
+    return URL(string: "https://open.spotify.com/\(parts[1])/\(parts[2])")
+}
+
+func currentSpotifyTrackURL(title: String, artist: String) -> URL? {
+    guard isSpotifyRunning() != 0 else { return nil }
+    return autoreleasepool {
+        let script = """
+            tell application id "com.spotify.client"
+                try
+                    return {name of current track, artist of current track, id of current track}
+                end try
+            end tell
+            """
+        guard let result = NSAppleScript(source: script)?.executeAndReturnError(nil),
+              result.atIndex(1)?.stringValue == title, result.atIndex(2)?.stringValue == artist,
+              let identifier = result.atIndex(3)?.stringValue else { return nil }
+        return spotifyTrackURL(identifier)
+    }
+}
+
 final class SpotifyEvents {
     private let lock = NSLock()
     private let semaphore = DispatchSemaphore(value: 0)

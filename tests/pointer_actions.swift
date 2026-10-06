@@ -54,4 +54,46 @@ func checkPointerActions() {
     precondition(pointer(344, 84, 3) == [.hidePreview, .menu, .redraw])
     precondition(!state.pointee.global_is_dragging && !state.pointee.global_panel_dragging)
     precondition(pointer(.nan, 1, 1).isEmpty)
+
+    state.pointee.setting_hide_text = false
+    updateTrackText(Array("A Track Title".utf8), Array("An Artist".utf8), state: state)
+    geometry = SceneLayout().inputGeometry(state.pointee)
+    precondition(!pointer(190, 40, 1).contains(.startDrag))
+    precondition(pointer(190, 40, 2).contains(.openTrack))
+    for mode: UInt8 in 0..<5 {
+        for scale: UInt8 in 0..<3 {
+            state.pointee.mode_from = mode; state.pointee.setting_mode = mode; state.pointee.mode_mix = 1
+            state.pointee.setting_font_scale = scale
+            var layout = SceneLayout()
+            layout.update(width: 540, height: 360, state: state.pointee)
+            geometry = layout.inputGeometry(state.pointee)
+            let x = geometry.title.x + 2, titleY = geometry.title.y + 2, artistY = geometry.artist.y + 2
+            precondition(!pointer(x, titleY, 1).contains(.startDrag))
+            precondition(pointer(x, titleY, 2).contains(.openTrack))
+            precondition(!pointer(x, artistY, 1).contains(.startDrag))
+            precondition(pointer(x, artistY, 2).contains(.searchArtist))
+            _ = pointer(x, titleY, 1)
+            precondition(!pointer(x, artistY, 2).contains(.searchArtist))
+            _ = pointer(x, titleY, 1); _ = pointer(x, titleY, 3)
+            precondition(!pointer(x, titleY, 2).contains(.openTrack))
+        }
+    }
+    state.pointee.setting_hide_text = true
+    geometry = SceneLayout().inputGeometry(state.pointee)
+    precondition(pointer(190, 40, 1).contains(.startDrag))
+    _ = pointer(190, 40, 2)
+    state.pointee.setting_hide_text = false; state.pointee.global_artist_len = 0
+    geometry = SceneLayout().inputGeometry(state.pointee)
+    precondition(geometry.artist.w == 0)
+    updateTrackText(Array("Spotifast is Closed".utf8), Array("Click to Launch".utf8), state: state)
+    geometry = SceneLayout().inputGeometry(state.pointee)
+    precondition(geometry.title.w == 0 && geometry.artist.w == 0)
+
+    precondition(spotifyTrackURL("spotify:track:4uLU6hMCjMI75M1A2tKUQC")?.absoluteString == "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC")
+    precondition(spotifyTrackURL("spotify:track:../../bad") == nil)
+    precondition(spotifyTrackURL("file:///tmp/music") == nil)
+    let search = mediaLabelSearchURL(title: "Café / #1", artist: "Björk & Friends", artistOnly: false)!
+    precondition(search.absoluteString == "https://open.spotify.com/search/Caf%C3%A9%20%2F%20%231%20Bj%C3%B6rk%20%26%20Friends")
+    precondition(mediaLabelSearchURL(title: "Song", artist: "Björk", artistOnly: true)?.lastPathComponent == "Björk")
+    precondition(mediaLabelSearchURL(title: "Song", artist: "", artistOnly: true) == nil)
 }

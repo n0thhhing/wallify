@@ -236,7 +236,8 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         let controls = geometry.controls_visible && !spotifyIsIdle() &&
             [geometry.buttons.0, geometry.buttons.1, geometry.buttons.2].contains(where: contains)
         let progress = geometry.progress_visible && !spotifyIsIdle() && state.pointee.global_duration > 0 && contains(geometry.bar)
-        if pressed && contains(geometry.card) && !controls && !progress {
+        let label = !spotifyIsIdle() && (contains(geometry.title) || contains(geometry.artist))
+        if pressed && contains(geometry.card) && !controls && !progress && !label {
             drag = (Int(pixelX / cells.cellWidth), Int(pixelY / cells.cellHeight), column, row); moved = false; return
         }
         let actions = reducePointer(localX, localY, kind: release ? 2 : pressed ? 1 : 0,
@@ -248,6 +249,8 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
             case .toggle: toggleWidgetPlayback()
             case .command(let command): enqueueMediaCommand(command)
             case .seek(let position): enqueueMediaSeek(position)
+            case .openTrack: openMediaLabel(artist: false)
+            case .searchArtist: openMediaLabel(artist: true)
             default: break
             }
         }

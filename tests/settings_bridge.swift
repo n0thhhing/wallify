@@ -194,7 +194,24 @@ struct SettingsBridgeCheck {
         precondition(!panel.isOpaque && !panel.hasShadow && !panel.hidesOnDeactivate)
         precondition(panel.level.rawValue == NSWindow.Level.normal.rawValue - 1)
         precondition(panel.collectionBehavior.contains([.canJoinAllSpaces, .stationary]))
-        precondition(view.isFlipped && !view.acceptsFirstResponder && view.acceptsFirstMouse(for: nil))
+        precondition(view.isFlipped && view.acceptsFirstResponder && view.acceptsFirstMouse(for: nil))
+        let state = widgetStatePointer(), original = widgetStatePointer().pointee
+        let closed = stateFlag(0, 0, false), playing = stateFlag(1, 0, false)
+        defer { state.pointee = original; _ = stateFlag(0, 1, closed); _ = stateFlag(1, 1, playing) }
+        state.pointee.setting_source = 1; state.pointee.setting_hide_text = false
+        _ = stateFlag(0, 1, false); _ = stateFlag(1, 1, true)
+        updateTrackText(Array("Track".utf8), Array("Artist".utf8), state: state)
+        let links = view.accessibilityChildren() as! [NSAccessibilityElement]
+        precondition(links.count == 2 && links[0].accessibilityRole() == .link && links[1].accessibilityLabel() == "Artist")
+        let tab = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: panel.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48)!
+        view.keyDown(with: tab)
+        precondition(state.pointee.global_hover_target == 8)
+        view.keyDown(with: tab)
+        precondition(state.pointee.global_hover_target == 9)
+        state.pointee.setting_hide_text = true
+        precondition(view.accessibilityChildren()!.isEmpty)
+        state.pointee.setting_hide_text = false
         view.updateTrackingAreas()
         view.updateTrackingAreas()
         precondition(view.trackingAreas.count == 1)

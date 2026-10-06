@@ -1,14 +1,65 @@
 import AppKit
 
+@MainActor private final class WidgetLabelLink: NSAccessibilityElement {
+    let artist: Bool
+    init(artist: Bool) {
+        self.artist = artist
+        super.init()
+        setAccessibilityRole(.link)
+        setAccessibilityHelp(artist ? "Search for this artist" : "Open this track; search when no track link is available")
+    }
+    override func accessibilityPerformPress() -> Bool {
+        openMediaLabel(artist: artist)
+        return true
+    }
+}
+
 @MainActor
 final class WidgetView: NSView {
     static weak var current: WidgetView?
     static var contextEvent: NSEvent?
+    private lazy var labelLinks = [WidgetLabelLink(artist: false), WidgetLabelLink(artist: true)]
+    private var keyboardLabel = -1
 
     override var isFlipped: Bool { true }
-    override var acceptsFirstResponder: Bool { false }
+    override var acceptsFirstResponder: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { self }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func accessibilityRole() -> NSAccessibility.Role? { .group }
+    override func accessibilityLabel() -> String? { "Wallify" }
+
+    override func accessibilityChildren() -> [Any]? {
+        sceneLock.lock()
+        let state = widgetStatePointer().pointee, layout = sceneLayout, idle = spotifyIsIdle()
+        sceneLock.unlock()
+        guard !idle, !state.setting_hide_text else { return [] }
+        return labelLinks.compactMap { link in
+            let rect = layout.labelBounds(link.artist, state: state)
+            guard rect.w > 0, let window else { return nil }
+            let title = withUnsafeBytes(of: state.global_title) { String(decoding: $0.prefix(state.global_title_len), as: UTF8.self) }
+            link.setAccessibilityLabel(link.artist ? trackArtist(state) : title)
+            link.setAccessibilityParent(self)
+            link.setAccessibilityFrame(window.convertToScreen(convert(NSRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h), to: nil)))
+            return link
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 48 {
+            sceneLock.lock()
+            let state = widgetStatePointer(), geometry = sceneLayout.inputGeometry(state.pointee)
+            let available = spotifyIsIdle() ? [] : [geometry.title, geometry.artist].enumerated().filter { $0.element.w > 0 }.map { $0.offset }
+            if !available.isEmpty {
+                let index = available.firstIndex(of: keyboardLabel) ?? (event.modifierFlags.contains(.shift) ? 0 : -1)
+                keyboardLabel = available[(index + (event.modifierFlags.contains(.shift) ? available.count - 1 : 1)) % available.count]
+                state.pointee.global_hover_target = Int32(keyboardLabel + 8)
+            }
+            sceneLock.unlock()
+            requestWidgetFrame()
+        } else if [36, 49, 76].contains(event.keyCode), keyboardLabel >= 0 {
+            if !event.isARepeat { openMediaLabel(artist: keyboardLabel == 1) }
+        } else { super.keyDown(with: event) }
+    }
 
     override func updateTrackingAreas() {
         for area in trackingAreas { removeTrackingArea(area) }
@@ -19,11 +70,15 @@ final class WidgetView: NSView {
     }
 
     private func pointer(_ event: NSEvent, kind: Int32) {
+        keyboardLabel = -1
         let point = convert(event.locationInWindow, from: nil)
         wallify_pointer(point.x, point.y, kind)
     }
 
-    override func mouseDown(with event: NSEvent) { pointer(event, kind: 1) }
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        pointer(event, kind: 1)
+    }
     override func mouseUp(with event: NSEvent) { pointer(event, kind: 2) }
     override func mouseMoved(with event: NSEvent) { pointer(event, kind: 0) }
     override func mouseDragged(with event: NSEvent) { pointer(event, kind: 0) }

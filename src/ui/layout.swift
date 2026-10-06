@@ -72,10 +72,26 @@ struct SceneLayout {
     }
     func controlsVisible(_ enabled: Bool) -> Bool { enabled && geometry.compact_mix <= 0.5 }
     func progressVisible(_ hidden: Bool) -> Bool { !hidden && geometry.compact_mix <= 0.5 }
+    func labelBounds(_ artist: Bool, state: WallifyWidgetState) -> WallifyCardRect {
+        guard !state.setting_hide_text, (artist ? state.global_artist_len : state.global_title_len) > 0 else { return WallifyCardRect() }
+        let title = withUnsafeBytes(of: state.global_title) { String(decoding: $0.prefix(state.global_title_len), as: UTF8.self) }
+        guard !placeholderTitle(title) else { return WallifyCardRect() }
+        let scale = state.setting_font_scale == 0 ? 0.85 : state.setting_font_scale == 2 ? 1.15 : 1
+        let compact = min(1, max(0, geometry.compact_mix))
+        let font = compact > 0.84 ? (artist ? 11.0 : 15.0) : (artist ? 14 - 3 * compact : 17 - 2 * compact)
+        // Match the rasterizer's 1.5-em line box, capped before the next row.
+        // These bounds stay independent of the worker-owned GPU text cache.
+        let height = min(font * scale * 1.5, artist ? .infinity : geometry.artist_y - geometry.title_y)
+        let bytes = artist ? withUnsafeBytes(of: state.global_artist) { Array($0.prefix(state.global_artist_len)) } :
+            withUnsafeBytes(of: state.global_title) { Array($0.prefix(state.global_title_len)) }
+        let width = bytes.withUnsafeBufferPointer { ceil(rasterTextWidth($0.baseAddress, UInt($0.count), font * scale * 2, artist ? 0 : 1)) / 2 + 4 }
+        return cardRect(geometry.text_x, artist ? geometry.artist_y : geometry.title_y, min(geometry.text_width, width), height)
+    }
     func inputGeometry(_ state: WallifyWidgetState) -> WallifyInputGeometry {
         WallifyInputGeometry(card: card, art: cardRect(geometry.art_x, geometry.art_y, geometry.art_size, geometry.art_size, 14),
             bar: cardRect(geometry.bar_x, geometry.bar_y - 14, geometry.bar_w, geometry.bar_h + 28, 3),
-            buttons: (buttonBounds(0), buttonBounds(1), buttonBounds(2)), bar_x: geometry.bar_x, bar_width: geometry.bar_w,
+            buttons: (buttonBounds(0), buttonBounds(1), buttonBounds(2)),
+            title: labelBounds(false, state: state), artist: labelBounds(true, state: state), bar_x: geometry.bar_x, bar_width: geometry.bar_w,
             controls_visible: controlsVisible(state.setting_show_controls), progress_visible: progressVisible(state.setting_hide_progress))
     }
 }

@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Darwin
 
 func monotonicTime() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000 }
@@ -37,6 +37,33 @@ func activeMediaSource() -> UInt8 {
     return sourceRouter.resolve(configured, now: monotonicTime()) {
         let reply = queryMediaSource(2, capacity: 32)
         return !reply.isEmpty && reply != Array("CLOSED".utf8)
+    }
+}
+
+func mediaLabelSearchURL(title: String, artist: String, artistOnly: Bool) -> URL? {
+    let query = (artistOnly ? artist : [title, artist].filter { !$0.isEmpty }.joined(separator: " "))
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !query.isEmpty,
+          let encoded = query.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")) else { return nil }
+    return URL(string: "https://open.spotify.com/search/" + encoded)
+}
+
+func openMediaLabel(artist: Bool) {
+    sceneLock.lock()
+    let state = widgetStatePointer().pointee
+    let title = withUnsafeBytes(of: state.global_title) { String(decoding: $0.prefix(state.global_title_len), as: UTF8.self) }
+    let performer = trackArtist(state)
+    let idle = spotifyIsIdle()
+    sceneLock.unlock()
+    guard !idle, !state.setting_hide_text, !placeholderTitle(title), !(artist ? performer : title).isEmpty else { return }
+    DispatchQueue.global(qos: .userInitiated).async {
+        // AppleScript can block. Resolve the clicked snapshot off the UI thread,
+        // and never substitute a newly playing track if metadata changed meanwhile.
+        let exact = !artist && activeMediaSource() != 2 ? currentSpotifyTrackURL(title: title, artist: performer) : nil
+        guard let url = exact ?? mediaLabelSearchURL(title: title, artist: performer, artistOnly: artist) else { return }
+        DispatchQueue.main.async {
+            if !NSWorkspace.shared.open(url) { NSLog("Wallify: could not open media link: %@", url.absoluteString) }
+        }
     }
 }
 

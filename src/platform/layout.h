@@ -8,7 +8,7 @@ typedef struct {
     double button_center, button_y, compact_mix;
 } WallifyLayoutGeometry;
 typedef struct {
-    WallifyCardRect card, art, bar, buttons[3];
+    WallifyCardRect card, art, bar, buttons[3], title, artist;
     double bar_x, bar_width;
     bool controls_visible, progress_visible;
 } WallifyInputGeometry;
