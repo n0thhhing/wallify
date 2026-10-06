@@ -32,7 +32,7 @@ final class WidgetView: NSView {
         sceneLock.lock()
         let state = widgetStatePointer().pointee, layout = sceneLayout, idle = spotifyIsIdle()
         sceneLock.unlock()
-        guard !idle, !state.setting_hide_text else { return [] }
+        guard state.setting_clickable_names, !idle, !state.setting_hide_text else { return [] }
         return labelLinks.compactMap { link in
             let rect = layout.labelBounds(link.artist, state: state)
             guard rect.w > 0, let window else { return nil }

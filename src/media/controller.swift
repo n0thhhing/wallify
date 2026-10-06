@@ -55,7 +55,8 @@ func openMediaLabel(artist: Bool) {
     let performer = trackArtist(state)
     let idle = spotifyIsIdle()
     sceneLock.unlock()
-    guard !idle, !state.setting_hide_text, !placeholderTitle(title), !(artist ? performer : title).isEmpty else { return }
+    guard state.setting_clickable_names, !idle, !state.setting_hide_text,
+          !placeholderTitle(title), !(artist ? performer : title).isEmpty else { return }
     DispatchQueue.global(qos: .userInitiated).async {
         // AppleScript can block. Resolve the clicked snapshot off the UI thread,
         // and never substitute a newly playing track if metadata changed meanwhile.

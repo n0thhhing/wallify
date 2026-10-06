@@ -34,7 +34,7 @@ A native macOS music widget written in Swift, with AppKit controls, SwiftUI Sett
 
 After building, open `build/Wallify.app` from Finder. Drag to move, right-click for the full Settings panel, use the on-screen buttons and seek bar to control playback. The music-note menu-bar item provides quick playback, appearance, media-source, widget-mode, idle-style, transition, frame, Settings, and Inspector controls. Quit from that same menu.
 
-Click the track title to open its Spotify page, or the artist name to search Spotify in your browser. Spotify provides exact track links; Spotifast and other Now Playing sources fall back to a title-and-artist search. The links also work in terminal mode. Hovering underlines the name; desktop users can focus the widget, press Tab or Shift-Tab to choose a label, then Return or Space to open it. VoiceOver exposes both names as links. Hidden text and idle placeholders stay inactive.
+Enable **Clickable Track and Artist Names** in **Settings → Playback → Visibility** to open a track's Spotify page or search for its artist in your browser. This option is off by default; disabled names remain draggable. Spotify provides exact track links; Spotifast and other Now Playing sources fall back to a title-and-artist search. The links also work in terminal mode. Hovering underlines the name; desktop users can focus the widget, press Tab or Shift-Tab to choose a label, then Return or Space to open it. VoiceOver exposes both names as links. Hidden text and idle placeholders stay inactive.
 
 Terminal mode uses the Kitty graphics protocol and SGR mouse reporting in any terminal that supports them, following the terminal support on `main` (`2e3f389`). Startup queries protocol support directly and waits up to two seconds for a positive reply; unsupported or unresponsive terminals exit with an explanation. It does not restrict startup by terminal name. The query follows the [protocol specification](https://sw.kovidgoyal.net/kitty/graphics-protocol/#querying-support-and-available-transmission-mediums). It shares the Swift renderer, media sources, waveform transitions, companions, and saved preferences. Drag the card to move within the terminal without snapping; click playback buttons or the seek bar as usual. Space toggles playback, left/right arrows (or `p`/`n`) change tracks, `1`–`5` change form factor, `m` cycles media sources, `s` opens Settings, and `q` or Ctrl+C exits. Terminal glass uses the rendered background. Desktop position is preserved, and CLI launch leaves the desktop instance running. Logs go to `/tmp/wallify-cli.log`. Inside tmux, enable `allow-passthrough` for graphics.
 
@@ -68,6 +68,7 @@ media_source        = auto          # now_playing | spotify | spotifast | auto
 idle_style          = pixel_cat     # cat | banana_cat | raccoon | spotify
 track_transition    = cinematic     # default | cinematic | ripple | flip | vinyl | glitch
 hide_text           = false         # Hide track title and artist labels
+clickable_names     = false         # Enable track links and artist searches
 hide_progress       = false         # Hide the progress/seek bar
 font_scale          = normal        # small | normal | large
 media_key_target    = off           # off | active | spotify | spotifast

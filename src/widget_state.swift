@@ -27,6 +27,7 @@ private let widgetState: UnsafeMutablePointer<WallifyWidgetState> = {
     value.seek_velocity = 0.0
     value.aurora_mix = 0.0
     value.setting_hide_text = false
+    value.setting_clickable_names = false
     value.setting_hide_progress = false
     value.setting_show_controls = true
     value.setting_show_timestamps = true

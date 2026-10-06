@@ -25,6 +25,7 @@ typedef struct {
     int grid_x;
     int grid_y;
     bool hide_text;
+    bool clickable_names;
     bool hide_progress;
     bool show_controls;
     bool show_timestamps;

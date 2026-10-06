@@ -56,6 +56,7 @@ func checkPointerActions() {
     precondition(pointer(.nan, 1, 1).isEmpty)
 
     state.pointee.setting_hide_text = false
+    parseConfiguration("clickable_names = true", into: &state.pointee)
     updateTrackText(Array("A Track Title".utf8), Array("An Artist".utf8), state: state)
     geometry = SceneLayout().inputGeometry(state.pointee)
     precondition(!pointer(190, 40, 1).contains(.startDrag))
@@ -88,6 +89,12 @@ func checkPointerActions() {
     updateTrackText(Array("Spotifast is Closed".utf8), Array("Click to Launch".utf8), state: state)
     geometry = SceneLayout().inputGeometry(state.pointee)
     precondition(geometry.title.w == 0 && geometry.artist.w == 0)
+    updateTrackText(Array("A Track Title".utf8), Array("An Artist".utf8), state: state)
+    parseConfiguration("clickable_names = false", into: &state.pointee)
+    geometry = SceneLayout().inputGeometry(state.pointee)
+    precondition(geometry.title.w == 0 && geometry.artist.w == 0)
+    precondition(pointer(190, 40, 1).contains(.startDrag))
+    _ = pointer(190, 40, 2)
 
     precondition(spotifyTrackURL("spotify:track:4uLU6hMCjMI75M1A2tKUQC")?.absoluteString == "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC")
     precondition(spotifyTrackURL("spotify:track:../../bad") == nil)

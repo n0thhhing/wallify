@@ -34,6 +34,7 @@ typedef struct {
     double hover_amount[3];
     WallifyPlaybackClock clock;
     bool setting_hide_text;
+    bool setting_clickable_names;
     bool setting_hide_progress;
     bool setting_show_controls;
     bool setting_show_timestamps;

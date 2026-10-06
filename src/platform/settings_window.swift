@@ -141,6 +141,8 @@ private struct SettingsView: View {
         case "Playback":
             section("Visibility") {
                 toggle("Hide Track Text", "Hide the title and artist labels.", 6, \.hide_text)
+                toggle("Clickable Track and Artist Names", "Open track links and artist searches when clicking their names.", 24, \.clickable_names)
+                    .disabled(model.snapshot.hide_text)
                 toggle("Hide Progress Bar", "Hide the playback progress bar.", 7, \.hide_progress)
                 toggle("Playback Controls", "Show previous, play/pause and next.", 8, \.show_controls)
                 toggle("Time Labels", "Show elapsed and remaining time.", 9, \.show_timestamps)

@@ -73,7 +73,8 @@ struct SceneLayout {
     func controlsVisible(_ enabled: Bool) -> Bool { enabled && geometry.compact_mix <= 0.5 }
     func progressVisible(_ hidden: Bool) -> Bool { !hidden && geometry.compact_mix <= 0.5 }
     func labelBounds(_ artist: Bool, state: WallifyWidgetState) -> WallifyCardRect {
-        guard !state.setting_hide_text, (artist ? state.global_artist_len : state.global_title_len) > 0 else { return WallifyCardRect() }
+        guard state.setting_clickable_names, !state.setting_hide_text,
+              (artist ? state.global_artist_len : state.global_title_len) > 0 else { return WallifyCardRect() }
         let title = withUnsafeBytes(of: state.global_title) { String(decoding: $0.prefix(state.global_title_len), as: UTF8.self) }
         guard !placeholderTitle(title) else { return WallifyCardRect() }
         let scale = state.setting_font_scale == 0 ? 0.85 : state.setting_font_scale == 2 ? 1.15 : 1

@@ -15,10 +15,11 @@ import Foundation
     _ = stateFlag(0, 1, false)
     pointer.pointee.setting_idle_style = 3
     pointer.pointee.setting_native_glass = true
+    pointer.pointee.setting_clickable_names = true
     updateTrackText(Array("Track 🎵".utf8), Array("Artist".utf8), state: pointer)
     var snapshot = WallifySettingsSnapshot()
     widgetSettingsSnapshot(&snapshot)
-    precondition(snapshot.idle_style == 3 && snapshot.native_glass && snapshot.media_source == 1)
+    precondition(snapshot.idle_style == 3 && snapshot.native_glass && snapshot.media_source == 1 && snapshot.clickable_names)
     precondition(withUnsafeBytes(of: snapshot.title) { String(decoding: $0.prefix(10), as: UTF8.self) } == "Track 🎵")
     let debug = inspectorSnapshot()
     precondition(debug.title_len == 10 && debug.native_glass == 1 && debug.source == 1)
@@ -32,6 +33,7 @@ func checkConfigurationStorage() {
     artwork_glow = no # comment
     native_glass = yes
     show_controls = invalid
+    clickable_names = true
     widget_mode = 1
     media_source = fastpotify
     widget_grid_x = 255
@@ -39,6 +41,7 @@ func checkConfigurationStorage() {
     artwork_radius = 300
     """, into: &value)
     precondition(!value.setting_glow && value.setting_native_glass && value.setting_show_controls)
+    precondition(value.setting_clickable_names)
     precondition(value.setting_mode == 2 && value.setting_source == 2)
     precondition(value.widget_grid_x == 20 && value.widget_margin_left == 3608 && value.widget_margin_top == 368)
     precondition(value.setting_artwork_radius == 1)

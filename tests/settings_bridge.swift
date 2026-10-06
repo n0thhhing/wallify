@@ -199,10 +199,14 @@ struct SettingsBridgeCheck {
         let closed = stateFlag(0, 0, false), playing = stateFlag(1, 0, false)
         defer { state.pointee = original; _ = stateFlag(0, 1, closed); _ = stateFlag(1, 1, playing) }
         state.pointee.setting_source = 1; state.pointee.setting_hide_text = false
+        state.pointee.setting_clickable_names = true
         _ = stateFlag(0, 1, false); _ = stateFlag(1, 1, true)
         updateTrackText(Array("Track".utf8), Array("Artist".utf8), state: state)
         let links = view.accessibilityChildren() as! [NSAccessibilityElement]
         precondition(links.count == 2 && links[0].accessibilityRole() == .link && links[1].accessibilityLabel() == "Artist")
+        state.pointee.setting_clickable_names = false
+        precondition(view.accessibilityChildren()!.isEmpty)
+        state.pointee.setting_clickable_names = true
         let tab = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
             windowNumber: panel.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48)!
         view.keyDown(with: tab)
