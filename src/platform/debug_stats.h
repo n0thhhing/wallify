@@ -14,6 +14,8 @@ typedef struct {
     int32_t glow, aurora, animations, dim, native_glass;
     int32_t hide_text, hide_progress, show_controls, timestamps;
     int32_t artwork_border, compact_gradient;
+    int32_t clickable_names, position_locked, waveform, media_stopped, stopped_hidden;
+    int32_t stopped_behavior, idle_style;
     int32_t frame, intensity, speed, source, mode, transition;
     int32_t font_scale, media_key_target, artwork_radius, progress_thickness;
     int32_t width, height, margin_left, margin_top, dragging;

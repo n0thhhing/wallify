@@ -27,6 +27,22 @@ import Foundation
     let debug = inspectorSnapshot()
     precondition(debug.title_len == 10 && debug.native_glass == 1 && debug.source == 1)
     precondition(debug.layout_width == sceneLayout.width && debug.duration == pointer.pointee.global_duration)
+    pointer.pointee.setting_position_locked = true
+    pointer.pointee.setting_waveform = true
+    for style: UInt8 in 0...3 {
+        pointer.pointee.setting_idle_style = style
+        for behavior: UInt8 in 0...2 {
+            pointer.pointee.setting_stopped_behavior = behavior
+            for stopped in [false, true] {
+                pointer.pointee.media_stopped = stopped
+                let current = inspectorSnapshot()
+                precondition(current.clickable_names == 1 && current.position_locked == 1 && current.waveform == 1)
+                precondition(current.stopped_behavior == Int32(behavior) && current.media_stopped == (stopped ? 1 : 0))
+                precondition(current.stopped_hidden == (stopped && behavior == 2 ? 1 : 0))
+                precondition(current.idle_style == (style == 0 ? 2 : style == 1 ? 0 : style == 2 ? 1 : 3))
+            }
+        }
+    }
 }
 
 func checkConfigurationStorage() {

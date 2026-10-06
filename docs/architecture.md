@@ -40,6 +40,18 @@ action or state change into `graphics/animation.swift`.
 
 `settings.swift` parses named and legacy numeric settings and saves with Foundation atomic replacement. `platform/application.swift` resolves the XDG override first, then macOS Application Support for a bundle, or the working directory for a bare executable. Bundled defaults seed only missing preferences. SwiftUI Settings and native menus share snapshots and mutations. Context selections are consumed once by the animation worker. The scene lock is released before synchronous menu tracking.
 
+Settings separates appearance and motion from playback visibility and desktop
+placement. Advanced diagnostics and configuration access live under Performance.
+See the [Settings guide](settings.md). The Inspector snapshot includes clickable
+names, position locking, waveform, companion selection, and stopped behavior;
+the C header and Swift producer must change together.
+
+`platform/display_placement.swift` persists desktop margins per ColorSync display
+UUID in a bounded JSON sidecar. UUIDs survive screen-array reordering; the
+preferred display remains selected while disconnected so reconnecting restores
+it. Saves use requested state margins because AppKit movement may still be
+queued. Restores clamp to the display's usable area. CLI placement is separate.
+
 ## Rendering and scheduling
 
 `ui/layout.swift` supplies one cached geometry for drawing and hit testing across five modes. `graphics/render.swift`, `canvas.swift`, and `player.swift` compose at most 128 commands. `platform/gpu.h` defines their layout for Swift and Metal shaders.
@@ -61,6 +73,13 @@ The Metal renderer retains only the latest pending scene and permits two command
 The helper queries native playing state alongside metadata to override stale rates. Notifications trigger an immediate snapshot and a follow-up after 100 ms. Separate completion tokens prevent late replies from satisfying a newer query.
 
 `media/playback.swift` interpolates elapsed time, smooths small corrections, and reconciles optimistic local intent. External playback changes apply on the first snapshot without a pending intent. `payload.swift` validates UTF-8 spans, finite numbers, and protocol bounds.
+
+`media_stopped` distinguishes absent metadata from a paused, present track.
+Stopping retains the last track for the session; `setting_stopped_behavior`
+selects companion, retained track, or hidden presentation. Native visibility
+changes run on the main thread and wake independently of the sleeping renderer,
+so new metadata can restore a hidden widget. Position locking cancels dragging
+and snapping without disabling playback or optional name links.
 
 Artwork downloads use URLSession, cancellation, generation checks, and atomic publication. Publication follows scene-lock ordering so stale artwork cannot cross sources. An optional Accessibility event tap routes only play/pause, previous, and next hardware keys; unrelated keys pass through.
 

@@ -254,7 +254,7 @@ static void drawRuntime(const WallifyDebugSnapshot& s) {
     if (beginProperties("runtime")) {
         static const char* modes[] = {"1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"};
         int mode = s.mode;
-        propertyHeader("Form Factor");
+        propertyHeader("Widget Size");
         if (ImGui::Combo("##mode", &mode, modes, IM_ARRAYSIZE(modes)))
             wallify_debug_set_int(14, mode);
 
@@ -293,11 +293,20 @@ static void drawAppearance(const WallifyDebugSnapshot& s) {
             wallify_debug_set_int(12, speed);
 
         propertyBool("Hide Text", s.hide_text != 0, 6);
+        ImGui::BeginDisabled(s.hide_text != 0);
+        propertyBool("Clickable Names", s.clickable_names != 0, 24);
+        ImGui::EndDisabled();
+        if (s.hide_text) propertyText("Names unavailable", "Turn off Hide Text to enable clickable names.");
         propertyBool("Hide Progress", s.hide_progress != 0, 7);
         propertyBool("Show Controls", s.show_controls != 0, 8);
         propertyBool("Timestamps", s.timestamps != 0, 9);
         propertyBool("Artwork Border", s.artwork_border != 0, 19);
         propertyBool("Compact Gradient", s.compact_gradient != 0, 20);
+        ImGui::BeginDisabled(s.hide_progress != 0 || s.animations == 0);
+        propertyBool("System Audio Waveform", s.waveform != 0, 23);
+        ImGui::EndDisabled();
+        if (s.hide_progress || !s.animations)
+            propertyText("Waveform unavailable", "Show the progress bar and enable Animations.");
         ImGui::EndTable();
     }
 }
@@ -309,6 +318,24 @@ static void drawMedia(const WallifyDebugSnapshot& s) {
         propertyHeader("Media Source");
         if (ImGui::Combo("##source", &source, sources, IM_ARRAYSIZE(sources)))
             wallify_debug_set_int(13, source);
+
+        static const char* stoppedBehaviors[] = {"Show Companion", "Keep Last Track", "Hide Widget"};
+        int stoppedBehavior = s.stopped_behavior;
+        propertyHeader("When Music Stops");
+        if (ImGui::Combo("##stopped", &stoppedBehavior, stoppedBehaviors, IM_ARRAYSIZE(stoppedBehaviors)))
+            wallify_debug_set_int(26, stoppedBehavior);
+
+        static const char* companions[] = {"Pixel Cat", "Banana Cat", "Spotify", "Raccoon"};
+        int companion = s.idle_style;
+        propertyHeader("Companion");
+        ImGui::BeginDisabled(s.stopped_behavior != 0);
+        if (ImGui::Combo("##companion", &companion, companions, IM_ARRAYSIZE(companions)))
+            wallify_debug_set_int(15, companion);
+        ImGui::EndDisabled();
+        if (s.stopped_behavior != 0)
+            propertyText("Companion unavailable", "Choose Show Companion to enable this setting.");
+        propertyText("Playback state", s.media_stopped ? "Stopped" : s.rate > 0 ? "Playing" : "Paused");
+        propertyText("Hidden by stop behavior", s.stopped_hidden ? "Yes" : "No");
 
         static const char* transitions[] = {"Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"};
         int transition = s.transition;
@@ -330,6 +357,10 @@ static void drawMedia(const WallifyDebugSnapshot& s) {
 
 static void drawWindow(const WallifyDebugSnapshot& s) {
     if (beginProperties("window")) {
+        propertyBool("Lock Position", s.position_locked != 0, 25);
+        NSWindow* widget = [NSApp windowWithWindowNumber:(NSInteger)s.window_number];
+        propertyText("Display", widget.screen.localizedName.UTF8String);
+        propertyText("Placement", "Remembered separately for each display; choose a display in Settings > Desktop.");
         propertyInt("Margin Left", s.margin_left, 1003);
         propertyInt("Margin Top", s.margin_top, 1004);
         propertyReadout("Window ID", "#%lld", (long long)s.window_number);

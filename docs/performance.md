@@ -66,6 +66,13 @@ Snap previews now ignore unchanged geometry/radius and repeated hides.
 Unchanged previews also avoid the player-window query and window ordering.
 Hiding clears the visible state so showing the same target again still works.
 
+Settings exposes renderer status under Performance, with profiling instructions
+and diagnostic controls inside Advanced. The Inspector also reports whether a
+widget is hidden by stopped-music behavior, separately from window occlusion.
+Stopped Hide Widget presentation suppresses desktop drawing; new track metadata
+wakes native presentation even while the render loop is asleep. Pausing retains
+the player and does not activate stopped-music hiding.
+
 ## SIMD layout interpolation
 
 Layout mode endpoints are packed once into SIMD16<Double>; resizing

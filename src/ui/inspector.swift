@@ -57,6 +57,8 @@ func hideInspector() {
         (\.dim, state.setting_dim), (\.native_glass, state.setting_native_glass), (\.hide_text, state.setting_hide_text),
         (\.hide_progress, state.setting_hide_progress), (\.show_controls, state.setting_show_controls),
         (\.timestamps, state.setting_show_timestamps), (\.artwork_border, state.setting_artwork_border), (\.compact_gradient, state.setting_compact_gradient),
+        (\.clickable_names, state.setting_clickable_names), (\.position_locked, state.setting_position_locked),
+        (\.waveform, state.setting_waveform), (\.media_stopped, state.media_stopped), (\.stopped_hidden, stoppedWidgetHidden(state)),
         (\.dragging, desktop.dragging), (\.seeking, state.global_is_dragging), (\.panel_dragging, state.global_panel_dragging),
         (\.transition_active, state.mode_transition_active), (\.frame_requested, stateFlag(2, 0, false)),
         (\.has_artwork, state.global_has_artwork), (\.snap_active, state.panel_snap_active)
@@ -66,9 +68,11 @@ func hideInspector() {
         (\.frame, state.setting_frame), (\.intensity, state.setting_intensity), (\.speed, state.setting_speed),
         (\.source, state.setting_source), (\.mode, state.setting_mode), (\.transition, state.setting_transition),
         (\.font_scale, state.setting_font_scale), (\.media_key_target, state.setting_media_key_target),
-        (\.artwork_radius, state.setting_artwork_radius), (\.progress_thickness, state.setting_progress_thickness)
+        (\.artwork_radius, state.setting_artwork_radius), (\.progress_thickness, state.setting_progress_thickness),
+        (\.stopped_behavior, state.setting_stopped_behavior)
     ]
     for (path, value) in enums { result[keyPath: path] = Int32(value) }
+    result.idle_style = state.setting_idle_style == 1 ? 0 : state.setting_idle_style == 2 ? 1 : state.setting_idle_style == 3 ? 3 : 2
     result.width = metalWidgetWidth(); result.height = metalWidgetHeight()
     result.margin_left = state.widget_margin_left; result.margin_top = state.widget_margin_top
     result.window_number = player.number; result.window_layer = player.layer
