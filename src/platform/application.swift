@@ -53,7 +53,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     ]
     private let choiceFields: [Int: KeyPath<WallifySettingsSnapshot, Int32>] = [
         13: \.media_source, 14: \.widget_mode, 15: \.idle_style,
-        16: \.track_transition, 10: \.frame_strength
+        10: \.frame_strength
     ]
 
     override init() {
@@ -72,9 +72,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         add("Next Track", #selector(next), symbol: "forward.end.fill")
         menu.addItem(.separator())
 
+        add("Settings…", #selector(settings), shortcut: ",")
+        let lock = add("Lock Position", #selector(toggle(_:)))
+        lock.tag = 25
+        toggles[25] = lock
+        menu.addItem(.separator())
         let quick = submenu("Quick Controls")
         for (key, title) in [(1, "Aurora"), (0, "Artwork Glow"), (2, "Animations"),
-                             (5, "Native Glass"), (3, "Dim Paused Artwork"), (25, "Lock Position")] {
+                             (5, "Native Glass"), (3, "Dim Paused Artwork")] {
             let item = NSMenuItem(title: title, action: #selector(toggle(_:)), keyEquivalent: "")
             item.target = self
             item.tag = key
@@ -82,13 +87,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             toggles[key] = item
         }
         addChoices("Media Source", key: 13, titles: ["Now Playing", "Spotify", "Spotifast", "Auto"])
-        addChoices("Widget Mode", key: 14, titles: ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
-        addChoices("Idle Companion", key: 15, titles: ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
-        addChoices("Track Transition", key: 16, titles: ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"])
+        addChoices("Widget Size", key: 14, titles: ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
+        addChoices("Companion", key: 15, titles: ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
         addChoices("Frame", key: 10, titles: ["Off", "Subtle", "Strong"])
         menu.addItem(.separator())
         add("Open Inspector", #selector(inspector))
-        add("Settings…", #selector(settings), shortcut: ",")
         menu.addItem(.separator())
         add("Open Spotify", #selector(spotify))
         let quit = add("Quit Wallify", #selector(NSApplication.terminate(_:)), shortcut: "q")

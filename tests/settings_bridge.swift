@@ -150,8 +150,9 @@ struct SettingsBridgeCheck {
         current.playing = true
         status.refresh()
         precondition(status.play.title == "Pause")
-        for (name, key) in [("Media Source", 13), ("Widget Mode", 14), ("Idle Companion", 15),
-                            ("Track Transition", 16), ("Frame", 10)] {
+        precondition(status.menu.items.firstIndex { $0.title == "Settings…" }! < status.menu.items.firstIndex { $0.title == "Quick Controls" }!)
+        precondition(!status.menu.items.contains { $0.title == "Track Transition" })
+        for (name, key) in [("Media Source", 13), ("Widget Size", 14), ("Companion", 15), ("Frame", 10)] {
             let items = status.menu.items.first { $0.title == name }!.submenu!.items
             for (value, item) in items.enumerated() {
                 status.choose(item)
@@ -159,7 +160,8 @@ struct SettingsBridgeCheck {
                 precondition(items.filter { $0.state == .on }.count == 1 && item.state == .on)
             }
         }
-        let toggles = status.menu.items.first { $0.title == "Quick Controls" }!.submenu!.items
+        let toggles = status.menu.items.first { $0.title == "Quick Controls" }!.submenu!.items +
+            [status.menu.items.first { $0.title == "Lock Position" }!]
         for item in toggles {
             let previous = item.state
             // A stale displayed checkmark must not change the toggle's meaning.
@@ -403,13 +405,20 @@ struct SettingsBridgeCheck {
         snapshot.frame_strength = 2
         snapshot.glow_intensity = 1
         snapshot.animation_speed = 0
+        snapshot.position_locked = true
         let target = WidgetContextMenu.shared
         let menu = target.build(snapshot)
         precondition(menu.items[0].title == "Pause" && menu.items[3].title == "Open Spotifast")
         func children(_ title: String, in parent: NSMenu) -> [NSMenuItem] {
             parent.items.first { $0.title == title }!.submenu!.items
         }
-        for (title, selected) in [("Media Source", 52), ("Widget Mode", 64), ("Idle Style", 83), ("Track Transition", 75)] {
+        precondition(menu.items[5].title == "Settings…" && menu.items[6].title == "Lock Position")
+        let lock = menu.items[6]
+        precondition(lock.state == .on)
+        target.choose(lock)
+        precondition(contextSelection == 9)
+        precondition(!menu.items.contains { $0.title == "Track Transition" })
+        for (title, selected) in [("Media Source", 52), ("Widget Size", 64), ("Companion", 83)] {
             let items = children(title, in: menu)
             precondition(items.filter { $0.state == .on }.map(\.tag) == [selected])
             for item in items {
@@ -419,9 +428,8 @@ struct SettingsBridgeCheck {
         }
         let preferences = menu.items.first { $0.title == "Quick Preferences" }!.submenu!
         precondition(preferences.items[0].state == .on && preferences.items[1].state == .off)
-        for (title, selected) in [("Frame Strength", 12), ("Glow Intensity", 21), ("Animation Speed", 30)] {
-            precondition(children(title, in: preferences).filter { $0.state == .on }.map(\.tag) == [selected])
-        }
+        precondition(children("Frame Strength", in: preferences).filter { $0.state == .on }.map(\.tag) == [12])
+        precondition(!preferences.items.contains { ["Glow Intensity", "Animation Speed", "Restore Defaults"].contains($0.title) })
         let settings = menu.items.first { $0.tag == 90 }!
         precondition(settings.keyEquivalent == ",")
         target.choose(settings)
@@ -429,10 +437,12 @@ struct SettingsBridgeCheck {
         snapshot.playing = false
         snapshot.media_source = 3
         snapshot.idle_style = 2
+        snapshot.position_locked = false
         let refreshed = target.build(snapshot)
         precondition(refreshed.items[0].title == "Play")
         precondition(children("Media Source", in: refreshed).allSatisfy { $0.state == .off })
-        precondition(children("Idle Style", in: refreshed).first { $0.tag == 80 }!.state == .on)
+        precondition(children("Companion", in: refreshed).first { $0.tag == 80 }!.state == .on)
+        precondition(refreshed.items.first { $0.title == "Lock Position" }!.state == .off)
     }
 
     @MainActor static func checkDesktopSnap() {

@@ -34,13 +34,16 @@ import AppKit
             menu.addItem(item(title, tag))
         }
         menu.addItem(.separator())
+        let settings = item("Settings…", 90)
+        settings.keyEquivalent = ","
+        menu.addItem(settings)
+        menu.addItem(item("Lock Position", 9, snapshot.position_locked))
+        menu.addItem(.separator())
         group("Media Source", ["Now Playing", "Spotify", "Spotifast"], [50, 51, 52], snapshot.media_source, in: menu)
-        group("Widget Mode", ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"],
+        group("Widget Size", ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"],
               [60, 61, 62, 63, 64], snapshot.widget_mode, in: menu)
-        group("Idle Style", ["Pixel Cat", "Banana Cat", "Raccoon", "Spotify Launcher"],
+        group("Companion", ["Pixel Cat", "Banana Cat", "Raccoon", "Spotify Launcher"],
               [81, 82, 83, 80], snapshot.idle_style, [0, 1, 3, 2], in: menu)
-        group("Track Transition", ["Default", "Cinematic", "Liquid Ripple", "3D Card Flip", "Vinyl Spin", "Cyber Glitch"],
-              [70, 71, 72, 73, 74, 75], snapshot.track_transition, in: menu)
         menu.addItem(.separator())
         let preferences = NSMenu(title: "Quick Preferences")
         preferences.autoenablesItems = false
@@ -50,17 +53,9 @@ import AppKit
         }
         preferences.addItem(.separator())
         group("Frame Strength", ["Off", "Subtle", "Strong"], [10, 11, 12], snapshot.frame_strength, in: preferences)
-        group("Glow Intensity", ["Low", "Normal", "High"], [20, 21, 22], snapshot.glow_intensity, in: preferences)
-        group("Animation Speed", ["Slow", "Normal", "Fast"], [30, 31, 32], snapshot.animation_speed, in: preferences)
-        preferences.addItem(.separator())
-        preferences.addItem(item("Restore Defaults", 40))
         let quick = NSMenuItem(title: preferences.title, action: nil, keyEquivalent: "")
         quick.submenu = preferences
         menu.addItem(quick)
-        menu.addItem(.separator())
-        let settings = item("Settings…", 90)
-        settings.keyEquivalent = ","
-        menu.addItem(settings)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Wallify", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         quit.target = NSApplication.shared
