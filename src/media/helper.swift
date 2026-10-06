@@ -1,9 +1,61 @@
 import Foundation
 import Darwin
 
-// Apple's Perl bundle identity lets the existing MediaRemote helper read metadata.
+// The surprising bit: Perl is the host, but Swift still does the metadata work.
+// Apple's Perl bundle identity lets the loaded dylib query MediaRemote in this
+// setup. Keep the loader in a child process rather than moving its private API
+// calls into the widget. DynaLoader installs the dylib's exported entry points
+// as Perl subs; stdout is then a PID handshake followed by one payload per line.
+// Keep diagnostic output off stdout, or the parent will read it as metadata.
 let nowPlayingHelperScript = #"""
-use strict; use warnings; use Cwd qw(abs_path); use DynaLoader; $| = 1; $SIG{PIPE} = sub { exit(0); }; my $abs; for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || (), qw(build/lib/libmetadata_fetcher.dylib ../Frameworks/libmetadata_fetcher.dylib ../Resources/libmetadata_fetcher.dylib ../Resources/build/lib/libmetadata_fetcher.dylib /Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib)) { if ($p && -f $p) { $abs = abs_path($p); last; } } if (!$abs) { exit(1); } my $libref = DynaLoader::dl_load_file($abs) or exit(2); my $sym = DynaLoader::dl_find_symbol($libref, "mrc_printNowPlayingInfo") or exit(3); my $init_sym = DynaLoader::dl_find_symbol($libref, "mrc_notifications_init") or exit(4); my $wait_sym = DynaLoader::dl_find_symbol($libref, "mrc_wait_for_notification") or exit(5); DynaLoader::dl_install_xsub("main::fetch", $sym); DynaLoader::dl_install_xsub("main::init_notifications", $init_sym); DynaLoader::dl_install_xsub("main::wait_notification", $wait_sym); print "$$\n"; init_notifications(); my $wake = 1; $SIG{USR1} = sub { $wake = 1; }; while (1) { if ($wake) { $wake = 0; fetch(); } else { wait_notification(); fetch(); } }
+use strict;
+use warnings;
+use Cwd qw(abs_path);
+use DynaLoader;
+
+$| = 1;
+$SIG{PIPE} = sub { exit(0); };
+
+# Prefer the explicit path supplied by Swift, then try development and bundle
+# layouts. Resolve it before dl_load_file so the loader gets an absolute path.
+my $abs;
+for my $p ($ENV{WALLIFY_FETCHER_DYLIB} || (), qw(
+    build/lib/libmetadata_fetcher.dylib
+    ../Frameworks/libmetadata_fetcher.dylib
+    ../Resources/libmetadata_fetcher.dylib
+    ../Resources/build/lib/libmetadata_fetcher.dylib
+    /Applications/Wallify.app/Contents/Frameworks/libmetadata_fetcher.dylib
+)) {
+    if ($p && -f $p) {
+        $abs = abs_path($p);
+        last;
+    }
+}
+if (!$abs) { exit(1); }
+
+my $libref = DynaLoader::dl_load_file($abs) or exit(2);
+my $sym = DynaLoader::dl_find_symbol($libref, "mrc_printNowPlayingInfo") or exit(3);
+my $init_sym = DynaLoader::dl_find_symbol($libref, "mrc_notifications_init") or exit(4);
+my $wait_sym = DynaLoader::dl_find_symbol($libref, "mrc_wait_for_notification") or exit(5);
+DynaLoader::dl_install_xsub("main::fetch", $sym);
+DynaLoader::dl_install_xsub("main::init_notifications", $init_sym);
+DynaLoader::dl_install_xsub("main::wait_notification", $wait_sym);
+
+# The parent validates this PID before allowing signals to target the helper.
+# Autoflush above makes both the handshake and later snapshots visible at once.
+print "$$\n";
+init_notifications();
+my $wake = 1;
+$SIG{USR1} = sub { $wake = 1; };
+while (1) {
+    if ($wake) {
+        $wake = 0;
+        fetch();
+    } else {
+        wait_notification();
+        fetch();
+    }
+}
 """#
 
 func runNowPlayingHelper(script: String = nowPlayingHelperScript, receive: ([UInt8]) -> Bool) {

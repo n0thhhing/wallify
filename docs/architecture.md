@@ -2,6 +2,38 @@
 
 Wallify is a macOS Swift application. `src/wallify.swift` prepares configuration, creates the AppKit panel and Metal surface, starts animation and metadata workers, and runs the event loop. `native_bindings.swift` connects native controls and the optional C++ Inspector to Swift state and actions.
 
+## Finding and placing files
+
+| Location | Responsibility |
+| --- | --- |
+| `src/wallify.swift` | Startup and worker launch. |
+| `src/widget_state.swift`, `src/settings.swift`, `src/native_bindings.swift` | Shared state, persisted configuration, and native callback bindings. |
+| `src/media/` | Source routing, metadata helper, playback reconciliation, artwork downloads, audio capture, and queued controls. |
+| `src/graphics/` | Scene commands, rendering preparation, animation policy, rasterization, textures, and sprites. |
+| `src/ui/` | Layout, hit testing, menus, and Inspector UI. |
+| `src/platform/` | AppKit/SwiftUI windows, desktop integration, terminal transport, Metal implementation, shaders, and C bridge headers. |
+| `assets/` | App artwork and sprite resources; runtime RLE atlases live in `assets/sprites/bin/`. |
+| `scripts/` | Build, packaging, relaunch, dependency fetching, and sprite preparation tools. |
+| `tests/` | Swift checks plus helper-loading, terminal-protocol, and build-cache probes. |
+| `config/` | Terminal configuration; local widget preferences are ignored by Git. |
+| `third_party/` | Checked-in external source; the optional Inspector builds from the pinned ImGui checkout in `build/vendor/`. |
+| `docs/` | Architecture, performance notes, and Swift port verification. |
+| `build/` | Generated binaries, compiler intermediates, copied resources, and app bundles; ignored by Git. |
+
+Keep rendering policy in `graphics/` and OS mechanisms in `platform/`: for
+example, `graphics/idle_compositor.swift` decides when a native pet can run,
+while `platform/idle_animation.swift` owns its Core Animation layers. Likewise,
+`ui/layout.swift` supplies geometry shared by drawing and pointer handling.
+New source files are discovered recursively by the build script; no separate
+source manifest needs updating. Sprite paths must agree in `graphics/assets.swift`,
+`scripts/build.sh`, and `scripts/package-app.sh`.
+
+For a track update, follow `media/controller.swift` → `media/playback.swift`
+and `media/artwork_download.swift` → `graphics/assets.swift` →
+`graphics/render.swift` → `platform/metal_renderer.swift`. For an interaction,
+start at `ui/input.swift` and `ui/layout.swift`, then follow the queued media
+action or state change into `graphics/animation.swift`.
+
 ## State and settings
 
 `widget_state.swift` owns widget state. A recursive scene lock serializes settings, metadata, input, and frame preparation. Separate locked flags coalesce dirty-frame requests and visibility changes. Rendering caches belong to the animation worker.

@@ -44,7 +44,13 @@ final class ArtworkDownload {
     }
 
     func complete(_ data: Data?, status: Int, generation token: UInt64) {
-        // Match the state → downloader order used by metadata source changes.
+        // Cancellation is a request, not proof that URLSession stopped calling
+        // us. Treat the generation token as permission to publish: an old source
+        // must not overwrite art.raw or clear the current source's artwork.
+        // Take sceneLock before the downloader lock, matching source selection;
+        // reversing them can deadlock a source switch against this completion.
+        // Keep both locks through the atomic write and callback so selection
+        // cannot change between validating the token and publishing the image.
         sceneLock.lock()
         defer { sceneLock.unlock() }
         lock.lock()

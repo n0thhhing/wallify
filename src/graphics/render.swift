@@ -5,6 +5,14 @@ import Foundation
 // ponytail: one scene lock; split state from caches only if measured contention warrants it.
 let sceneLock = NSRecursiveLock()
 
+// This is the CPU half of the static-scene cache. The Metal half compares draw
+// command bytes, which cannot see that an artwork texture changed in place of
+// the previous slot contents. Include the asset generation here so new artwork
+// forces command preparation too. During a crossfade, animation_time belongs in
+// the key because yesterday's "static" artwork is moving; after the transition
+// it becomes zero again so normal progress ticks reuse the same static scene.
+// When adding a setting, include it here if drawPlayerStatic or the card/frame
+// drawing reads it, otherwise the effect may appear only after another change.
 struct StaticSceneKey: Equatable {
     let geometry: [Double]
     let settings: [UInt8]

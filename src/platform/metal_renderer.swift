@@ -57,6 +57,8 @@ final class MetalRenderer: @unchecked Sendable {
         }
     }
 
+    // MARK: - GPU resources and scene encoding
+
     func initialize(libraryURL: URL) throws {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
             throw NSError(domain: "Wallify", code: 1, userInfo: [NSLocalizedDescriptionKey: "Metal device or command queue unavailable"])
@@ -223,6 +225,8 @@ final class MetalRenderer: @unchecked Sendable {
         lock.unlock()
     }
 
+    // MARK: - Window and frame presentation
+
     @MainActor func createWindow(width: Int32, height: Int32, left: Int32, top: Int32) -> Bool {
         guard width > 0, height > 0 else { return false }
         let libraryURL = Bundle.main.url(forResource: "default", withExtension: "metallib") ??
@@ -261,6 +265,13 @@ final class MetalRenderer: @unchecked Sendable {
         return true
     }
 
+    // A mailbox, not a frame queue: the animation worker may prepare scenes while
+    // AppKit is busy or both GPU slots are occupied. Copy the newest commands and
+    // the matching texture references under the lock, overwriting unpresented
+    // work. Snapshotting textures matters during artwork swaps: old commands
+    // must not accidentally sample a newer track's texture. One scheduled main
+    // queue callback consumes the latest snapshot; GPU completion schedules a
+    // retry if presentation ran out of slots. Never block AppKit waiting for one.
     func submit(size: SIMD2<Float>, staticCommands: UnsafePointer<DrawCommand>?, staticCount: UInt,
                 dynamicCommands: UnsafePointer<DrawCommand>?, dynamicCount: UInt) {
         guard staticCount <= WALLIFY_MAX_COMMANDS, dynamicCount <= WALLIFY_MAX_COMMANDS,
@@ -347,6 +358,8 @@ final class MetalRenderer: @unchecked Sendable {
         defer { lock.unlock() }
         return (width, height)
     }
+
+    // MARK: - Performance diagnostics
 
     func profileScene(_ seconds: Double) {
         guard seconds.isFinite, seconds >= 0, seconds < Double(UInt64.max) / 1e9 else { return }

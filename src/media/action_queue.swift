@@ -23,6 +23,12 @@ final class MediaActionQueue {
     @discardableResult func enqueue(_ action: MediaAction) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        // A scrub gesture can produce targets faster than AppleScript or IPC can
+        // execute them. Replace only the last waiting seek, never an earlier one
+        // across a command: seek(10), pause, seek(20) must keep that exact order.
+        // The worker removes its current action before executing, so this also
+        // cannot rewrite a seek already in flight. The fixed ring bounds memory
+        // when a backend stalls; enqueue reports false when there is no room.
         if case .seek = action, count > 0 {
             let last = (tail + count - 1) % actions.count
             if case .seek? = actions[last] {

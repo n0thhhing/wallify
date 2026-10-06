@@ -87,7 +87,12 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     let seekTarget: Double = state.global_is_dragging ? 1 : 0
     if abs(state.seek_expansion - seekTarget) > 0.0001 || abs(state.seek_velocity) > 0.001 {
         high = true
-        // Exact critically damped step: a dropped frame cannot destabilize the spring.
+        // Solve the critically damped spring for the entire time step instead of
+        // nudging velocity with Euler integration. This keeps the seek bar stable
+        // when the scheduler changes frame rate or a frame arrives late. The 18
+        // is the spring's response rate, and momentum combines its current speed
+        // with displacement from the target. Snap both values at the threshold:
+        // an almost-settled spring should not keep requesting 60 FPS forever.
         let displacement = state.seek_expansion - seekTarget, decay = exp(-18 * dt)
         let momentum = state.seek_velocity + 18 * displacement
         state.seek_expansion = seekTarget + (displacement + momentum * dt) * decay
@@ -187,7 +192,12 @@ public func runAnimationWorker() {
             marqueeTitle = title; marqueeWidth = textCache.width(title, 15, true)
         }
         let idle = spotifyIsIdle()
-        // Start newly requested motion at frame zero, while preserving native pet elapsed time.
+        // Waking from an indefinite wait is not a giant animation frame. Start
+        // newly requested UI motion with dt=0, then let scheduled frames advance
+        // it. Core Animation pets kept moving while this worker slept, however;
+        // pass their real elapsed time separately so returning to Metal does not
+        // jump back to the pose from before sleep. These two clocks intentionally
+        // disagree on the first frame after rest.
         let step = advanceAnimations(&state.pointee, now: now, previous: rested ? now : previousTime, lastDraw: lastDraw, idle: idle,
             compositorActive: idleCompositor.active, compositorElapsed: idleCompositor.elapsed(now - previousTime), layout: sceneLayout, titleWidth: marqueeWidth,
             waveformAvailable: state.pointee.setting_waveform && state.pointee.global_rate > 0 && audioWaveform.textureAvailable())
