@@ -215,6 +215,7 @@ public func saveConfiguration() {
     do {
         try persistConfiguration(renderConfiguration(widgetStatePointer().pointee), to: URL(fileURLWithPath: String(cString: wallify_settings_path())))
         refreshSettingsUI()
+        DispatchQueue.main.async { rememberWidgetDisplayPlacement() }
     } catch { NSLog("Wallify: settings save failed: %@", error.localizedDescription) }
 }
 

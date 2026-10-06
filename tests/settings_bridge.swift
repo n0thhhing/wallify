@@ -122,6 +122,7 @@ struct SettingsBridgeCheck {
         checkConfigurationStorage()
         checkMediaCoordination()
         checkPointerActions()
+        checkDisplayPlacements()
         checkSceneAssets()
         checkAnimationCoordination()
         checkSharedStateAndInspector()
@@ -241,8 +242,9 @@ struct SettingsBridgeCheck {
         (panel as! WidgetPanel).occlusionChanged(Notification(name: NSWindow.didChangeOcclusionStateNotification))
         precondition(visible == (panel.occlusionState.contains(.visible) ? 1 : 0))
         state.pointee.setting_stopped_behavior = 2; state.pointee.media_stopped = true
+        state.pointee.global_panel_dragging = true
         updateStoppedPresentation()
-        precondition(!panel.isVisible && (panel as! WidgetPanel).hiddenForStoppedMusic)
+        precondition(!panel.isVisible && (panel as! WidgetPanel).hiddenForStoppedMusic && !state.pointee.global_panel_dragging)
         state.pointee.media_stopped = false
         updateStoppedPresentation()
         precondition(panel.isVisible && !(panel as! WidgetPanel).hiddenForStoppedMusic && visible == 1)

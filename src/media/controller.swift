@@ -181,7 +181,7 @@ final class MediaCoordinator {
         _ = stateFlag(0, 1, false)
         _ = stateFlag(1, 1, false)
         noTrackMisses = 0; emptyPolls = 0; emptyArtPolls = 0; artworkURL = []
-        clearTrack(preserveLast: false)
+        clearTrack(preserveLast: widgetStatePointer().pointee.setting_source == 3)
         widgetStatePointer().pointee.artwork_refresh_pending = true
     }
 

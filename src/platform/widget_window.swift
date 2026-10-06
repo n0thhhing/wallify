@@ -110,6 +110,10 @@ final class WidgetPanel: NSPanel {
     @objc func occlusionChanged(_ notification: Notification) {
         wallify_set_window_visible(occlusionState.contains(.visible) ? 1 : 0)
     }
+    @objc func screensChanged(_ notification: Notification) {
+        restoreWidgetDisplayPlacement()
+        refreshSettingsUI()
+    }
 }
 
 func refreshStoppedPresentation() {
@@ -119,7 +123,12 @@ func refreshStoppedPresentation() {
 @MainActor func updateStoppedPresentation() {
     guard !terminalMode, let panel = WidgetPanel.current else { return }
     sceneLock.lock()
-    let hidden = stoppedWidgetHidden(widgetStatePointer().pointee)
+    let state = widgetStatePointer(), hidden = stoppedWidgetHidden(widgetStatePointer().pointee)
+    if hidden {
+        state.pointee.global_panel_dragging = false; state.pointee.global_is_dragging = false
+        state.pointee.global_click_target = 0
+        state.pointee.panel_snap_active = false; state.pointee.panel_save_after_snap = false
+    }
     sceneLock.unlock()
     guard panel.hiddenForStoppedMusic != hidden else { return }
     panel.hiddenForStoppedMusic = hidden
@@ -152,6 +161,8 @@ func refreshStoppedPresentation() {
     WidgetPanel.current = panel
     NotificationCenter.default.addObserver(panel, selector: #selector(WidgetPanel.occlusionChanged(_:)),
                                            name: NSWindow.didChangeOcclusionStateNotification, object: panel)
+    NotificationCenter.default.addObserver(panel, selector: #selector(WidgetPanel.screensChanged(_:)),
+                                           name: NSApplication.didChangeScreenParametersNotification, object: nil)
     // The Swift renderer consumes this retained reference at the C boundary.
     return Unmanaged.passRetained(panel).toOpaque()
 }
@@ -181,8 +192,14 @@ func widgetScreenOffsets(primaryFrame: NSRect, visibleFrame: NSRect) -> NSPoint 
 
 @_cdecl("wallify_move_panel_now")
 @MainActor public func moveWidgetPanelNow(_ left: Int32, _ top: Int32) {
-    guard let panel = WidgetPanel.current, let screen = panel.screen ?? NSScreen.main else { return }
-    panel.setFrameOrigin(widgetPanelOrigin(visibleFrame: screen.visibleFrame, height: panel.frame.height, left: left, top: top))
+    guard let panel = WidgetPanel.current, let screen = widgetPlacementScreen() else { return }
+    let placement = DisplayPlacement(left: left, top: top).clamped(to: screen.visibleFrame.size, widget: panel.frame.size)
+    panel.setFrameOrigin(widgetPanelOrigin(visibleFrame: screen.visibleFrame, height: panel.frame.height, left: placement.left, top: placement.top))
+    WidgetView.current?.layer?.contentsScale = screen.backingScaleFactor
+    sceneLock.lock()
+    widgetStatePointer().pointee.widget_margin_left = placement.left
+    widgetStatePointer().pointee.widget_margin_top = placement.top
+    sceneLock.unlock()
 }
 
 @_cdecl("wallify_move")

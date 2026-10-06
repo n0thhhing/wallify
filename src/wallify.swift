@@ -9,6 +9,7 @@ struct WallifyApp {
         preparePlatform()
         initializeApplication()
         loadConfiguration()
+        loadWidgetDisplayPlacements()
         if terminalMode { TerminalDisplay.current = TerminalDisplay() }
         let state = widgetStatePointer(), (width, height) = modeDimensions(widgetStatePointer().pointee.setting_mode)
         state.pointee.mode_from = state.pointee.setting_mode
@@ -21,6 +22,7 @@ struct WallifyApp {
             exit(1)
         }
         NSLog("Wallify: Swift widget ready, mode=%d source=%d", state.pointee.setting_mode, state.pointee.setting_source)
+        rememberWidgetDisplayPlacement()
         refreshStoppedPresentation()
         do { try TerminalDisplay.current?.start() }
         catch {

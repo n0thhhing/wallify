@@ -168,10 +168,10 @@ public func showSnapPreview(_ x: Double, _ y: Double, _ width: Double, _ height:
     guard [x, y, width, height, radius].allSatisfy({ $0.isFinite }), width > 0, height > 0, radius >= 0 else { return }
     let rect = NSRect(x: x, y: y, width: width, height: height)
     DispatchQueue.main.async {
-        guard let screen = NSScreen.main else { return }
-        guard SnapPreview.shared.needsUpdate(rect: rect, radius: radius, screenHeight: screen.frame.height) else { return }
+        guard let screen = NSScreen.screens.first else { return }
+        guard SnapPreview.shared.needsUpdate(rect: rect, radius: radius, screenHeight: screen.frame.maxY) else { return }
         let player = playerWindowInfo()
-        SnapPreview.shared.show(rect: rect, radius: radius, screenHeight: screen.frame.height,
+        SnapPreview.shared.show(rect: rect, radius: radius, screenHeight: screen.frame.maxY,
                                 playerLayer: player.number > 0 ? Int(player.layer) : nil)
         widget_debug_window_show()
     }

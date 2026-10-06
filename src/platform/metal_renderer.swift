@@ -257,7 +257,7 @@ final class MetalRenderer: @unchecked Sendable {
         self.panel = panel
         self.view = view
         self.surface = surface
-        moveWidgetPanelNow(left, top)
+        restoreWidgetDisplayPlacement(fallback: DisplayPlacement(left: left, top: top))
         NSLog("Wallify window: show widget id=%d frame=%@", panel.windowNumber, NSStringFromRect(panel.frame))
         panel.makeKeyAndOrderFront(nil)
         wallify_set_window_visible(panel.occlusionState.contains(.visible) ? 1 : 0)
@@ -339,6 +339,10 @@ final class MetalRenderer: @unchecked Sendable {
                 frame.size = NSSize(width: CGFloat(size.x), height: CGFloat(size.y))
                 frame.origin.y = top - frame.height
                 panel.setFrame(frame, display: false)
+                sceneLock.lock()
+                let left = widgetStatePointer().pointee.widget_margin_left, marginTop = widgetStatePointer().pointee.widget_margin_top
+                sceneLock.unlock()
+                moveWidgetPanelNow(left, marginTop)
             }
             drawable.present()
             CATransaction.commit()

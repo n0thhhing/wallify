@@ -88,4 +88,10 @@ func checkMediaCoordination() {
     precondition(!state.pointee.global_has_artwork && state.pointee.playback_state.pending == -1)
     _ = artworkMedia.apply(paused, source: 0, now: 102)
     precondition(widgetTitle().isEmpty)
+    state.pointee.setting_source = 3
+    media.select(2)
+    _ = media.apply(Array("fastpotify:now paused\tAuto Track\tArtist\tAlbum\t1200\t90000\t70\toff\toff\t\tno\tDevice\n".utf8), source: 2, now: 103)
+    precondition(widgetTitle() == "Auto Track" && !state.pointee.media_stopped)
+    media.select(0)
+    precondition(widgetTitle() == "Auto Track" && state.pointee.media_stopped)
 }

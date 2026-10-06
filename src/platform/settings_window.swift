@@ -185,8 +185,16 @@ private struct SettingsView: View {
         default:
             section("Position") {
                 toggle("Lock Position", "Prevent accidental dragging. Playback controls remain usable.", 25, \.position_locked)
+                if !terminalMode {
+                    Text("Display: \(WidgetPanel.current?.screen?.localizedName ?? "Unavailable")")
+                    Menu("Move to Display") {
+                        ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in
+                            Button("\(index + 1) — \(screen.localizedName)") { moveWidgetToDisplay(screen); model.refresh() }
+                        }
+                    }
+                }
                 Text("Margins: \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid: \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
-                Text("Drag the widget to change its position.").foregroundColor(.secondary)
+                Text("Drag within this display, or use Move to Display. Placement is remembered separately for each monitor.").foregroundColor(.secondary)
                 Button("Reset Position") { wallify_settings_reset_position(); model.refresh() }
             }
             section("Diagnostics") {
