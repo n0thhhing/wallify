@@ -63,11 +63,10 @@ Terminal mode uses the Kitty graphics protocol and SGR mouse reporting in any te
 The optional sprite tools require Pillow:
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-dev.txt
+/usr/bin/python3 -m pip install --user -r requirements-dev.txt
 ```
 
-The editor defaults to `.venv/bin/python`. If another interpreter is already selected, use **Python: Select Interpreter** to choose this environment. Run sprite scripts with `.venv/bin/python`.
+Zed/basedpyright and VS Code use `/usr/bin/python3`. Run sprite scripts with that interpreter; no virtual environment is required.
 
 ## Configuration
 

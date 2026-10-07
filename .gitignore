@@ -1,6 +1,5 @@
 # Swift build output and historical caches
 .zig-cache/
-.venv/
 .zig-local-cache/
 zig-out/
 build/

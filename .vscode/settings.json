@@ -1,3 +1,4 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
+  "python.defaultInterpreterPath": "/usr/bin/python3",
+  "python.pythonPath": "/usr/bin/python3"
 }
