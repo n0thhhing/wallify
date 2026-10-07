@@ -285,7 +285,7 @@ func kittyImage(_ png: Data, id: Int, columns: Int, rows: Int, tmux: Bool) -> St
         let rows = max(1, Int(ceil(Double(height) / cells.cellHeight)))
         column = min(column, max(0, cells.columns - columns)); row = min(row, max(0, cells.rows - rows))
         imageID = imageID == 1 ? 2 : 1
-        // ponytail: PNG encodes each frame; use shared memory if terminal transfer becomes a bottleneck.
+        // PNG encodes each frame; use shared memory if terminal transfer becomes a bottleneck.
         let frame = kittyImage(png as Data, id: imageID, columns: columns, rows: rows, tmux: tmux)
         let deletion = "\u{1b}_Ga=d,d=I,i=\(imageID == 1 ? 2 : 1),q=2\u{1b}\\"
         do {

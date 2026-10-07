@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
 """Expose Swift and native compiler invocations to SourceKit-LSP and clangd."""
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 commands = [[]]
 for argument in sys.argv[1:]:

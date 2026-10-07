@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 """Encode an RGBA PNG in Wallify's RLE format (requires Pillow)."""
 import argparse
 from pathlib import Path
+
 from PIL import Image
 
 

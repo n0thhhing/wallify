@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
 """Small filesystem operations shared by build, packaging, and watch mode."""
 import ctypes
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def write_changed(path, content):
@@ -20,14 +19,14 @@ def write_changed(path, content):
 
 def identity(root, mode, inspector, architecture):
     def git(*args):
-        result = subprocess.run(["git", *args], capture_output=True, text=True)
+        result = subprocess.run(["git", *args], check=False, capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else ""
 
     commit = git("rev-parse", "--short=12", "HEAD") or "unknown"
     dirty = bool(git("status", "--porcelain", "--untracked-files=normal"))
     label = f"{mode} • {architecture} • {commit}{' (modified)' if dirty else ''} • Inspector {'on' if inspector == 'true' else 'off'}"
-    info = dict(configuration=mode, inspector=inspector == "true", architecture=architecture,
-                commit=commit, modified=dirty, label=label)
+    info = {"configuration": mode, "inspector": inspector == "true", "architecture": architecture,
+                "commit": commit, "modified": dirty, "label": label}
     write_changed(root / "build-info.json", json.dumps(info, indent=2) + "\n")
     write_changed(root / "BuildIdentity.swift", "enum WallifyBuildIdentity {\n    static let label = " + json.dumps(label, ensure_ascii=False) + "\n}\n")
     print(label)
@@ -52,7 +51,7 @@ def select(root):
 
 
 def watch_snapshot():
-    # ponytail: metadata-only scan; hash contents if edits preserve size and mtime.
+    # Metadata-only scan; hash contents if edits preserve size and mtime.
     files = [Path("run")]
     for directory in ("src", "assets", "config", "scripts", "tests"):
         files.extend(path for path in Path(directory).rglob("*") if path.is_file())

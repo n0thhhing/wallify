@@ -469,12 +469,12 @@ struct SettingsBridgeCheck {
         var player = WallifyWindowInfo()
         queryPlayerWindow(&player)
         precondition(player.number == 0)
-        let panel = WidgetPanel(contentRect: NSRect(x: 188, y: 400, width: 180, height: 180),
-                                styleMask: .borderless, backing: .buffered, defer: false)
-        panel.level = NSWindow.Level(rawValue: -1)
-        WidgetPanel.current = panel
+        let playerPanel = WidgetPanel(contentRect: NSRect(x: 188, y: 400, width: 180, height: 180),
+                                      styleMask: .borderless, backing: .buffered, defer: false)
+        playerPanel.level = NSWindow.Level(rawValue: -1)
+        WidgetPanel.current = playerPanel
         queryPlayerWindow(&player)
-        precondition(player.number == Int64(panel.windowNumber) && player.layer == -1)
+        precondition(player.number == Int64(playerPanel.windowNumber) && player.layer == -1)
         precondition(player.frame.x == 188 && player.frame.y == NSScreen.screens.first!.frame.maxY - 580)
         precondition(player.frame.width == 180 && player.frame.height == 180)
         WidgetPanel.current = previousPanel

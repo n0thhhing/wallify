@@ -1,21 +1,29 @@
-#!/usr/bin/env python3
 """Prepare the original sleeping raccoon atlas and breathing preview (requires Pillow)."""
+from math import pi, sin
 from pathlib import Path
-from math import sin, pi
+from typing import cast
+
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def _binarize_alpha(a: int) -> int:
+    return 255 if a >= 128 else 0
+
 source = Image.open(ROOT / "assets/sprites/raccoon-source.png").convert("RGBA")
 # Strip low-alpha halo pixels before downsampling the transparent artwork.
-source.putalpha(source.getchannel("A").point(lambda a: 255 if a >= 128 else 0))
-box = source.getchannel("A").point(lambda a: 255 if a >= 128 else 0).getbbox()
-body = source.crop(box)
+source.putalpha(source.getchannel("A").point(_binarize_alpha))
+box = source.getchannel("A").point(_binarize_alpha).getbbox()
+if box:
+    body = source.crop(box)
+else:
+    body = source
 body.thumbnail((108, 64), Image.Resampling.LANCZOS)
 base = Image.new("RGBA", (110, 68))
 base.paste(body, ((110 - body.width) // 2, 67 - body.height))
 # Preserve the new artwork's silver-gray fur, cream cheeks and pink accents.
 base.putdata([(r, g, b, a) if a >= 16 else (0, 0, 0, 0)
-              for r, g, b, a in base.getdata()])
+              for r, g, b, a in cast(list[tuple[int, int, int, int]], base.getdata())])
 
 frames = []
 for rise in (0, 1, 2, 1, 0):
@@ -24,7 +32,7 @@ for rise in (0, 1, 2, 1, 0):
     # Native one-pixel motion keeps the breathing subtle at the cat's scale.
     for x in range(68, 106):
         lift = round(rise * sin(pi * (x - 67) / 39))
-        top = next((y for y in range(36) if base.getpixel((x, y))[3] >= 128), 36)
+        top = next((y for y in range(36) if cast(tuple[int, ...], base.getpixel((x, y)))[3] >= 128), 36)
         if top == 36 or lift == 0:
             continue
         for y in range(36):
@@ -32,7 +40,7 @@ for rise in (0, 1, 2, 1, 0):
                 frame.putpixel((x, y), (0, 0, 0, 0))
             else:
                 source_y = round(top + (y - top + lift) * (36 - top) / (36 - top + lift))
-                frame.putpixel((x, y), base.getpixel((x, source_y)))
+                frame.putpixel((x, y), cast(tuple[int, ...], base.getpixel((x, source_y))))
     frames.append(frame)
 
 sheet = Image.new("RGBA", (550, 68))
