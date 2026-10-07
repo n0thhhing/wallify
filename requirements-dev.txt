@@ -1,0 +1,2 @@
+# Optional sprite preparation and encoding tools.
+Pillow>=9.1

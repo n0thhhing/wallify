@@ -58,6 +58,17 @@ Choose **When Music Stops** under **Settings → General → Idle Behavior**: sh
 
 Terminal mode uses the Kitty graphics protocol and SGR mouse reporting in any terminal that supports them, following the terminal support on `main` (`2e3f389`). Startup queries protocol support directly and waits up to two seconds for a positive reply; unsupported or unresponsive terminals exit with an explanation. It does not restrict startup by terminal name. The query follows the [protocol specification](https://sw.kovidgoyal.net/kitty/graphics-protocol/#querying-support-and-available-transmission-mediums). It shares the Swift renderer, media sources, waveform transitions, companions, and saved preferences. Drag the card to move within the terminal without snapping; click playback buttons or the seek bar as usual. Space toggles playback, left/right arrows (or `p`/`n`) change tracks, `1`–`5` change form factor, `m` cycles media sources, `s` opens Settings, and `q` or Ctrl+C exits. Terminal glass uses the rendered background. Desktop position is preserved, and CLI launch leaves the desktop instance running. Logs go to `/tmp/wallify-cli.log`. Inside tmux, enable `allow-passthrough` for graphics.
 
+## Python sprite tools
+
+The optional sprite tools require Pillow:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+```
+
+The editor defaults to `.venv/bin/python`. If another interpreter is already selected, use **Python: Select Interpreter** to choose this environment. Run sprite scripts with `.venv/bin/python`.
+
 ## Configuration
 
 The optional **System Audio Waveform** in Settings → Playback → Progress replaces the elapsed progress fill with live audio; the remaining track stays plain. It is off by default, requires macOS 14.2+ and system audio capture permission, and saves no audio. Capture stops when playback pauses, the widget is hidden, or progress/animations are disabled. The normal fill returns when audio is unavailable.
