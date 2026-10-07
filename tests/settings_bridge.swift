@@ -464,22 +464,20 @@ struct SettingsBridgeCheck {
         precondition(!result.found)
         calculatePanelSnap(&neighbor, 1, .nan, 100, 180, 180, 0, 0, 0, 0, &result)
         precondition(!result.found)
-        var widget: [String: Any] = [kCGWindowOwnerName as String: "Wallify", kCGWindowName as String: "Wallify Settings",
-                                   kCGWindowLayer as String: 3]
-        precondition(!isWallifyWindow(widget, expectedID: 0))
-        for name in ["Wallify Debug Console", "Wallify Snap Outline", "Wallify Settings"] {
-            widget[kCGWindowName as String] = name
-            precondition(!isWallifyWindow(widget, expectedID: 0))
-        }
-        widget[kCGWindowName as String] = "wallify"
-        widget[kCGWindowLayer as String] = -1
-        precondition(isWallifyWindow(widget, expectedID: 0))
-        widget[kCGWindowNumber as String] = 123
-        precondition(isWallifyWindow(widget, expectedID: 123) && !isWallifyWindow(widget, expectedID: 124))
-        widget[kCGWindowName as String] = nil
-        precondition(isWallifyWindow(widget, expectedID: 0))
-        widget[kCGWindowOwnerName as String] = "Other app"
-        precondition(!isWallifyWindow(widget, expectedID: 0))
+        let previousPanel = WidgetPanel.current
+        WidgetPanel.current = nil
+        var player = WallifyWindowInfo()
+        queryPlayerWindow(&player)
+        precondition(player.number == 0)
+        let panel = WidgetPanel(contentRect: NSRect(x: 188, y: 400, width: 180, height: 180),
+                                styleMask: .borderless, backing: .buffered, defer: false)
+        panel.level = NSWindow.Level(rawValue: -1)
+        WidgetPanel.current = panel
+        queryPlayerWindow(&player)
+        precondition(player.number == Int64(panel.windowNumber) && player.layer == -1)
+        precondition(player.frame.x == 188 && player.frame.y == NSScreen.screens.first!.frame.maxY - 580)
+        precondition(player.frame.width == 180 && player.frame.height == 180)
+        WidgetPanel.current = previousPanel
         var candidate: [String: Any] = [kCGWindowOwnerName as String: "Notification Center",
                                        kCGWindowLayer as String: -2147483601,
                                        kCGWindowAlpha as String: 1,
@@ -770,6 +768,18 @@ struct SettingsBridgeCheck {
         precondition(play.wait(timeout: .now()) == nil)
         play.complete(["kMRMediaRemoteNowPlayingInfoPlaybackRate": 0])
         precondition(play.wait(timeout: .now())?["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double == 1)
+        let concurrent = NowPlayingReply(expectsPlaying: true)
+        let group = DispatchGroup()
+        for callback in 0..<2 {
+            group.enter()
+            DispatchQueue.global().async {
+                if callback == 0 { concurrent.complete(["title": "concurrent"]) }
+                else { concurrent.completePlaying(true) }
+                group.leave()
+            }
+        }
+        precondition(concurrent.wait(timeout: .now() + 2)?["title"] as? String == "concurrent")
+        group.wait()
         precondition(notifications.wait(timeout: .now() + .milliseconds(300)) == 1)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -108,40 +108,27 @@ final class NowPlayingOutput {
 // Each query owns its completion token. A delayed callback cannot publish a
 // stale line or satisfy the next query's wait after this query times out.
 final class NowPlayingReply {
-    private let lock = NSLock()
-    private let semaphore = DispatchSemaphore(value: 0)
+    private let group = DispatchGroup()
     private var info: [String: Any]?
-    private var receivedInfo = false
-    private var receivedPlaying: Bool
     private var playing: Bool?
 
-    init(expectsPlaying: Bool = false) { receivedPlaying = !expectsPlaying }
-
-    private func signalIfComplete() {
-        if receivedInfo && receivedPlaying { semaphore.signal() }
+    init(expectsPlaying: Bool = false) {
+        group.enter()
+        if expectsPlaying { group.enter() }
     }
 
     func complete(_ dictionary: NSDictionary?) {
-        lock.lock()
         info = dictionary as? [String: Any]
-        receivedInfo = true
-        signalIfComplete()
-        lock.unlock()
+        group.leave()
     }
 
     func completePlaying(_ value: Bool) {
-        lock.lock()
         playing = value
-        receivedPlaying = true
-        signalIfComplete()
-        lock.unlock()
+        group.leave()
     }
 
     func wait(timeout: DispatchTime) -> [String: Any]? {
-        guard semaphore.wait(timeout: timeout) == .success else { return nil }
-        lock.lock()
-        defer { lock.unlock() }
-        guard var result = info else { return nil }
+        guard group.wait(timeout: timeout) == .success, var result = info else { return nil }
         if let playing = playing {
             let key = "kMRMediaRemoteNowPlayingInfoPlaybackRate"
             let rate = (result[key] as? NSNumber)?.doubleValue ?? 0

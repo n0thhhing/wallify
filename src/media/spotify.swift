@@ -127,7 +127,13 @@ func spotifySeekScript(_ position: Double) -> String? {
 @_cdecl("widget_spotify_control")
 public func controlSpotify(_ command: Int32) {
     guard let source = spotifyControlScript(command) else { return }
-    autoreleasepool { _ = NSAppleScript(source: source)?.executeAndReturnError(nil) }
+    autoreleasepool {
+        var error: NSDictionary?
+        guard NSAppleScript(source: source)?.executeAndReturnError(&error) != nil else {
+            NSLog("spotify: control %d failed: %@", command, error ?? [:])
+            return
+        }
+    }
 }
 
 @_cdecl("widget_spotify_seek")

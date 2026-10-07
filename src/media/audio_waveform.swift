@@ -20,6 +20,7 @@ func waveformPixels(_ samples: UnsafeBufferPointer<Float>) -> [UInt32] {
 }
 
 final class AudioWaveform: @unchecked Sendable {
+    // ponytail: keep NSLock.try() instead of an actor on the real-time callback; drop a frame rather than block or task-switch.
     private let lock = NSLock()
     private let control = DispatchQueue(label: "Wallify.audio.control", qos: .utility)
     private let audio = DispatchQueue(label: "Wallify.audio.samples", qos: .userInitiated)

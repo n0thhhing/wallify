@@ -46,16 +46,6 @@ public func calculatePanelSnap(_ candidates: UnsafePointer<WallifyWindowRect>?, 
     }
 }
 
-func isWallifyWindow(_ info: [String: Any], expectedID: Int) -> Bool {
-    let name = info[kCGWindowName as String] as? String
-    func matches(_ value: String?, _ expected: String) -> Bool { value?.caseInsensitiveCompare(expected) == .orderedSame }
-    if ["Wallify Debug Console", "Wallify Snap Outline", "Wallify Settings"].contains(where: { matches(name, $0) }) { return false }
-    if expectedID > 0, let number = info[kCGWindowNumber as String] as? NSNumber { return number.intValue == expectedID }
-    let owner = info[kCGWindowOwnerName as String] as? String
-    guard matches(name, "Wallify") || matches(owner, "Wallify") else { return false }
-    if name != nil && !matches(name, "Wallify") { return false }
-    return (info[kCGWindowLayer as String] as? NSNumber)?.intValue == -1
-}
 
 func desktopWindowBounds(_ info: [String: Any]) -> CGRect? {
     guard let bounds = info[kCGWindowBounds as String] as? [String: Any],
@@ -75,21 +65,20 @@ func desktopWidgetCandidate(_ info: [String: Any]) -> CGRect? {
     return bounds
 }
 
+// Notification Center widgets belong to another process, so NSApp.windows cannot supply snap candidates.
 private func desktopWindows() -> [[String: Any]] {
     CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
 }
 
 @MainActor private func playerWindowInfo() -> WallifyWindowInfo {
-    let expectedID = WidgetPanel.current?.windowNumber ?? 0
-    for info in desktopWindows() where isWallifyWindow(info, expectedID: expectedID) {
-        guard let number = info[kCGWindowNumber as String] as? NSNumber, let frame = desktopWindowBounds(info) else { continue }
-        var result = WallifyWindowInfo()
-        result.number = number.int64Value
-        result.layer = (info[kCGWindowLayer as String] as? NSNumber)?.int64Value ?? 0
-        result.frame = WallifyWindowRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
-        return result
-    }
-    return WallifyWindowInfo()
+    guard let panel = WidgetPanel.current, let primary = NSScreen.screens.first else { return WallifyWindowInfo() }
+    let frame = panel.frame
+    var result = WallifyWindowInfo()
+    result.number = Int64(panel.windowNumber)
+    result.layer = Int64(panel.level.rawValue)
+    result.frame = WallifyWindowRect(x: frame.minX, y: primary.frame.maxY - frame.maxY,
+                                     width: frame.width, height: frame.height)
+    return result
 }
 
 @_cdecl("wallify_query_player_window")
