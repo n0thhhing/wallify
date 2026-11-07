@@ -50,6 +50,7 @@ private let widgetState: UnsafeMutablePointer<WallifyWidgetState> = {
     value.setting_transition = 1
     value.setting_source = 0
     value.setting_debug = false
+    value.setting_check_updates = true
     value.idle_mix = 0.0
     value.cat_pet_until = 0.0
     value.cat_time = 0.0

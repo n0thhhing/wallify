@@ -228,6 +228,7 @@ private func storeRefreshToken(_ token: String?) {
 }
 
 let spotifyClientIDKey = "SpotifyClientID"
+private let usesKeychain = Bundle.main.bundleIdentifier != nil
 
 let spotifyAccount = SpotifyAccount(
     send: { request, completion in
@@ -235,7 +236,8 @@ let spotifyAccount = SpotifyAccount(
             completion(data, (response as? HTTPURLResponse)?.statusCode ?? 0)
         }.resume()
     },
-    load: loadRefreshToken, store: storeRefreshToken,
+    // The test binary has no bundle identifier; keep it away from the real Keychain, which would prompt on every build.
+    load: { usesKeychain ? loadRefreshToken() : nil }, store: { if usesKeychain { storeRefreshToken($0) } },
     clientID: { (UserDefaults.standard.string(forKey: spotifyClientIDKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) })
 
 // Whether the current Spotify track is in Liked Songs; nil hides the heart (not connected, not Spotify, or unknown).

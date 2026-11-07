@@ -38,6 +38,7 @@ struct WallifyApp {
         Thread.detachNewThread { runAnimationWorker() }
         Thread.detachNewThread { runMetadataWorker() }
         if hasSettingsFlag() { showSettingsWindow() } else if !terminalMode { showOnboardingIfNeeded() }
+        if !terminalMode { updateChecker.start() }
         runApplication()
     }
 }

@@ -29,6 +29,7 @@ typedef struct {
     bool position_locked;
     int stopped_behavior; // 0: companion, 1: keep last track, 2: hide
     bool lyrics;
+    bool check_updates;
     int scroll_action;    // 0: off, 1: volume, 2: seek
     bool hide_progress;
     bool show_controls;

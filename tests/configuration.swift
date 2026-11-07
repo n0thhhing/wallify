@@ -95,7 +95,7 @@ func checkConfigurationGolden() {
     let position = ["widget_margin_left": "0", "widget_margin_top": "0", "widget_grid_x": "0", "widget_grid_y": "0"]
     let bools = ["artwork_glow", "native_glass", "aurora", "animations", "dim_paused_artwork", "widget_debug", "hide_text",
                  "hide_progress", "show_controls", "show_timestamps", "artwork_border", "compact_gradient", "waveform",
-                 "clickable_names", "position_locked", "lyrics"]
+                 "clickable_names", "position_locked", "lyrics", "check_updates"]
     var low = WallifyWidgetState()
     var expected = position.merging(Dictionary(uniqueKeysWithValues: bools.map { ($0, "false") })) { $1 }
     expected.merge(["frame_strength": "off", "glow_intensity": "low", "animation_speed": "slow", "media_source": "now_playing",
@@ -106,7 +106,7 @@ func checkConfigurationGolden() {
     for path: WritableKeyPath<WallifyWidgetState, Bool> in [\.setting_glow, \.setting_native_glass, \.setting_aurora, \.setting_animations,
         \.setting_dim, \.setting_debug, \.setting_hide_text, \.setting_hide_progress, \.setting_show_controls, \.setting_show_timestamps,
         \.setting_artwork_border, \.setting_compact_gradient, \.setting_waveform, \.setting_clickable_names, \.setting_position_locked,
-        \.setting_lyrics] {
+        \.setting_lyrics, \.setting_check_updates] {
         low[keyPath: path] = true
     }
     low.setting_frame = 2; low.setting_intensity = 2; low.setting_speed = 2; low.setting_source = 3; low.setting_mode = 4
@@ -149,6 +149,11 @@ func checkConfigurationGolden() {
     precondition(lyricFrame(lyrics, at: 17)!.line == "♪" && lyricFrame(lyrics, at: 17)!.previous == "Yeah")
     precondition(lyricFrame(lyrics, at: 62.6)! == LyricFrame(line: "Twice", previous: "Twice", progress: 1, untilNext: nil))
     precondition(lyricFrame([], at: 1) == nil)
+    precondition(compareVersions("1.10.0", "1.9.0") == 1 && compareVersions("1.2", "1.2.0") == 0 && compareVersions("0.9", "1.0.0") == -1)
+    let release = #"{"tag_name":"v1.2.0","html_url":"https://github.com/n0thhhing/wallify/releases/tag/v1.2.0","draft":false}"#
+    precondition(parseLatestRelease(Data(release.utf8))! == ("1.2.0", URL(string: "https://github.com/n0thhhing/wallify/releases/tag/v1.2.0")!))
+    // Only github.com pages are opened from the response.
+    precondition(parseLatestRelease(Data(#"{"tag_name":"v9","html_url":"https://evil.example/x"}"#.utf8)) == nil)
     precondition(!renderConfiguration(parsed).contains("[Other]") && configurationValues(parsed)["lyrics"] == "false")
     // Every current setting is documented in the config template, so nothing lands in the fallback section.
     precondition(!renderConfiguration(parsed).contains("[Other]"))

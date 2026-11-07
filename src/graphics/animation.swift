@@ -177,6 +177,7 @@ func applyContextSelection(_ tag: Int32) {
     case 3: enqueueMediaCommand(4)
     case 4: if state.pointee.setting_source == 2 { openSpotifast() } else { openSpotify() }
     case 6: likeStore.toggle()
+    case 7: updateChecker.openRelease()
     case 90: showSettingsWindow()
     default: break
     }

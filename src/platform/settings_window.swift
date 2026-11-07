@@ -217,6 +217,14 @@ private struct SettingsView: View {
                 valueRow("Build", WallifyBuildIdentity.label)
                 valueRow("Placement", "Margins \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
             }
+            section("Updates") {
+                toggle(29, "Checks GitHub once a day. Nothing is downloaded automatically.")
+                if let update = updateChecker.available {
+                    buttonRow("Version \(updateChecker.current)", "Version \(update.version) is available.", "Download…") { updateChecker.openRelease() }
+                } else {
+                    buttonRow("Version \(updateChecker.current)", updateChecker.lastStatus, "Check Now") { updateChecker.check() }
+                }
+            }
             section("Configuration", footer: configURL.path) {
                 if #available(macOS 13, *) {
                     LabeledContent("Config File") {

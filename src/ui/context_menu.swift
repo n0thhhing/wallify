@@ -84,6 +84,7 @@ func settingTag(_ tag: Int) -> (spec: SettingSpec, value: Int32)? {
         addSettingsSection(to: menu, target: self, action: #selector(choose(_:)))
         menu.addItem(.separator())
         menu.addItem(item(snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify", 4, "arrow.up.forward.app"))
+        if let update = updateChecker.available { menu.addItem(item("Update Available: \(update.version)…", 7, "arrow.down.circle")) }
         let settings = item("Settings…", 90, "gearshape")
         settings.keyEquivalent = ","
         menu.addItem(settings)

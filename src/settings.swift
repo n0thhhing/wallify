@@ -53,6 +53,7 @@ let settingSpecs: [SettingSpec] = [
     toggle(24, "clickable_names", "Clickable Names", \.setting_clickable_names, \.clickable_names, on: false),
     toggle(25, "position_locked", "Lock Position", \.setting_position_locked, \.position_locked, on: false),
     toggle(28, "lyrics", "Synced Lyrics", \.setting_lyrics, \.lyrics, on: false),
+    toggle(29, "check_updates", "Check for Updates", \.setting_check_updates, \.check_updates, on: true),
     choice(10, "frame_strength", "Custom Border", \.setting_frame, \.frame_strength, ["Off", "Subtle", "Strong"],
            [["off", "0"], ["subtle", "1"], ["strong", "2"]], default: 1),
     choice(11, "glow_intensity", "Glow Intensity", \.setting_intensity, \.glow_intensity, ["Low", "Normal", "High"],
@@ -368,6 +369,10 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
     widget_grid_x = \(values["widget_grid_x"]!)
     widget_grid_y = \(values["widget_grid_y"]!)
     
+    [Updates]
+    # Check GitHub daily for a newer Wallify release [true, false]
+    check_updates = \(values["check_updates"]!)
+
     [Debug]
     # Show developer diagnostics overlay window [true, false]
     widget_debug = \(values["widget_debug"]!)

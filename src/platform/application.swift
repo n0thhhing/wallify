@@ -48,6 +48,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private var timer: Timer?
     private var open: NSMenuItem!
     private var like: NSMenuItem!
+    private var update: NSMenuItem!
 
     // Keep this order and naming in step with WidgetContextMenu.
     override init() {
@@ -68,6 +69,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         addSettingsSection(to: menu, target: self, action: #selector(chooseSetting(_:)))
         menu.addItem(.separator())
         open = add("Open Spotify", #selector(spotify), symbol: "arrow.up.forward.app")
+        update = add("Update Available…", #selector(openUpdate), symbol: "arrow.down.circle")
         add("Settings…", #selector(settings), shortcut: ",", symbol: "gearshape")
         menu.addItem(.separator())
         let quit = add("Quit Wallify", #selector(NSApplication.terminate(_:)), shortcut: "q")
@@ -108,6 +110,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         if #available(macOS 14.4, *) { track.subtitle = artist.title }
         track.image = NSImage(systemSymbolName: snapshot.playing ? "waveform" : "music.note", accessibilityDescription: nil)
         open.title = snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify"
+        update.isHidden = updateChecker.available == nil
+        update.title = updateChecker.available.map { "Update Available: \($0.version)…" } ?? "Update Available…"
         let liked = likeStore.state
         like.isHidden = liked == nil
         like.title = liked == true ? "Remove from Liked Songs" : "Save to Liked Songs"
@@ -132,6 +136,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     @objc func playPause() { wallify_menu_play_pause() }
     @objc func toggleLike() { likeStore.toggle() }
+    @objc func openUpdate() { updateChecker.openRelease() }
     @objc func previous() { wallify_menu_previous() }
     @objc func next() { wallify_menu_next() }
     @objc private func settings() { showSettingsWindow() }

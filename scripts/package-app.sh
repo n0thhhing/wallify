@@ -15,6 +15,8 @@ RESET="\033[0m"
 
 APP_NAME="Wallify"
 BUNDLE_ID="com.wallify.widget"
+# The release version lives in VERSION; scripts/release.sh bumps it.
+VERSION="$(tr -d '[:space:]' < VERSION)"
 APP_DIR="$PWD/build/${APP_NAME}.app"
 FINAL_APP="$APP_DIR"
 STAGING_DIR=""
@@ -148,9 +150,9 @@ else
     <key>CFBundleIdentifier</key>
     <string>${BUNDLE_ID}</string>
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleExecutable</key>
     <string>Wallify</string>
     <key>CFBundleIconFile</key>
@@ -175,7 +177,12 @@ PLIST
 
     # 7. Code signing with entitlements and hardened runtime options
     echo -e "  ${CYAN}•${RESET} Signing binaries & bundle..."
-    SIGN_ARGS=(--force --sign -)
+    # A real signing identity keeps the app's identity stable across builds, so Keychain and privacy
+    # approvals ("Always Allow") persist. Override with WALLIFY_SIGN_IDENTITY; ad-hoc when none exists.
+    SIGN_IDENTITY="${WALLIFY_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null |
+        awk -F'"' '/Developer ID Application|Apple Development/ { print $2; exit }')}"
+    SIGN_ARGS=(--force --sign "${SIGN_IDENTITY:--}")
+    echo -e "    Identity: ${SIGN_IDENTITY:-ad-hoc}"
     if [[ -f "$ENTITLEMENTS" ]]; then
         SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
     fi
