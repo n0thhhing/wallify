@@ -181,3 +181,7 @@ When macOS reports the widget as fully occluded, Wallify keeps the latest scene 
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for a breakdown of the rendering pipeline, media source multiplexer, settings bridge, and native glass implementation.
+
+## License
+
+Wallify is released under the [MIT License](LICENSE).
