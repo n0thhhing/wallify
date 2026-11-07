@@ -118,7 +118,7 @@ else
     # 4. Copy Metal shaders & assets
     cp "$BUILD_ROOT/bin/default.metallib" "$APP_DIR/Contents/Resources/default.metallib"
     cp "$BUILD_ROOT/build-info.json" "$APP_DIR/Contents/Resources/build-info.json"
-    cp assets/sprites/bin/*.bin "$APP_DIR/Contents/Resources/assets/"
+    cp assets/sprites/bin/*.png "$APP_DIR/Contents/Resources/assets/"
     if [[ -f assets/spotify_icon.png ]]; then
         cp assets/spotify_icon.png "$APP_DIR/Contents/Resources/assets/"
     fi

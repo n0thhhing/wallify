@@ -1,6 +1,6 @@
 # Sprite assets
 
-`bin/` holds the checked-in RLE atlases used at runtime: Pixel Cat, Banana
+`bin/` holds the checked-in PNG atlases used at runtime: Pixel Cat, Banana
 Cat, and Raccoon. Keep these beside the sprite artwork rather than under
 `src/`, which contains application code. The build copies them into
 `build/resources/assets/`; packaging copies them into the app's
@@ -27,12 +27,13 @@ reducing the artwork; the character's colors and shading are preserved.
 `raccoon-preview.gif` shows the breathing loop;
 its timing rounds to GIF's 10ms resolution.
 
-Regenerate the atlas and embedded binary with Python and Pillow:
+Regenerate the raccoon atlas with Python and Pillow, then copy it to the runtime assets:
 
 ```sh
 python3 scripts/prepare-raccoon.py
-python3 scripts/encode-sprite.py assets/sprites/raccoon.png assets/sprites/bin/raccoon_pixels.bin
+cp assets/sprites/raccoon.png assets/sprites/bin/raccoon.png
 ```
 
-The binary uses the same RGBA run format as the cat and banana atlases.
-The Swift decoder premultiplies alpha when uploading the texture.
+The cat and banana atlases in `bin/` are the full-resolution PNGs recovered
+from the previous runtime assets. ImageIO decodes all three into premultiplied
+RGBA pixels before texture upload.

@@ -72,7 +72,7 @@ HELPER_COMMAND=(xcrun swiftc "${COMMON[@]}" "$OPT" -emit-library -module-name Me
 build_if_needed "$BUILD_ROOT/lib/libmetadata_fetcher.dylib" src/media/metadata_fetcher.swift -- "${HELPER_COMMAND[@]}"
 build_if_needed "$BUILD_ROOT/objects/shaders.air" src/platform/gpu.h src/platform/shaders.metal -- xcrun -sdk macosx metal -fmodules-cache-path=/tmp/wallify-metal-modules -c -include src/platform/gpu.h src/platform/shaders.metal -o "$BUILD_ROOT/objects/shaders.air"
 build_if_needed "$BUILD_ROOT/bin/default.metallib" "$BUILD_ROOT/objects/shaders.air" -- xcrun -sdk macosx metallib "$BUILD_ROOT/objects/shaders.air" -o "$BUILD_ROOT/bin/default.metallib"
-for asset in assets/sprites/bin/*.bin; do
+for asset in assets/sprites/bin/*.png; do
     build_if_needed "$BUILD_ROOT/resources/assets/$(basename "$asset")" "$asset" -- cp "$asset" "$BUILD_ROOT/resources/assets/"
 done
 OBJECTS=()

@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 func checkSceneAssets() {
     let textScratch = TextCache()
@@ -8,13 +9,18 @@ func checkSceneAssets() {
     precondition(black.0 == 0 && black.1 == 0 && black.2 == 0)
     let color = artworkColor([0xff201008, 0xff201008])
     precondition(color.0 == 40 && color.1 == 80 && color.2 == 160)
-    for (name, count) in [("cat_pixels.bin", 541 * 52), ("banana_pixels.bin", 98 * 114 * 45), ("raccoon_pixels.bin", 550 * 68)] {
-        let url = assetURL(name)!
-        let bytes = Array(try! Data(contentsOf: url))
-        var pixels = [UInt32](repeating: 0, count: count)
-        precondition(bytes.withUnsafeBufferPointer { input in pixels.withUnsafeMutableBufferPointer {
-            decodeSpriteRLE(input.baseAddress, UInt(input.count), $0.baseAddress, UInt($0.count))
-        } })
+    // Full-atlas pixel hashes from the previous RLE decoder (premultiplied RGBA).
+    for (name, width, height, digest) in [
+        ("cat.png", 541, 52, "490accf16bad9ce0758223069fc2c2b65802b8ae76aaaf00a7c34ac2587d6bd2"),
+        ("banana.png", 98, 5130, "7784b1bd52df7a280962abd3648c288a7f03a14dd44fddb164734f0ea6869149"),
+        ("raccoon.png", 550, 68, "301ea62f90e38293f74b2709512f2f6fd43e8b804d1a738f2344337e856f956a")
+    ] {
+        var pixels = [UInt32](repeating: 0, count: width * height)
+        precondition(pixels.withUnsafeMutableBufferPointer {
+            decodeSpritePNG(assetURL(name)!, pixels: $0.baseAddress, width: UInt(width), height: UInt(height))
+        })
+        let hash = pixels.withUnsafeBytes { SHA256.hash(data: Data($0)) }
+        precondition(hash.map { String(format: "%02x", $0) }.joined() == digest)
     }
     let canvas = Canvas(clip: cardRect(8, 8, 164, 164, 26))
     canvas.opacity = 0.5

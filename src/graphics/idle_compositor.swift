@@ -28,8 +28,3 @@ final class IdleCompositor {
 }
 
 let idleCompositor = IdleCompositor()
-
-@_cdecl("wallify_idle_compositor_active")
-public func idleCompositorActive() -> Bool { idleCompositor.active }
-@_cdecl("wallify_idle_compositor_elapsed")
-public func idleCompositorElapsed(_ seconds: Double) -> Double { idleCompositor.elapsed(seconds) }

@@ -12,7 +12,7 @@ Wallify is a macOS Swift application. `src/wallify.swift` prepares configuration
 | `src/graphics/` | Scene commands, rendering preparation, animation policy, rasterization, textures, and sprites. |
 | `src/ui/` | Layout, hit testing, menus, and Inspector UI. |
 | `src/platform/` | AppKit/SwiftUI windows, desktop integration, terminal transport, Metal implementation, shaders, and C bridge headers. |
-| `assets/` | App artwork and sprite resources; runtime RLE atlases live in `assets/sprites/bin/`. |
+| `assets/` | App artwork and sprite resources; runtime PNG atlases live in `assets/sprites/bin/`. |
 | `scripts/` | Build, packaging, relaunch, dependency fetching, and sprite preparation tools. |
 | `tests/` | Swift checks plus helper-loading, terminal-protocol, and build-cache probes. |
 | `config/` | Terminal configuration; local widget preferences are ignored by Git. |
@@ -58,7 +58,7 @@ queued. Restores clamp to the display's usable area. CLI placement is separate.
 
 The Metal renderer retains only the latest pending scene and permits two command buffers in flight. Small lists use inline bytes; larger lists use owned buffers. Artwork, glow, controls, and frame treatments form a cached static texture. Progress, labels, hover, and aurora use the dynamic pass. GPU readback checks verify output and cache invalidation.
 
-`graphics/assets.swift` loads bundled RLE atlases, rasterizes symbols, decodes artwork through ImageIO, and publishes transitions and dominant colors. `text_cache.swift` bounds Core Text textures to 16 entries. Artwork generations invalidate the static cache.
+`graphics/assets.swift` loads bundled PNG atlases, rasterizes symbols, decodes artwork through ImageIO, and publishes transitions and dominant colors. `text_cache.swift` bounds Core Text textures to 16 entries. Artwork generations invalidate the static cache.
 
 `graphics/animation.swift` assigns 60 FPS to interaction, 30 FPS to decorative transitions, and 20 FPS to playback and ambient effects. Timestamp-only playback wakes once per second; unchanged scenes sleep until an event. Occluded widgets retain dirty state without drawing and wake on visibility changes. `platform/frame_wakeup.swift` coalesces wakeups and supports monotonic timed waits.
 

@@ -36,7 +36,7 @@ typedef struct {
     bool waveform;
     int artwork_radius;
     int progress_thickness;
-    int font_scale;      // 0: small, 1: normal, 2: large
+    int font_scale;       // 0: small, 1: normal, 2: large
     int media_key_target; // 0: off, 1: active, 2: spotify, 3: spotifast
     bool playing;
     char title[512];
@@ -44,7 +44,7 @@ typedef struct {
 } WallifySettingsSnapshot;
 
 // Swift callbacks
-extern void wallify_settings_get_snapshot(WallifySettingsSnapshot *out_snapshot);
+extern void wallify_settings_get_snapshot(WallifySettingsSnapshot* out_snapshot);
 extern void wallify_settings_apply_bool(int key, bool val);
 extern void wallify_settings_apply_int(int key, int val);
 extern void wallify_settings_restore_defaults(void);
@@ -53,14 +53,12 @@ extern void wallify_settings_reset_position(void);
 // Native AppKit entry points
 void wallify_show_settings_window(void);
 void wallify_install_status_menu(void);
-void *wallify_create_widget_panel(int width, int height);
-void *wallify_create_widget_view(int width, int height);
+void* wallify_create_widget_panel(int width, int height);
+void* wallify_create_widget_view(int width, int height);
 void wallify_move_panel_now(int left, int top);
-void wallify_close_settings_window(void);
 bool wallify_has_settings_flag(void);
 void wallify_settings_notify_position_changed(void);
 bool wallify_launch_at_login_enabled(void);
-bool wallify_launch_at_login_set(bool enabled);
 
 #ifdef __cplusplus
 }

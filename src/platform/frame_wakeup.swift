@@ -28,8 +28,6 @@ final class FrameWakeups {
 
 private let frameWakeups = FrameWakeups()
 
-@_cdecl("wallify_frame_wakeup_init")
-public func initializeFrameWakeups() { _ = frameWakeups }
 
 @_cdecl("wallify_frame_wake")
 public func wakeFrame() { frameWakeups.wake() }

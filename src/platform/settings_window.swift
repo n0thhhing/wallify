@@ -322,15 +322,11 @@ private final class SettingsWindow {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func close() { window?.orderOut(nil) }
     func refreshIfVisible() { if window?.isVisible == true { model.refresh() } }
 }
 
 @_cdecl("wallify_show_settings_window")
 public func showSettingsWindow() { DispatchQueue.main.async { SettingsWindow.shared.show() } }
-
-@_cdecl("wallify_close_settings_window")
-public func closeSettingsWindow() { DispatchQueue.main.async { SettingsWindow.shared.close() } }
 
 @_cdecl("wallify_settings_notify_position_changed")
 public func settingsPositionChanged() { refreshSettingsUI() }
@@ -346,17 +342,5 @@ public func hasSettingsFlag() -> Bool {
 @_cdecl("wallify_launch_at_login_enabled")
 public func launchAtLoginEnabled() -> Bool {
     if #available(macOS 13, *) { return SMAppService.mainApp.status == .enabled }
-    return false
-}
-
-@_cdecl("wallify_launch_at_login_set")
-public func setLaunchAtLogin(_ enabled: Bool) -> Bool {
-    if #available(macOS 13, *) {
-        do {
-            if enabled { try SMAppService.mainApp.register() }
-            else { try SMAppService.mainApp.unregister() }
-            return true
-        } catch { NSLog("Wallify: launch at login failed: %@", error.localizedDescription) }
-    }
     return false
 }

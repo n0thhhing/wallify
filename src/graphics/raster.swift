@@ -146,6 +146,16 @@ public func drawSpotifyRasterIcon(_ pixels: UnsafeMutablePointer<UInt32>?, _ wid
     return 1
 }
 
+func decodeSpritePNG(_ url: URL, pixels: UnsafeMutablePointer<UInt32>?, width: UInt, height: UInt) -> Bool {
+    guard let context = rasterContext(pixels, width: width, height: height),
+          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+          image.width == width, image.height == height else { return false }
+    context.interpolationQuality = .none
+    context.draw(image, in: CGRect(x: 0, y: 0, width: Int(width), height: Int(height)))
+    return true
+}
+
 func decodeArtwork(_ url: URL, pixels: UnsafeMutablePointer<UInt32>?, width: UInt, height: UInt) -> Bool {
     guard let context = rasterContext(pixels, width: width, height: height),
           let source = CGImageSourceCreateWithURL(url as CFURL, nil),

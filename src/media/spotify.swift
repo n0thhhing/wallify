@@ -76,8 +76,6 @@ let spotifyEvents = SpotifyEvents()
 
 @_cdecl("widget_spotify_observe")
 public func observeSpotify() { spotifyEvents.observe() }
-@_cdecl("widget_spotify_take_state")
-public func takeSpotifyState() -> Int32 { spotifyEvents.takeState() }
 @_cdecl("widget_spotify_wait_for_event")
 public func waitForSpotifyEvent(_ milliseconds: UInt64) -> Int32 { spotifyEvents.wait(milliseconds: milliseconds) }
 @_cdecl("widget_spotify_set_helper_pid")

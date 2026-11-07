@@ -448,24 +448,118 @@ struct SettingsBridgeCheck {
     }
 
     @MainActor static func checkDesktopSnap() {
-        var neighbor = WallifyWindowRect(x: 400, y: 400, width: 360, height: 360)
-        var result = WallifyPanelSnap()
-        calculatePanelSnap(&neighbor, 1, 225, 765, 540, 180, 10, 33, 8, 8, &result)
-        precondition(result.found && result.margin_left == 202 && result.margin_top == 719)
-        precondition(result.outline_x == 228 && result.outline_y == 768 && result.distance_sq == 50)
-        neighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 180)
-        calculatePanelSnap(&neighbor, 1, 400, 400, 180, 180, 0, 0, 0, 0, &result)
-        precondition(result.found && result.margin_left == 400 && result.margin_top == 220 && result.distance_sq == 32400)
+        let neighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 180)
+        func snap(_ x: Double, _ y: Double, _ neighbors: [WallifyWindowRect] = [neighbor],
+                  previous: WallifyPanelSnap = WallifyPanelSnap(), bounds: CGRect? = nil,
+                  width: Double = 180, height: Double = 180) -> WallifyPanelSnap {
+            panelSnap(neighbors, visualX: x, visualY: y, width: width, height: height,
+                offsetX: 0, offsetY: 0, insetX: 8, insetY: 8, bounds: bounds, previous: previous)
+        }
+        precondition(nativeWidgetCard(neighbor) == CGRect(x: 408, y: 408, width: 164, height: 164))
+        let visibleNative = WallifyWindowRect(x: 408, y: 408, width: 164, height: 164)
+        precondition(nativeWidgetCard(visibleNative) == CGRect(x: 408, y: 408, width: 164, height: 164))
+        let desktop = DesktopInteraction()
+        desktop.candidates = [WallifyWindowRect(x: 120, y: 120, width: 180, height: 180)]
+        desktop.hasOffsets = true; desktop.offsetX = 0; desktop.offsetY = 0
+        let dragCheckStart = monotonicTime()
+        for _ in 0..<1000 {
+            let cached = desktop.nearby(left: 700, top: 120, x: 8, y: 8, width: 180, height: 180)
+            precondition(cached.found && cached.kind == 2 && cached.axes == 2 && cached.margin_top == 120)
+        }
+        print("Cached drag snap average milliseconds: \((monotonicTime() - dragCheckStart) * 1000 / 1000)")
+        let adjacent = snap(588, 408)
+        precondition(adjacent.found && adjacent.kind == 1 && adjacent.margin_left == 580 && adjacent.margin_top == 400)
+        precondition(adjacent.outline_x == 588 && adjacent.outline_width == 164)
+        precondition(snap(678, 498).kind == 1)
+        precondition(!snap(679, 499).found)
+        precondition(snap(678, 498, previous: adjacent).kind == 1)
+        precondition(!snap(679, 499, previous: adjacent).found)
+        precondition(snap(498, 678).kind == 1)
+        precondition(!snap(499, 679).found)
+        let horizontal = snap(1008, 419)
+        precondition(horizontal.found && horizontal.kind == 2 && horizontal.axes == 2)
+        precondition(horizontal.margin_left == 1000 && horizontal.margin_top == 400 && horizontal.guide_y == 408)
+        let vertical = snap(420, 1008)
+        precondition(vertical.found && vertical.axes == 1 && vertical.margin_left == 400 && vertical.margin_top == 1000)
+        let fromTop = snap(1008, 397), fromLeft = snap(397, 1008)
+        precondition(fromTop.guide_y == 408 && fromLeft.guide_x == 408)
+        precondition(SnapFeedback(fromTop).guides[0].minY == 403)
+        precondition(SnapFeedback(fromLeft).guides[0].minX == 403)
+        precondition(snap(1008, 397, previous: horizontal).guide_y == 408)
+        precondition(snap(397, 800, previous: vertical).guide_x == 408)
+        let wideNeighbor = WallifyWindowRect(x: 400, y: 400, width: 360, height: 180)
+        precondition(snap(408, 1008, [wideNeighbor]).guide_x == 408)
+        precondition(snap(588, 1008, [wideNeighbor]).guide_x == 752)
+        let display = CGRect(x: 0, y: 33, width: 1470, height: 923)
+        let calendar = WallifyWindowRect(x: 390, y: 184, width: 180, height: 180)
+        let clock = WallifyWindowRect(x: 980, y: 556, width: 180, height: 180)
+        for delta in [-10.0, 10.0] {
+            let top = snap(708, 192 + delta, [calendar], bounds: display)
+            let bottom = snap(708, 564 + delta, [clock], bounds: display)
+            let left = snap(398 + delta, 480, [calendar], bounds: display)
+            let right = snap(988 + delta, 270, [clock], bounds: display)
+            precondition(top.axes == 2 && top.guide_y == 192)
+            precondition(bottom.axes == 2 && bottom.guide_y == 728)
+            precondition(left.axes == 1 && left.guide_x == 398)
+            precondition(right.axes == 1 && right.guide_x == 1152)
+            precondition(SnapFeedback(top).guides[0].minY == 187)
+            precondition(SnapFeedback(bottom).guides[0].minY == 731)
+            precondition(SnapFeedback(left).guides[0].minX == 393)
+            precondition(SnapFeedback(right).guides[0].minX == 1155)
+        }
+        let second = WallifyWindowRect(x: 1000, y: 800, width: 180, height: 180)
+        let both = snap(418, 818, [neighbor, second])
+        precondition(both.found && both.kind == 2 && both.axes == 3 && both.margin_left == 400 && both.margin_top == 800)
+        precondition(!snap(1008, 421).found)
+        precondition(snap(1008, 420).found)
+        precondition(snap(1008, 424, previous: horizontal).found)
+        precondition(!snap(1008, 425, previous: horizontal).found)
+        let competing = WallifyWindowRect(x: 400, y: 410, width: 180, height: 180)
+        precondition(snap(1008, 419, [neighbor, competing], previous: horizontal).margin_top == 400)
+        precondition(snap(1008, 426, [neighbor, competing], previous: horizontal).margin_top == 410)
+        precondition(!snap(1008, 419, bounds: CGRect(x: 0, y: 0, width: 1170, height: 1100)).found)
+        precondition(snap(1008, 419, bounds: CGRect(x: 0, y: 0, width: 1180, height: 1100)).found)
+        let leftDisplay = panelSnap([WallifyWindowRect(x: -1100, y: 400, width: 180, height: 180)],
+            visualX: -1092, visualY: 708, width: 180, height: 180, offsetX: -1440, offsetY: 33,
+            insetX: 8, insetY: 8, bounds: CGRect(x: -1440, y: 33, width: 1440, height: 900))
+        precondition(leftDisplay.found && leftDisplay.margin_left == 340 && leftDisplay.margin_top == 667)
+        precondition(snapPreviewFrame(CGRect(x: -1092, y: 708, width: 164, height: 164), screenHeight: 956) ==
+            CGRect(x: -1092, y: 84, width: 164, height: 164))
+        let occupied = WallifyWindowRect(x: 580, y: 400, width: 180, height: 180)
+        precondition(!snap(588, 408, [neighbor, occupied]).found)
+        // An invalid nearest slot must not hide another valid slot within the capture band.
+        let alternate = WallifyWindowRect(x: 410, y: 400, width: 180, height: 180)
+        let blocker = WallifyWindowRect(x: 580, y: 400, width: 5, height: 180)
+        let fallback = snap(588, 408, [neighbor, blocker, alternate])
+        precondition(fallback.found && fallback.margin_left == 590 && fallback.margin_top == 400)
         for mode: UInt8 in 0...4 {
             let (width, height) = modeDimensions(mode)
-            neighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 180)
-            calculatePanelSnap(&neighbor, 1, 600, 580, width, height, 0, 0, 0, 0, &result)
-            precondition(result.found && result.outline_width == width - 16 && result.outline_height == height - 16)
+            let value = snap(1008, 418, width: width, height: height)
+            precondition(value.found && value.outline_width == width - 16 && value.outline_height == height - 16)
         }
+        precondition(!snap(.nan, 408).found && !snap(10000, 10000).found)
+        precondition(!snap(408, 408, []).found)
+        var result = WallifyPanelSnap()
         calculatePanelSnap(nil, 0, 100, 100, 180, 180, 0, 0, 0, 0, &result)
         precondition(!result.found)
-        calculatePanelSnap(&neighbor, 1, .nan, 100, 180, 180, 0, 0, 0, 0, &result)
-        precondition(!result.found)
+        let horizontalFeedback = SnapFeedback(horizontal)
+        precondition(horizontalFeedback.outline == nil && horizontalFeedback.guides.count == 2)
+        precondition(horizontalFeedback.guides == [CGRect(x: 992, y: 403, width: 196, height: 2),
+            CGRect(x: 392, y: 403, width: 196, height: 2)])
+        let verticalFeedback = SnapFeedback(vertical)
+        precondition(verticalFeedback.outline == nil && verticalFeedback.guides == [
+            CGRect(x: 403, y: 992, width: 2, height: 196),
+            CGRect(x: 403, y: 392, width: 2, height: 196)])
+        let bothFeedback = SnapFeedback(both)
+        precondition(bothFeedback.outline == CGRect(x: 408, y: 808, width: 164, height: 164))
+        precondition(bothFeedback.guides == [CGRect(x: 403, y: 392, width: 2, height: 196),
+            CGRect(x: 992, y: 803, width: 196, height: 2)])
+        let oneEdge = SnapFeedback(snap(408, 1008, [wideNeighbor]))
+        precondition(oneEdge.outline == nil && oneEdge.guides.count == 2)
+        let tallNeighbor = WallifyWindowRect(x: 400, y: 400, width: 180, height: 360)
+        let oneHorizontalEdge = SnapFeedback(snap(1008, 408, [tallNeighbor]))
+        precondition(oneHorizontalEdge.outline == nil && oneHorizontalEdge.guides.count == 2)
+        precondition(SnapFeedback(adjacent).outline == CGRect(x: 588, y: 408, width: 164, height: 164))
         let previousPanel = WidgetPanel.current
         WidgetPanel.current = nil
         var player = WallifyWindowInfo()
@@ -518,13 +612,46 @@ struct SettingsBridgeCheck {
         preview.show(rect: expected, radius: 26, screenHeight: 1080, playerLayer: -1)
         precondition(panel.level.rawValue == -2 && panel.ignoresMouseEvents && !panel.hasShadow)
         precondition(panel.frame == NSRect(x: 188, y: 679, width: 180, height: 180))
-        precondition(panel.contentView!.layer!.cornerRadius == 26 && panel.contentView!.layer!.borderWidth == 2.5)
+        precondition(panel.contentView!.layer!.cornerRadius == 26 && panel.contentView!.layer!.borderWidth == 2)
+        precondition(panel.contentView!.layer!.backgroundColor == nil)
         preview.hide()
         precondition(!panel.isVisible)
         precondition(preview.needsUpdate(rect: expected, radius: 26, screenHeight: 1080))
         preview.show(rect: NSRect(x: 188, y: 221, width: 524, height: 164), radius: 26, screenHeight: 1080, playerLayer: nil)
         precondition(preview.panel === panel && panel.frame.size == NSSize(width: 524, height: 164))
+        preview.show(horizontalFeedback, screenHeight: 1080, playerLayer: -1)
+        precondition(preview.panel === panel && panel.contentView!.layer!.borderWidth == 0)
+        precondition(panel.contentView!.layer!.sublayers?.count == 2)
+        precondition(panel.contentView!.layer!.sublayers!.allSatisfy { $0 is CAGradientLayer })
+        preview.show(bothFeedback, screenHeight: 1080, playerLayer: -1)
+        let outlineLayer = panel.contentView!.layer!.sublayers!.first!
+        precondition(panel.contentView!.layer!.sublayers?.count == 3 && outlineLayer.borderWidth == 2)
+        precondition(outlineLayer.frame.size == CGSize(width: 164, height: 164))
+        var fractionalFeedback = verticalFeedback
+        fractionalFeedback.guides = fractionalFeedback.guides.map { $0.offsetBy(dx: 0.5, dy: 0.5) }
+        for feedback in [fractionalFeedback, verticalFeedback, bothFeedback, verticalFeedback, horizontalFeedback, bothFeedback] {
+            preview.show(feedback, screenHeight: 1080, playerLayer: -1)
+            let guideLayers = panel.contentView!.layer!.sublayers!.compactMap { $0 as? CAGradientLayer }
+            for (guide, layer) in zip(feedback.guides, guideLayers) {
+                let actual = CGRect(x: panel.frame.minX + layer.frame.minX,
+                    y: 1080 - panel.frame.minY - layer.frame.maxY, width: layer.frame.width, height: layer.frame.height)
+                precondition(actual == guide, "Guide moved during axis transition: \(actual) != \(guide)")
+            }
+        }
         preview.hide()
+        DesktopInteraction.shared.previousSnap = horizontal
+        hideSnapFeedback()
+        precondition(!DesktopInteraction.shared.previousSnap.found)
+        SnapPreview.shared.show(horizontalFeedback, screenHeight: 1080, playerLayer: -1)
+        hideSnapFeedback()
+        hideSnapFeedback()
+        SnapPreview.shared.show(bothFeedback, screenHeight: 1080, playerLayer: -1)
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.02))
+        precondition(SnapPreview.shared.panel!.isVisible)
+        hideSnapPreview()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.02))
+        precondition(!SnapPreview.shared.panel!.isVisible)
+        precondition(!DesktopInteraction.shared.previousSnap.found)
     }
 
     static func checkMetalRenderer() {
@@ -887,7 +1014,7 @@ struct SettingsBridgeCheck {
         petHost.wantsLayer = true
         petHost.layer = idleTestSurface
         petWindow.contentView = petHost
-        petWindow.orderFront(nil)
+        petWindow.alphaValue = 0; petWindow.orderFront(nil)
         defer { petWindow.close() }
         var petCard = WallifyCardRect(x: 8, y: 8, w: 164, h: 164, radius: 26)
         precondition(startPetAnimation(0, &petCard, 0.2, 2))

@@ -8,6 +8,9 @@ typedef struct {
     bool found;
     int32_t margin_left, margin_top;
     double outline_x, outline_y, outline_width, outline_height, distance_sq;
+    uint32_t kind, axes; /* 1: adjacent slot, 2: edge alignment; axes: 1=x, 2=y */
+    double guide_x, guide_y;
+    WallifyWindowRect vertical_neighbor, horizontal_neighbor;
 } WallifyPanelSnap;
 
 typedef struct {

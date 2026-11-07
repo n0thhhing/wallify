@@ -1,33 +1,5 @@
 import Foundation
 
-@_cdecl("wallify_decode_sprite_rle")
-public func decodeSpriteRLE(_ input: UnsafePointer<UInt8>?, _ length: UInt,
-                            _ output: UnsafeMutablePointer<UInt32>?, _ pixelCount: UInt) -> Bool {
-    if length == 0 && pixelCount == 0 { return true }
-    guard let input = input, let output = output, length <= UInt(Int.max), pixelCount <= UInt(Int.max) else { return false }
-    let bytes = UnsafeBufferPointer(start: input, count: Int(length))
-    var source = 0
-    var destination = 0
-    while source < bytes.count && destination < Int(pixelCount) {
-        let header = bytes[source]
-        source += 1
-        let count = Int(header & 127)
-        let repeated = header & 128 != 0
-        let byteCount = repeated ? 4 : count * 4
-        guard count > 0, count <= Int(pixelCount) - destination, byteCount <= bytes.count - source else { return false }
-        for index in 0..<count {
-            let offset = source + (repeated ? 0 : index * 4)
-            let alpha = UInt32(bytes[offset + 3])
-            let red = (UInt32(bytes[offset]) * alpha + 127) / 255
-            let green = (UInt32(bytes[offset + 1]) * alpha + 127) / 255
-            let blue = (UInt32(bytes[offset + 2]) * alpha + 127) / 255
-            output[destination] = red | (green << 8) | (blue << 16) | (alpha << 24)
-            destination += 1
-        }
-        source += byteCount
-    }
-    return destination == Int(pixelCount) && source == bytes.count
-}
 
 let sleepStrips = [(0, 0, 5), (3, 1, 1), (2, 2, 1), (1, 3, 1), (0, 4, 5)]
 let heartStrips = [(1, 0, 1), (3, 0, 1), (0, 1, 5), (0, 2, 5), (1, 3, 3), (2, 4, 1)]

@@ -100,7 +100,7 @@ def package_signature(root):
              Path("scripts/Wallify.entitlements"), Path("config/widget-settings.conf"),
              Path("assets/AppIcon.icns"), Path("assets/spotify_icon.png"),
              Path(shutil.which("codesign") or "/usr/bin/codesign")]
-    paths.extend(Path("assets/sprites/bin").glob("*.bin"))
+    paths.extend(Path("assets/sprites/bin").glob("*.png"))
     print(digest_paths(paths))
 
 

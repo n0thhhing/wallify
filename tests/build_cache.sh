@@ -7,7 +7,7 @@ mkdir -p "$SCRATCH"/{scripts,src/media,src/platform,assets/sprites/bin,tests,too
 cp "$ROOT/scripts/build.sh" "$ROOT/scripts/editor-commands.py" "$ROOT/scripts/build-tools.py" "$SCRATCH/scripts/"
 touch "$SCRATCH/src/media/metadata_fetcher.swift" "$SCRATCH/src/native_bindings.swift" "$SCRATCH/src/wallify.swift" "$SCRATCH/src/player.swift"
 touch "$SCRATCH/src/platform/settings_bridge.h" "$SCRATCH/src/platform/gpu.h" "$SCRATCH/src/platform/shaders.metal"
-touch "$SCRATCH/assets/sprites/bin/cat.bin" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
+touch "$SCRATCH/assets/sprites/bin/cat.png" "$SCRATCH/tests/check.swift" "$SCRATCH/tests/helper-loader.pl"
 touch "$SCRATCH/third_party/imgui/imgui.cpp" "$SCRATCH/third_party/imgui/backends/imgui_impl_metal.h"
 cat > "$SCRATCH/tools/xcrun" <<'PY'
 #!/usr/bin/env python3
@@ -49,7 +49,7 @@ build() { : > "$BUILD_LOG"; bash scripts/build.sh "$@" > /dev/null; }
 expect() { diff -u <(printf '%s\n' "$@" | sed '/^$/d') <(sed -E 's@build/variants/[^/]+/@build/@g' "$BUILD_LOG"); }
 build
 expect build/lib/libmetadata_fetcher.dylib build/objects/shaders.air build/bin/default.metallib build/bin/wallify
-cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
+cmp assets/sprites/bin/cat.png build/resources/assets/cat.png
 python3 - <<'PY'
 import json
 from pathlib import Path
@@ -77,9 +77,9 @@ PY
 rm compile_commands.json
 build; expect
 test -f compile_commands.json
-printf 'sprite change' >> assets/sprites/bin/cat.bin
+printf 'sprite change' >> assets/sprites/bin/cat.png
 build; expect
-cmp assets/sprites/bin/cat.bin build/resources/assets/cat.bin
+cmp assets/sprites/bin/cat.png build/resources/assets/cat.png
 echo '// change' >> src/wallify.swift
 build; expect build/bin/wallify
 echo '// change' >> src/media/metadata_fetcher.swift
@@ -162,22 +162,22 @@ export SIGN_LOG="$SCRATCH/sign.log"
 package() { : > "$SIGN_LOG"; bash scripts/package-app.sh > /dev/null 2>&1; }
 package
 [[ -s "$SIGN_LOG" ]]
-cp build/Wallify.app/Contents/Resources/assets/cat.bin "$SCRATCH/previous-sprite"
+cp build/Wallify.app/Contents/Resources/assets/cat.png "$SCRATCH/previous-sprite"
 package
 [[ ! -s "$SIGN_LOG" ]]
-echo 'new artwork' >> assets/sprites/bin/cat.bin
+echo 'new artwork' >> assets/sprites/bin/cat.png
 if FAIL_VERIFY=1 package; then echo 'Failed verification unexpectedly succeeded'; exit 1; fi
-cmp "$SCRATCH/previous-sprite" build/Wallify.app/Contents/Resources/assets/cat.bin
+cmp "$SCRATCH/previous-sprite" build/Wallify.app/Contents/Resources/assets/cat.png
 [[ -z "$(find build -maxdepth 1 -name '.package.*' -print)" ]]
 package
-cmp assets/sprites/bin/cat.bin build/Wallify.app/Contents/Resources/assets/cat.bin
+cmp assets/sprites/bin/cat.png build/Wallify.app/Contents/Resources/assets/cat.png
 [[ -s "$SIGN_LOG" ]]
 package
 [[ ! -s "$SIGN_LOG" ]]
-echo 'tampered' >> build/Wallify.app/Contents/Resources/assets/cat.bin
+echo 'tampered' >> build/Wallify.app/Contents/Resources/assets/cat.png
 package
 [[ -s "$SIGN_LOG" ]]
-cmp assets/sprites/bin/cat.bin build/Wallify.app/Contents/Resources/assets/cat.bin
+cmp assets/sprites/bin/cat.png build/Wallify.app/Contents/Resources/assets/cat.png
 
 # Docs, generated output, and log files cannot trigger a watch rebuild.
 cp "$ROOT/run" run

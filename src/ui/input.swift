@@ -1,7 +1,7 @@
 import AppKit
 
 enum PointerAction: Equatable {
-    case redraw, menu, startDrag, hidePreview, preview(Double, Double, Double, Double)
+    case redraw, menu, startDrag, hidePreview, preview(SnapFeedback)
     case dragDebug(Bool), save, openIdle, toggle, command(UInt32), seek(Double)
     case move(Int32, Int32), openTrack, searchArtist
 }
@@ -63,19 +63,17 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
                 actions.append(.move(nextLeft, nextTop))
             }
         }
-        let live = snap(state.pointee.widget_margin_left, state.pointee.widget_margin_top)
-        let span = max(width, height), previewRadius = max(180, span * 0.45), commitRadius = max(150, span * 0.32)
+        let live = click ? WallifyPanelSnap() : snap(state.pointee.widget_margin_left, state.pointee.widget_margin_top)
         actions.append(.dragDebug(true))
         if !release {
-            actions.append(live.found && live.distance_sq <= previewRadius * previewRadius ?
-                .preview(live.outline_x, live.outline_y, live.outline_width, live.outline_height) : .hidePreview)
+            actions.append(live.found ? .preview(SnapFeedback(live)) : .hidePreview)
         } else {
             let idleClick = idle && abs(mouse.x - state.pointee.widget_drag_start_mouse_x) < 5 && abs(mouse.y - state.pointee.widget_drag_start_mouse_y) < 5
             if idleClick {
                 if state.pointee.setting_idle_style != 0 { state.pointee.cat_pet_until = state.pointee.animation_time + 2.5 }
                 else { actions.append(.openIdle) }
             }
-            if !idleClick && live.found && live.distance_sq <= commitRadius * commitRadius {
+            if !idleClick && live.found {
                 state.pointee.panel_snap_active = true; state.pointee.panel_snap_elapsed = 0
                 state.pointee.panel_snap_start_left = state.pointee.widget_margin_left
                 state.pointee.panel_snap_start_top = state.pointee.widget_margin_top
@@ -130,7 +128,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
     sceneLock.lock()
     let actions = reducePointer(x, y, kind: kind, mouse: NSEvent.mouseLocation, now: monotonicTime(),
                                 width: width, height: height, geometry: geometry.pointee, state: state, idle: spotifyIsIdle()) {
-        widget_nearby_panel_snap($0, $1, 0, 0, width, height)
+        widget_nearby_panel_snap($0, $1, geometry.pointee.card.x, geometry.pointee.card.y, width, height)
     }
     let hoveringLabel = (8...9).contains(state.pointee.global_hover_target) && !state.pointee.global_panel_dragging
     sceneLock.unlock()
@@ -141,8 +139,8 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
         case let .move(left, top): moveWidgetPanelNow(left, top)
         case .menu: showWidgetContextMenu()
         case .startDrag: widget_start_drag(state.pointee.widget_margin_left, state.pointee.widget_margin_top, width)
-        case .hidePreview: widget_hide_snap_outline()
-        case let .preview(x, y, w, h): widget_show_snap_outline(x, y, w, h)
+        case .hidePreview: hideSnapFeedback()
+        case let .preview(feedback): showSnapFeedback(feedback)
         case .dragDebug(let dragging): widget_set_snap_debug(state.pointee.mode_mix, width, height, dragging)
         case .save: saveConfiguration()
         case .openIdle: if state.pointee.setting_source == 2 { openSpotifast() } else { openSpotify() }

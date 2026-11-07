@@ -169,11 +169,3 @@ public func printNowPlayingInfo() {
         writeMetadataLine(nowPlayingOutput.line(reply.wait(timeout: .now() + .milliseconds(100))))
     }
 }
-
-@_cdecl("mrc_sendCommand")
-public func sendMetadataCommand(_ command: UInt32) {
-    guard let symbol = metadataSymbol("MRMediaRemoteSendCommand") else { return }
-    typealias Send = @convention(c) (UInt32, UnsafeMutableRawPointer?) -> Void
-    unsafeBitCast(symbol, to: Send.self)(command, nil)
-    Thread.sleep(forTimeInterval: 0.1)
-}

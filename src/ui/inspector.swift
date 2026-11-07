@@ -11,8 +11,15 @@ final class DesktopInteraction {
     var modeMix: Double = 0
     var width: Double = 164, height: Double = 164
     var dragging = false
+    var previousSnap = WallifyPanelSnap()
+    var candidates: [WallifyWindowRect] = []
 
     func startDrag(left: Int32, top: Int32) {
+        previousSnap = WallifyPanelSnap()
+        candidates = [WallifyWindowRect](repeating: WallifyWindowRect(), count: 64)
+        let count = candidates.withUnsafeMutableBufferPointer { copyDesktopCandidates($0.baseAddress, UInt($0.count)) }
+        candidates = Array(candidates.prefix(Int(count)))
+        candidateCount = UInt32(count)
         var x: Double = 0, y: Double = 0
         if widgetPanelOffsets(&x, &y) { offsetX = x; offsetY = y; hasOffsets = true; return }
         var info = WallifyWindowInfo(); queryPlayerWindow(&info)
@@ -21,12 +28,15 @@ final class DesktopInteraction {
         }
     }
     func nearby(left: Int32, top: Int32, x: Double, y: Double, width: Double, height: Double) -> WallifyPanelSnap {
-        var candidates = [WallifyWindowRect](repeating: WallifyWindowRect(), count: 64)
-        let count = candidates.withUnsafeMutableBufferPointer { copyDesktopCandidates($0.baseAddress, UInt($0.count)) }
-        candidateCount = UInt32(count)
         let ox = hasOffsets ? offsetX : 0, oy = hasOffsets ? offsetY : 0
-        var result = WallifyPanelSnap()
-        candidates.withUnsafeBufferPointer { calculatePanelSnap($0.baseAddress, count, ox + Double(left) + x, oy + Double(top) + y, width, height, ox, oy, x, y, &result) }
+        let bounds = widgetPlacementScreen().flatMap { screen in NSScreen.screens.first.map {
+            CGRect(x: screen.visibleFrame.minX, y: $0.frame.maxY - screen.visibleFrame.maxY,
+                   width: screen.visibleFrame.width, height: screen.visibleFrame.height)
+        } }
+        let result = panelSnap(candidates, visualX: ox + Double(left) + x,
+            visualY: oy + Double(top) + y, width: width, height: height, offsetX: ox, offsetY: oy,
+            insetX: x, insetY: y, bounds: bounds, previous: previousSnap)
+        previousSnap = result
         distance = result.distance_sq
         return result
     }

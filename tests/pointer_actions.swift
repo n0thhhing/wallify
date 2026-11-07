@@ -17,9 +17,10 @@ func checkPointerActions() {
     state.pointee.setting_position_locked = false
     state.pointee.global_is_dragging = false; state.pointee.global_panel_dragging = false
     state.pointee.global_duration = 200; state.pointee.global_rate = 1
+    var snapRequests = 0
     func pointer(_ x: Double, _ y: Double, _ kind: Int32, mouse: NSPoint = .zero, idle: Bool = false,
                  snap: WallifyPanelSnap = WallifyPanelSnap()) -> [PointerAction] {
-        reducePointer(x, y, kind: kind, mouse: mouse, now: 10, width: 540, height: 180, geometry: geometry, state: state, idle: idle) { _, _ in snap }
+        reducePointer(x, y, kind: kind, mouse: mouse, now: 10, width: 540, height: 180, geometry: geometry, state: state, idle: idle) { _, _ in snapRequests += 1; return snap }
     }
     _ = pointer(344, 132, 1)
     precondition(pointer(344, 132, 2).contains(.toggle))
@@ -39,7 +40,9 @@ func checkPointerActions() {
     precondition(pointer(999, 999, 0).isEmpty)
     state.pointee.widget_margin_left = 8; state.pointee.widget_margin_top = 8
     state.pointee.panel_snap_active = true
+    let requestsBeforeDrag = snapRequests
     precondition(pointer(60, 60, 1, mouse: NSPoint(x: 100, y: 100)).contains(.startDrag))
+    precondition(snapRequests == requestsBeforeDrag)
     precondition(!state.pointee.panel_snap_active)
     let movement = pointer(60, 60, 0, mouse: NSPoint(x: 120, y: 80))
     precondition(movement.contains(.move(28, 28)) && !movement.contains(.redraw))
@@ -47,8 +50,15 @@ func checkPointerActions() {
     precondition(state.pointee.widget_margin_left == 28 && state.pointee.widget_margin_top == 28)
     var snap = WallifyPanelSnap()
     snap.found = true; snap.distance_sq = 100; snap.margin_left = 188; snap.margin_top = 8
+    snap.kind = 2; snap.axes = 2; snap.guide_y = 16
+    snap.outline_x = 196; snap.outline_y = 16; snap.outline_width = 524; snap.outline_height = 164
+    snap.horizontal_neighbor = WallifyWindowRect(x: 8, y: 8, width: 180, height: 180)
+    precondition(pointer(60, 60, 0, mouse: NSPoint(x: 120, y: 80), snap: snap).contains(.preview(SnapFeedback(snap))))
     precondition(!pointer(60, 60, 2, mouse: NSPoint(x: 120, y: 80), snap: snap).contains(.save))
     precondition(state.pointee.panel_snap_active && state.pointee.panel_snap_target_left == 188 && state.pointee.panel_save_after_snap)
+    _ = pointer(60, 60, 1, mouse: NSPoint(x: 120, y: 80))
+    precondition(pointer(60, 60, 0).contains(.hidePreview))
+    precondition(pointer(60, 60, 2).contains(.hidePreview) && !state.pointee.panel_snap_active)
     state.pointee.animation_time = 30; state.pointee.setting_idle_style = 1
     _ = pointer(60, 60, 1, mouse: .zero, idle: true)
     precondition(pointer(60, 60, 2, mouse: .zero, idle: true).contains(.save))

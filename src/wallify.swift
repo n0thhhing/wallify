@@ -33,7 +33,6 @@ struct WallifyApp {
         #if DEBUG_INSPECTOR
         if !terminalMode { showInspector() }
         #endif
-        initializeFrameWakeups()
         requestWidgetFrame()
         drawSwiftUIFrame()
         Thread.detachNewThread { runAnimationWorker() }
