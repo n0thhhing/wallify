@@ -117,8 +117,18 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
     textCache.draw(canvas, artist.isEmpty ? "Play something to get started" : artist, g.text_x, g.artist_y, g.text_width, 14 * scale, (11 + 3 * expanded) / 14, false, secondary)
     guard expanded >= 0.88 else { return }
     // A synced lyric line takes the time row; the progress bar still shows the position.
-    if state.setting_lyrics, state.global_title_len > 0, let line = lyricsStore.line(title: title, artist: artist, duration: state.global_duration, at: elapsed) {
-        textCache.draw(canvas, line, g.text_x, g.timestamp_y, g.text_width, 12 * scale, 1, false, secondary, 0, false, false)
+    if state.setting_lyrics, state.global_title_len > 0,
+       let lyric = lyricsStore.frame(title: title, artist: artist, duration: state.global_duration, at: elapsed) {
+        // The new line rises into place as the old one rises out, both fading.
+        let ease = Float(smoothTransition(lyric.progress)), rise = 7.0
+        func line(_ text: String, _ offset: Double, _ alpha: Float) {
+            guard alpha > 0.01, !text.isEmpty else { return }
+            let note = text == "♪"
+            textCache.draw(canvas, text, g.text_x, g.timestamp_y + offset, g.text_width, 12.5 * scale, 1, !note,
+                           note ? SIMD4(secondary.x, secondary.y, secondary.z, 0.6 * alpha) : SIMD4(1, 1, 1, 0.95 * alpha), 0, false, false)
+        }
+        if ease < 1 { line(lyric.previous, -rise * Double(ease), 1 - ease) }
+        line(lyric.line, rise * Double(1 - ease), ease)
         return
     }
     guard state.setting_show_timestamps else { return }

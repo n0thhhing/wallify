@@ -112,8 +112,13 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
         progressVisible: layout.progressVisible(state.setting_hide_progress), timestampsVisible: !state.setting_hide_text && state.setting_show_timestamps && layout.geometry.compact_mix <= 0.12,
         // Assumes a 2x Retina backing scale; on 1x displays this redraws twice as often as needed.
         secondsPerPixel: state.waveform_mix > 0 || state.global_duration <= 0 ? 0 : state.global_duration / (max(1, layout.geometry.bar_w) * 2))
-    // Lyric lines change every few seconds; redraw often enough to switch them on time.
-    let paced = state.setting_lyrics && playback > 0 ? min(playback, 0.25) : playback
+    // Lyrics animate at 30 FPS while a line changes, then sleep until the next line starts.
+    var paced = playback
+    if state.setting_lyrics && playback > 0,
+       let lyric = lyricsStore.cachedFrame(at: playbackPosition(state.playback_clock, now: now, duration: state.global_duration)) {
+        if lyric.progress < 1 { visual = true; result.draw = true }
+        else if let next = lyric.untilNext { paced = min(paced, max(1 / 60, next)) }
+    }
     if paced > 0 && !high && now - lastDraw >= paced { result.draw = true }
     let iconTarget: Double = state.global_rate > 0 ? 1 : 0
     if state.play_pause_mix != iconTarget {

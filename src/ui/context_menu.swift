@@ -104,18 +104,16 @@ func settingTag(_ tag: Int) -> (spec: SettingSpec, value: Int32)? {
         var snapshot = WallifySettingsSnapshot()
         wallify_settings_get_snapshot(&snapshot)
         let menu = build(snapshot)
-        if let event = WidgetView.contextEvent, let view = WidgetView.current {
-            NSMenu.popUpContextMenu(menu, with: event, for: view)
-        } else {
-            // Without an event, AppKit expects screen coordinates with no view.
-            menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-        }
+        // Anchor to the screen so AppKit can lay out the menu beyond the widget.
+        let event = WidgetView.contextEvent
+        let location = event.flatMap { $0.window?.convertPoint(toScreen: $0.locationInWindow) }
+        menu.popUp(positioning: nil, at: location ?? NSEvent.mouseLocation, in: nil)
     }
 }
 
 @_cdecl("wallify_show_context_menu")
 public func showWidgetContextMenu() {
-    // Right-click tracking must begin in the originating main-thread handler.
+    // AppKit menu tracking must run on the main thread.
     if Thread.isMainThread {
         MainActor.assumeIsolated { WidgetContextMenu.shared.show() }
     } else {

@@ -3,6 +3,8 @@ import Foundation
 func checkMediaCoordination() {
     checkSpotifyNotificationReply()
     checkSpotifyAccount()
+    precondition(automationStatus(OSStatus(noErr)) == .granted && automationStatus(OSStatus(errAEEventNotPermitted)) == .denied)
+    precondition(automationStatus(OSStatus(procNotFound)) == .notRunning && automationStatus(OSStatus(errAEEventWouldRequireUserConsent)) == .undecided)
     let state = widgetStatePointer()
     let original = state.pointee
     let closed = stateFlag(0, 0, false), track = stateFlag(1, 0, false)

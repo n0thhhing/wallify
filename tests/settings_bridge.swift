@@ -251,7 +251,7 @@ struct SettingsBridgeCheck {
         precondition(lastPointer?.2 == 2)
         view.mouseDragged(with: event)
         precondition(lastPointer?.2 == 0)
-        view.rightMouseDown(with: event)
+        view.rightMouseUp(with: event)
         precondition(lastPointer?.2 == 3)
         let retainedEvent = Unmanaged<NSEvent>.fromOpaque(contextMenuEvent()!).takeUnretainedValue()
         precondition(retainedEvent === event)

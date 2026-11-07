@@ -105,8 +105,8 @@ final class WidgetView: NSView {
             likeElement.press = { likeStore.toggle() }
             children.append(place(likeElement, like, liked ? "Remove from Liked Songs" : "Save to Liked Songs"))
         }
-        if state.setting_lyrics, g.compact_mix <= 0.12, let line = lyricsStore.cachedLine(at: elapsed) {
-            children.append(place(lyricElement, cardRect(g.text_x, g.timestamp_y, g.text_width, 18), line))
+        if state.setting_lyrics, g.compact_mix <= 0.12, let lyric = lyricsStore.cachedFrame(at: elapsed), lyric.line != "♪" {
+            children.append(place(lyricElement, cardRect(g.text_x, g.timestamp_y, g.text_width, 18), lyric.line))
         }
         if layout.progressVisible(state.setting_hide_progress) && state.global_duration > 0 {
             progress.setAccessibilityMinValue(0)
@@ -162,13 +162,11 @@ final class WidgetView: NSView {
     override func mouseDragged(with event: NSEvent) { pointer(event, kind: 0) }
     override func mouseExited(with event: NSEvent) { wallify_pointer(-1, -1, 0) }
 
-    override func rightMouseDown(with event: NSEvent) {
-        // Retain the original event for synchronous native context-menu tracking.
+    override func rightMouseUp(with event: NSEvent) {
+        // Start popup tracking after the click so its release cannot dismiss the menu.
         Self.contextEvent = event
         pointer(event, kind: 3)
     }
-
-    override func rightMouseUp(with event: NSEvent) {}
 
     override func scrollWheel(with event: NSEvent) {
         // Momentum scrolling would overshoot volume and seek targets.

@@ -7,8 +7,9 @@ final class LyricsStore: @unchecked Sendable {
     private var key = ""
     private var lines: [(time: Double, text: String)] = []
 
-    // The line playing at `time`, starting a fetch when the track changes. Empty lines are instrumental gaps.
-    func line(title: String, artist: String, duration: Double, at time: Double) -> String? {
+    // What the lyric row shows at `time`, starting a fetch when the track changes; nil when the track has no
+    // synced lyrics, so the row falls back to the time labels.
+    func frame(title: String, artist: String, duration: Double, at time: Double) -> LyricFrame? {
         let key = title + "\u{1f}" + artist
         lock.lock()
         defer { lock.unlock() }
@@ -17,19 +18,14 @@ final class LyricsStore: @unchecked Sendable {
             lines = []
             if !title.isEmpty { fetch(title: title, artist: artist, duration: duration, key: key) }
         }
-        return currentLine(at: time)
+        return lyricFrame(lines, at: time)
     }
 
-    // The current line without fetching, for accessibility on the main thread.
-    func cachedLine(at time: Double) -> String? {
+    // The current frame without fetching, for accessibility and frame pacing.
+    func cachedFrame(at time: Double) -> LyricFrame? {
         lock.lock()
         defer { lock.unlock() }
-        return currentLine(at: time)
-    }
-
-    private func currentLine(at time: Double) -> String? {
-        guard let line = lines.last(where: { $0.time <= time }), !line.text.isEmpty else { return nil }
-        return line.text
+        return lyricFrame(lines, at: time)
     }
 
     private func fetch(title: String, artist: String, duration: Double, key: String) {
@@ -51,6 +47,29 @@ final class LyricsStore: @unchecked Sendable {
 }
 
 let lyricsStore = LyricsStore()
+
+struct LyricFrame: Equatable {
+    var line: String, previous: String
+    var progress: Double        // 0 → 1 over the line-change transition
+    var untilNext: Double?      // seconds until the next line starts
+}
+
+let lyricTransition = 0.35
+
+// Instrumental gaps and the intro show a note, so the row stays a lyric row for the whole song.
+func lyricFrame(_ lines: [(time: Double, text: String)], at time: Double) -> LyricFrame? {
+    guard !lines.isEmpty else { return nil }
+    func shown(_ text: String) -> String { text.isEmpty ? "♪" : text }
+    let index = lines.lastIndex { $0.time <= time }
+    let start = index.map { lines[$0].time } ?? 0
+    let next = lines[(index ?? -1) + 1 ..< lines.count].first { $0.time > time }
+    let line = index.map { shown(lines[$0].text) } ?? "♪"
+    let previous = index.map { $0 > 0 ? shown(lines[$0 - 1].text) : "♪" } ?? ""
+    // A repeated line (two gaps in a row, a repeated chorus line) does not animate.
+    return LyricFrame(line: line, previous: previous,
+                      progress: previous == line ? 1 : min(1, max(0, (time - start) / lyricTransition)),
+                      untilNext: next.map { $0.time - time })
+}
 
 // LRC lines look like "[01:23.45]text"; a line may carry several time tags, and metadata tags are skipped.
 func parseSyncedLyrics(_ text: String) -> [(time: Double, text: String)] {

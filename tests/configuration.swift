@@ -142,6 +142,13 @@ func checkConfigurationGolden() {
     precondition(volumeScript(target: 140) == "set volume output volume 100" && volumeScript(target: -5) == "set volume output volume 0")
     let lyrics = parseSyncedLyrics("[ar:NEET]\n[00:13.13]Yeah\n[00:16.56]\n[01:02.50][00:20.00]Twice\nplain line")
     precondition(lyrics.map(\.time) == [13.13, 16.56, 20, 62.5] && lyrics.map(\.text) == ["Yeah", "", "Twice", "Twice"])
+    // Intro and gaps show a note; a line animates in for 0.35 s; repeats do not animate.
+    precondition(lyricFrame(lyrics, at: 5) == LyricFrame(line: "♪", previous: "", progress: 1, untilNext: 13.13 - 5))
+    let entering = lyricFrame(lyrics, at: 13.13 + 0.175)!
+    precondition(entering.line == "Yeah" && entering.previous == "♪" && abs(entering.progress - 0.5) < 1e-9)
+    precondition(lyricFrame(lyrics, at: 17)!.line == "♪" && lyricFrame(lyrics, at: 17)!.previous == "Yeah")
+    precondition(lyricFrame(lyrics, at: 62.6)! == LyricFrame(line: "Twice", previous: "Twice", progress: 1, untilNext: nil))
+    precondition(lyricFrame([], at: 1) == nil)
     precondition(!renderConfiguration(parsed).contains("[Other]") && configurationValues(parsed)["lyrics"] == "false")
     // Every current setting is documented in the config template, so nothing lands in the fallback section.
     precondition(!renderConfiguration(parsed).contains("[Other]"))

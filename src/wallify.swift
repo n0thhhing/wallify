@@ -37,7 +37,7 @@ struct WallifyApp {
         drawSwiftUIFrame()
         Thread.detachNewThread { runAnimationWorker() }
         Thread.detachNewThread { runMetadataWorker() }
-        if hasSettingsFlag() { showSettingsWindow() }
+        if hasSettingsFlag() { showSettingsWindow() } else if !terminalMode { showOnboardingIfNeeded() }
         runApplication()
     }
 }

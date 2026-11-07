@@ -131,6 +131,7 @@ private struct SettingsView: View {
                         label("Launch at Login", model.loginError ?? "")
                     }.toggleStyle(.switch)
                     buttonRow("Login Items", "", "Open…") { SMAppService.openSystemSettingsLoginItems() }
+                    buttonRow("Permissions", "Spotify control, system audio and your Spotify account.", "Review…") { showOnboarding() }
                 } else {
                     Text("Launch at Login requires macOS 13 or later.").foregroundColor(.secondary)
                 }
