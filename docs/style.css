@@ -78,69 +78,82 @@ section { padding-block: clamp(56px, 9vw, 112px); }
 .menubar { position: absolute; inset: 0 0 auto; height: 26px; display: flex; justify-content: space-between; align-items: center; padding-inline: 14px; background: #0d0b1a66; backdrop-filter: blur(10px); font-size: .72rem; font-weight: 600; color: #ffffffd0; }
 .menubar span:first-child { width: 12px; height: 12px; border-radius: 4px; background: #ffffffc0; }
 
+/* The widget is drawn at Wallify's own size (540 × 180 pt for 3 × 1) with positions from the app's layout
+   table, then scaled to fit. site.js sets each element's box; these rules carry the app's look. */
+.frame { position: relative; margin: auto; transition: width .45s var(--morph), height .45s var(--morph); }
 .widget {
   --art-a: #ff8a5c; --art-b: #7a3cff; --art-c: #1c1033; --tint: #ffb59c;
-  position: relative; display: grid; gap: 16px; align-items: center; width: 100%; max-width: 560px;
-  padding: 16px; border-radius: 30px; background: #1d1c21e6; border: 1px solid #ffffff1a;
-  backdrop-filter: blur(24px) saturate(1.4); box-shadow: 0 30px 60px -24px #000c, inset 0 1px 0 #ffffff14;
-  transition: max-width .45s cubic-bezier(.2, .8, .2, 1);
+  position: absolute; left: 0; top: 0; transform-origin: 0 0; font-size: 14px;
 }
-.glow { position: absolute; inset: 10% 40% 10% 0; background: radial-gradient(closest-side, var(--art-a), transparent); opacity: .45; filter: blur(40px); z-index: -1; transition: background .6s; }
-.art {
-  position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden;
+.widget > * { position: absolute; margin: 0; transition: left .45s var(--morph), top .45s var(--morph), width .45s var(--morph),
+  height .45s var(--morph), border-radius .45s var(--morph), font-size .45s var(--morph), opacity .3s,
+  transform .3s var(--smooth), filter .3s var(--smooth), background-color .25s ease-out; }
+:root { --morph: cubic-bezier(.45, 0, .55, 1); --smooth: cubic-bezier(.6, 0, .4, 1); }
+.card { border-radius: 26px; background: #1c1c1fd9; backdrop-filter: blur(30px) saturate(1.6); -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  box-shadow: inset 0 0 0 .8px #ffffff1f, 0 24px 50px -20px #000c; }
+.glow { border-radius: 50%; background: radial-gradient(closest-side, var(--art-a), transparent); opacity: .55; filter: blur(28px); transition-property: left, top, width, height, background; }
+.art { overflow: hidden; border-radius: 14px; box-shadow: inset 0 0 0 .5px #ffffff1c; }
+.cover {
+  position: absolute; inset: 0;
   background:
-    radial-gradient(circle at 30% 30%, var(--art-a), transparent 55%),
-    radial-gradient(circle at 75% 70%, var(--art-b), transparent 60%),
-    conic-gradient(from 200deg at 60% 40%, var(--art-c), var(--art-b), var(--art-a), var(--art-c));
-  box-shadow: inset 0 0 0 1px #ffffff14; transition: background .6s;
+    radial-gradient(circle at 30% 30%, var(--a), transparent 55%),
+    radial-gradient(circle at 75% 70%, var(--b), transparent 60%),
+    conic-gradient(from 200deg at 60% 40%, var(--c), var(--b), var(--a), var(--c));
 }
-.art::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, #ffffff0a 0 2px, transparent 2px 9px); mix-blend-mode: overlay; }
-.meta { min-width: 0; display: grid; gap: 4px; }
-.title-row { display: flex; align-items: center; gap: 8px; }
-.track { font-weight: 700; font-size: 1.12rem; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.artist { color: var(--tint); opacity: .85; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .6s; }
-.like { margin-left: auto; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; cursor: pointer; }
-.like:hover { background: #ffffff14; }
-.like svg { width: 20px; height: 20px; fill: none; stroke: #ffffffb0; stroke-width: 1.8; transition: transform .2s; }
-.like[aria-pressed="true"] svg { fill: var(--green); stroke: var(--green); transform: scale(1.12); }
-.bar { height: 5px; border-radius: 3px; background: #ffffff26; margin-top: 10px; overflow: hidden; }
-.bar i { display: block; height: 100%; width: 30%; border-radius: inherit; background: #fff; }
-.lyrics { position: relative; height: 22px; overflow: hidden; margin-top: 4px; font-size: .84rem; font-weight: 650; }
-.line { position: absolute; inset: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fffffff0; }
-.line.note { color: var(--tint); opacity: .6; font-weight: 500; }
-.line.in { animation: rise-in .35s cubic-bezier(.2, .8, .2, 1) both; }
-.line.out { animation: rise-out .35s cubic-bezier(.2, .8, .2, 1) both; }
+.cover::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, #ffffff0a 0 2px, transparent 2px 9px); mix-blend-mode: overlay; }
+/* Wallify's default "Cinematic" track change: a diagonal wipe while the new cover settles from 108 % and flares. */
+.cover.enter { -webkit-mask-image: linear-gradient(115deg, #000 42%, transparent 58%); mask-image: linear-gradient(115deg, #000 42%, transparent 58%);
+  -webkit-mask-size: 300% 100%; mask-size: 300% 100%; animation: cover-in .5s linear both; }
+.cover.leave { animation: cover-out .5s linear both; }
+@keyframes cover-in {
+  from { -webkit-mask-position: 100% 0; mask-position: 100% 0; transform: scale(1.08); filter: brightness(1); }
+  50% { filter: brightness(1.35); }
+  to { -webkit-mask-position: 0 0; mask-position: 0 0; transform: scale(1); filter: brightness(1); }
+}
+@keyframes cover-out { to { transform: scale(1.06); } }
+/* Pausing eases the artwork in 10 pt and dims it, and the glow fades, as in the app. */
+.widget[data-playing="false"] .art { transform: scale(var(--paused-scale, .85)); filter: brightness(.6); }
+.widget[data-playing="false"] .glow { opacity: 0; }
+.shade { border-radius: 0 0 26px 26px; background: linear-gradient(transparent, #000000a2); pointer-events: none; }
+.title, .artist, .time, .lyrics { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.5; }
+.title { font-size: 17px; font-weight: 700; color: #f5f5f7; letter-spacing: -.01em; }
+.artist { font-size: 14px; color: var(--tint); transition-property: left, top, width, height, font-size, opacity, color; }
+.time { font-size: 12px; color: var(--tint); font-variant-numeric: tabular-nums; }
+.time.end { text-align: right; }
+.bar { border-radius: 3px; background: #2d2d2d; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: #fff; }
+.lyrics { font-size: 12.5px; }
+.line { position: absolute; inset: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: #fffffff2; }
+.line.note { color: var(--tint); opacity: .6; font-weight: 400; }
+.line.in { animation: rise-in .35s cubic-bezier(.45, 0, .55, 1) both; }
+.line.out { animation: rise-out .35s cubic-bezier(.45, 0, .55, 1) both; }
 @keyframes rise-in { from { opacity: 0; transform: translateY(7px); } }
 @keyframes rise-out { to { opacity: 0; transform: translateY(-7px); } }
-.controls { display: flex; justify-content: center; gap: 10px; margin-top: 4px; }
-.controls button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; cursor: pointer; }
-.controls button:hover { background: #ffffff14; }
-.controls svg { width: 22px; height: 22px; fill: #ffffffd8; }
-.controls .play { width: 46px; height: 46px; }
-.controls .play svg { width: 28px; height: 28px; }
-.widget[data-playing="true"] .play-icon, .widget[data-playing="false"] .pause-icon { display: none; }
-.upnext { position: absolute; inset: auto 0 0; padding: 26px 12px 10px; background: linear-gradient(transparent, #000c); font-size: .75rem; display: none; }
-.upnext b { display: block; font-size: .64rem; text-transform: uppercase; letter-spacing: .08em; opacity: .7; }
-.upnext span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.widget[data-lyrics="true"] .time, .widget[data-lyrics="false"] .lyrics { opacity: 0; }
+.control, .like { display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; color: #d4d4d4; cursor: pointer; }
+.control:hover, .like:hover { background: #ffffff1f; }
+.control svg { width: 24px; height: 24px; fill: currentColor; }
+.control.play svg { width: 30px; height: 30px; }
+.widget[data-icon="pause"] .play-icon, .widget[data-icon="play"] .pause-icon { display: none; }
+.scrub { cursor: pointer; touch-action: none; }
+/* Dragging the bar grows it 4 pt with a slight spring, independent of the size morph. */
+.widget > .bar { transition: left .45s var(--morph), top .45s var(--morph), width .45s var(--morph), height .45s var(--morph),
+  transform .22s cubic-bezier(.2, .9, .3, 1.25); }
+.widget[data-seeking="true"] .bar { transform: scaleY(1.8); }
+.like svg { width: 17px; height: 17px; fill: none; stroke: #ffffffb3; stroke-width: 2; transition: transform .2s; }
+.like[aria-pressed="true"] svg { fill: #1fd660; stroke: #1fd660; transform: scale(1.08); }
+.upnext { position: absolute; inset: auto 0 0; padding: 22px 12px 10px; background: linear-gradient(transparent, #000000bf); font-size: 12px; opacity: 0; transition: opacity .3s; }
+.upnext b { display: block; font-size: 10px; font-weight: 700; color: #ffffffb3; }
+.upnext span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f5f5f7; }
+.widget[data-size="2x2"] .upnext { opacity: 1; }
+.widget[data-compact="true"] :is(.bar, .scrub, .time, .lyrics, .control, .like) { opacity: 0; pointer-events: none; }
+.widget[data-compact="false"] .shade { opacity: 0; }
 
-/* Sizes */
-.widget[data-size="3x1"] { grid-template-columns: 132px 1fr; }
-.widget[data-size="2x1"] { grid-template-columns: 112px 1fr; max-width: 400px; }
-.widget[data-size="2x1"] .lyrics { display: none; }
-.widget[data-size="1x1"] { grid-template-columns: 1fr; max-width: 190px; padding: 10px; border-radius: 26px; }
-.widget[data-size="1x1"] .art { border-radius: 18px; }
-.widget[data-size="1x1"] .meta { position: absolute; inset: auto 10px 10px; padding: 34px 12px 10px; border-radius: 0 0 18px 18px; background: linear-gradient(transparent, #000b); }
-.widget[data-size="1x1"] :is(.bar, .lyrics, .controls, .like) { display: none; }
-.widget[data-size="1x1"] .track { font-size: .95rem; }
-.widget[data-size="1x1"] .artist { font-size: .8rem; }
-.widget[data-size="2x2"] { grid-template-columns: 1fr; max-width: 330px; padding: 20px; }
-.widget[data-size="2x2"] .art { width: 62%; justify-self: center; }
-.widget[data-size="2x2"] .upnext { display: block; }
-
-.sizes { display: flex; justify-content: center; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
-.sizes button { min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--raise); color: var(--muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
-.sizes button:hover { color: var(--ink); }
-.sizes button[aria-checked="true"] { background: var(--ink); color: var(--base); border-color: var(--ink); }
+.demo-controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.sizes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.sizes button, .toggle { min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--raise); color: var(--muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.sizes button:hover, .toggle:hover { color: var(--ink); }
+.sizes button[aria-checked="true"], .toggle[aria-pressed="true"] { background: var(--ink); color: var(--base); border-color: var(--ink); }
 .demo-note { text-align: center; color: var(--faint); font-size: .82rem; margin-top: 10px; }
 
 /* Captures */
@@ -182,13 +195,12 @@ section { padding-block: clamp(56px, 9vw, 112px); }
   .privacy, .install-card { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
+  .desk { min-height: 400px; }  /* the tallest size scaled to a phone needs about 380 */
   nav a:not(:last-child) { display: none; }
   .cards, .capture-grid { grid-template-columns: 1fr; }
   .card.span-2 { grid-column: auto; }
-  .widget[data-size="3x1"] { grid-template-columns: 96px 1fr; padding: 12px; gap: 12px; border-radius: 24px; }
-  .widget[data-size="2x1"] { grid-template-columns: 88px 1fr; padding: 12px; gap: 12px; }
-  .controls button { width: 36px; height: 36px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.widget.instant > *, .instant + *, .frame:has(.instant) { transition: none !important; }
