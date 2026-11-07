@@ -152,6 +152,7 @@ PY
 # Packaging uses fake signing but real filesystem publication. A failed verify
 # must retain the previous bundle, and unchanged inputs must not sign again.
 cp "$ROOT/scripts/package-app.sh" "$ROOT/scripts/Wallify.entitlements" scripts/
+cp "$ROOT/VERSION" .
 cat > tools/codesign <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >> "$SIGN_LOG"
