@@ -213,7 +213,11 @@ private func loadRefreshToken() -> String? {
     query[kSecReturnData] = true
     query[kSecMatchLimit] = kSecMatchLimitOne
     var result: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    if status != errSecSuccess && status != errSecItemNotFound {
+        NSLog("Wallify: reading the Spotify login from the Keychain failed (%d)", status)
+    }
+    guard status == errSecSuccess, let data = result as? Data else { return nil }
     return String(data: data, encoding: .utf8)
 }
 
