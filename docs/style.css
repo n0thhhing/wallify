@@ -134,6 +134,9 @@ section { padding-block: clamp(56px, 9vw, 112px); }
 .control:hover, .like:hover { background: #ffffff1f; }
 .control svg { width: 24px; height: 24px; fill: currentColor; }
 .control.play svg { width: 30px; height: 30px; }
+/* One HTML wrapper is animated for the press, so Safari composites it on the GPU instead of
+   re-rasterising two SVGs, and the icon swap never interrupts the animation. */
+.glyph { display: grid; place-items: center; will-change: transform; }
 .widget[data-icon="pause"] .play-icon, .widget[data-icon="play"] .pause-icon { display: none; }
 .scrub { cursor: pointer; touch-action: none; }
 /* Dragging the bar grows it 4 pt with a slight spring, independent of the size morph. */

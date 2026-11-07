@@ -152,11 +152,11 @@
       play.setAttribute("aria-label", playing ? "Pause" : "Play");
       const icon = playing ? "pause" : "play";
       if (reduceMotion.matches) { widget.dataset.icon = icon; return; }
-      play.querySelectorAll("svg").forEach((svg) => svg.animate([
+      play.querySelector(".glyph").animate([
         { transform: "scale(1)", easing: "cubic-bezier(.55, .085, .68, .53)" },
         { transform: "scale(.5)", offset: 0.27, easing: "cubic-bezier(.215, .61, .355, 1)" },
         { transform: "scale(1)" }
-      ], { duration: 330 }));
+      ], { duration: 330 });
       setTimeout(() => { widget.dataset.icon = icon; }, 90);
     });
 
