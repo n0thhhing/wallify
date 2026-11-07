@@ -23,6 +23,8 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     var result = AnimationStep(), high = false, visual = false, ambient = false
     var idleInterval: Double = 0
     if state.animation_time < state.art_transition_until { result.draw = true; visual = true }
+    // One extra frame after the volume hint expires puts the position back.
+    if state.volume_hint_until > 0 && state.animation_time < state.volume_hint_until + 0.1 { result.draw = true; visual = true }
     if !state.setting_animations {
         state.play_pause_mix = state.global_rate > 0 ? 1 : 0
         state.global_anim_art_t = state.play_pause_mix; state.art_transition_until = 0
@@ -110,7 +112,9 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
         progressVisible: layout.progressVisible(state.setting_hide_progress), timestampsVisible: !state.setting_hide_text && state.setting_show_timestamps && layout.geometry.compact_mix <= 0.12,
         // Assumes a 2x Retina backing scale; on 1x displays this redraws twice as often as needed.
         secondsPerPixel: state.waveform_mix > 0 || state.global_duration <= 0 ? 0 : state.global_duration / (max(1, layout.geometry.bar_w) * 2))
-    if playback > 0 && !high && now - lastDraw >= playback { result.draw = true }
+    // Lyric lines change every few seconds; redraw often enough to switch them on time.
+    let paced = state.setting_lyrics && playback > 0 ? min(playback, 0.25) : playback
+    if paced > 0 && !high && now - lastDraw >= paced { result.draw = true }
     let iconTarget: Double = state.global_rate > 0 ? 1 : 0
     if state.play_pause_mix != iconTarget {
         visual = true; state.play_pause_mix = advancePlaybackIcon(state.play_pause_mix, state.global_rate > 0, dt); result.draw = true
@@ -129,7 +133,7 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     } else if state.global_rate == 0 && state.global_anim_art_t > 0 {
         ambient = true; state.global_anim_art_t = max(0, state.global_anim_art_t - dt / 0.3); result.draw = true
     }
-    result.interval = high ? 1 / 60 : visual ? 1 / 30 : ambient ? 1 / 20 : idleInterval > 0 && !compositorActive ? idleInterval : playback
+    result.interval = high ? 1 / 60 : visual ? 1 / 30 : ambient ? 1 / 20 : idleInterval > 0 && !compositorActive ? idleInterval : paced
     return result
 }
 

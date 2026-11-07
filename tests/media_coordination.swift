@@ -1,6 +1,7 @@
 import Foundation
 
 func checkMediaCoordination() {
+    checkSpotifyNotificationReply()
     let state = widgetStatePointer()
     let original = state.pointee
     let closed = stateFlag(0, 0, false), track = stateFlag(1, 0, false)
@@ -94,4 +95,20 @@ func checkMediaCoordination() {
     precondition(widgetTitle() == "Auto Track" && !state.pointee.media_stopped)
     media.select(0)
     precondition(widgetTitle() == "Auto Track" && state.pointee.media_stopped)
+}
+
+// The payload Spotify posts on play/pause (captured from Spotify 1.2): position in seconds, duration in ms.
+func checkSpotifyNotificationReply() {
+    let info: [AnyHashable: Any] = ["Name": "Internet Buzzwords", "Artist": "NEET", "Player State": "Playing",
+        "Playback Position": 23.785, "Duration": 121304, "Track ID": "spotify:track:4H6SycLgj3UkYozVnFcgQ5"]
+    let event = spotifyNotificationReply(info, artwork: "https://i.scdn.co/image/a")!
+    precondition(event.trackID == "spotify:track:4H6SycLgj3UkYozVnFcgQ5")
+    let payload = parseMediaPayload(event.reply, format: 0)!
+    precondition(payload.rate == 1 && abs(payload.elapsed - 23.785) < 1e-9 && abs(payload.duration - 121.304) < 1e-9)
+    let text = String(decoding: event.reply, as: UTF8.self)
+    precondition(text.hasPrefix("Internet Buzzwords|||NEET|||playing|||") && text.contains("|||https://i.scdn.co/image/a|||"))
+    var paused = info; paused["Player State"] = "Paused"
+    precondition(parseMediaPayload(spotifyNotificationReply(paused, artwork: "")!.reply, format: 0)!.rate == 0)
+    // Stopped events omit the track; the worker then falls back to AppleScript.
+    precondition(spotifyNotificationReply(["Player State": "Stopped"], artwork: "") == nil)
 }

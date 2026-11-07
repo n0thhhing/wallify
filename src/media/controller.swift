@@ -119,6 +119,68 @@ public func toggleWidgetPlayback() {
     requestWidgetFrame()
 }
 
+// Seeks relative to the current position, updating the bar immediately like a scrub release.
+func seekWidget(by seconds: Double) {
+    sceneLock.lock()
+    defer { sceneLock.unlock() }
+    let state = widgetStatePointer(), now = monotonicTime(), duration = state.pointee.global_duration
+    guard duration > 0, seconds.isFinite else { return }
+    let target = min(duration, max(0, playbackPosition(state.pointee.playback_clock, now: now, duration: duration) + seconds))
+    state.pointee.global_elapsed = target
+    synchronizePlayback(&state.pointee.playback_clock, target, state.pointee.global_rate, now, duration, true)
+    state.pointee.global_rate_lock = 1; state.pointee.global_rate_lock_until = now + 0.5
+    enqueueMediaSeek(target)
+    requestWidgetFrame()
+}
+
+// Scroll events become one coalesced AppleScript call at a time on a background queue.
+private let volumeQueue = DispatchQueue(label: "Wallify.volume", qos: .userInitiated)
+private let volumeLock = NSLock()
+private var pendingVolume = 0.0, volumeScheduled = false
+private var knownVolume: Double?, lastVolumeChange = 0.0  // volumeQueue-owned
+
+// The Mac's output volume, like the volume keys. Spotify's own volume usually sits at 100 %,
+// so scrolling it would start from the top regardless of how loud playback is.
+func volumeScript(target: Int? = nil) -> String {
+    target.map { "set volume output volume \(min(100, max(0, $0)))" } ?? "output volume of (get volume settings)"
+}
+
+func adjustVolume(by points: Double) {
+    volumeLock.lock()
+    pendingVolume += points
+    let schedule = !volumeScheduled
+    volumeScheduled = true
+    volumeLock.unlock()
+    guard schedule else { return }
+    volumeQueue.async {
+        volumeLock.lock()
+        let delta = pendingVolume
+        pendingVolume = 0; volumeScheduled = false
+        volumeLock.unlock()
+        let now = monotonicTime()
+        // Re-read after a pause in scrolling, in case the volume changed elsewhere.
+        if knownVolume == nil || now - lastVolumeChange > 2 {
+            knownVolume = autoreleasepool { NSAppleScript(source: volumeScript())?.executeAndReturnError(nil).int32Value }.map(Double.init)
+        }
+        guard let current = knownVolume else { return }
+        let target = min(100, max(0, current + delta))
+        knownVolume = target; lastVolumeChange = now
+        autoreleasepool { _ = NSAppleScript(source: volumeScript(target: Int(target.rounded())))?.executeAndReturnError(nil) }
+        sceneLock.lock()
+        let state = widgetStatePointer()
+        state.pointee.volume_hint = target / 100
+        state.pointee.volume_hint_until = state.pointee.animation_time + 1.2
+        sceneLock.unlock()
+        requestWidgetFrame()
+    }
+}
+
+// Trackpads report pixel deltas, a mouse wheel about one line per notch; one line is 2 % volume or 2 s.
+func scrollAmount(deltaY: Double, precise: Bool, inverted: Bool) -> Double {
+    let lines = (precise ? deltaY / 10 : deltaY) * (inverted ? -1 : 1)
+    return lines * 2
+}
+
 @_cdecl("wallify_native_media_key")
 public func handleWidgetMediaKey(_ code: Int32) {
     sceneLock.lock()
@@ -262,6 +324,7 @@ final class MediaCoordinator {
         guard titleChanged || artistChanged || item.rate != state.pointee.global_rate || elapsedChanged ||
               item.duration != state.pointee.global_duration || artChanged || incomingArtwork || wasStopped ||
               (state.pointee.artwork_refresh_pending && (source == 0 || item.has_artwork)) else { return nil }
+        if titleChanged || artistChanged || item.rate != state.pointee.global_rate { announceWidgetChange() }
         updateTrackText(title, artist, state: state)
         if accept && !state.pointee.global_is_dragging && (state.pointee.global_rate_lock == 0 || titleChanged) {
             synchronizePlayback(&state.pointee.playback_clock, item.elapsed, item.rate, now, item.duration, titleChanged)
@@ -308,6 +371,7 @@ public func receiveArtwork(_ available: Bool) {
 @_cdecl("wallify_metadata_loop")
 public func runMetadataWorker() {
     let coordinator = MediaCoordinator()
+    var spotifyTrackID = "", spotifyArtwork = ""
     while true {
         let source = activeMediaSource()
         coordinator.select(source)
@@ -319,13 +383,22 @@ public func runMetadataWorker() {
             }
             Thread.sleep(forTimeInterval: 2)
         } else {
-            let reply = autoreleasepool { queryMediaSource(source) }
+            // A Spotify event for the known track is applied directly; a new track or a drift check queries AppleScript.
+            let reply: [UInt8]
+            if source == 1, let info = spotifyEvents.takePayload(),
+               let event = spotifyNotificationReply(info, artwork: spotifyArtwork), event.trackID == spotifyTrackID {
+                reply = event.reply
+            } else {
+                reply = autoreleasepool { queryMediaSource(source) }
+                let fields = String(decoding: reply, as: UTF8.self).components(separatedBy: "|||")
+                if source == 1 && fields.count >= 7 { spotifyArtwork = fields[5]; spotifyTrackID = fields[6] }
+            }
             guard activeMediaSource() == source else { continue }
             let running = source == 1 && reply == Array("CLOSED".utf8) && isSpotifyRunning() != 0
             let retry = coordinator.apply(reply, source: source, spotifyRunning: running, now: monotonicTime())
             if let retry { Thread.sleep(forTimeInterval: retry) }
-            // Polling only catches seeks; Spotify notifications still wake a hidden widget for play/pause/track changes.
-            else if source == 1 { _ = waitForSpotifyEvent(stateFlag(3, 0, false) ? 2000 : 30000) }
+            // Spotify posts no event for seeks, so a slow AppleScript check catches them and any drift.
+            else if source == 1 { _ = waitForSpotifyEvent(stateFlag(3, 0, false) ? 15000 : 30000) }
             else { Thread.sleep(forTimeInterval: 1) }
         }
     }

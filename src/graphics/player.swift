@@ -57,7 +57,11 @@ func drawPlayerProgress(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, 
         let bar = cardRect(g.bar_x, g.bar_y - (height - g.bar_h) / 2, g.bar_w, height, height / 2)
         let trackHeight = base + 4 * state.seek_expansion
         canvas.fill(cardRect(bar.x, bar.y + (height - trackHeight) / 2, bar.w, trackHeight, trackHeight / 2), SIMD4(0.176, 0.176, 0.176, 1))
-        if state.global_duration > 0 {
+        if state.volume_hint_until > state.animation_time {
+            // Briefly show the volume level after a scroll, in place of the position.
+            let level = bar.w * min(1, max(0, state.volume_hint))
+            if level > 0 { canvas.fill(cardRect(bar.x, bar.y + (height - trackHeight) / 2, level, trackHeight, trackHeight / 2), SIMD4(0.55, 0.78, 1, 1)) }
+        } else if state.global_duration > 0 {
             var progress = bar; progress.w *= min(1, max(0, elapsed / state.global_duration))
             if progress.w > 0 {
                 if mix < 1 {
@@ -94,7 +98,13 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
     }
     textCache.draw(canvas, title, g.text_x, g.title_y, g.text_width, 17 * scale, (15 + 2 * expanded) / 17, true, primaryTextColor)
     textCache.draw(canvas, artist.isEmpty ? "Play something to get started" : artist, g.text_x, g.artist_y, g.text_width, 14 * scale, (11 + 3 * expanded) / 14, false, secondary)
-    guard expanded >= 0.88, state.setting_show_timestamps else { return }
+    guard expanded >= 0.88 else { return }
+    // A synced lyric line takes the time row; the progress bar still shows the position.
+    if state.setting_lyrics, state.global_title_len > 0, let line = lyricsStore.line(title: title, artist: artist, duration: state.global_duration, at: elapsed) {
+        textCache.draw(canvas, line, g.text_x, g.timestamp_y, g.text_width, 12 * scale, 1, false, secondary, 0, false, false)
+        return
+    }
+    guard state.setting_show_timestamps else { return }
     textCache.draw(canvas, formatTimestamp(elapsed), g.text_x, g.timestamp_y, 100, 12 * scale, 1, false, secondary, 0, false, false)
     textCache.draw(canvas, formatTimestamp(state.global_duration), g.text_x, g.timestamp_y, g.text_width, 12 * scale, 1, false, secondary, 0, true, false)
 }

@@ -52,6 +52,7 @@ let settingSpecs: [SettingSpec] = [
     toggle(23, "waveform", "System Audio Waveform", \.setting_waveform, \.waveform, on: false),
     toggle(24, "clickable_names", "Clickable Names", \.setting_clickable_names, \.clickable_names, on: false),
     toggle(25, "position_locked", "Lock Position", \.setting_position_locked, \.position_locked, on: false),
+    toggle(28, "lyrics", "Synced Lyrics", \.setting_lyrics, \.lyrics, on: false),
     choice(10, "frame_strength", "Custom Border", \.setting_frame, \.frame_strength, ["Off", "Subtle", "Strong"],
            [["off", "0"], ["subtle", "1"], ["strong", "2"]], default: 1),
     choice(11, "glow_intensity", "Glow Intensity", \.setting_intensity, \.glow_intensity, ["Low", "Normal", "High"],
@@ -80,7 +81,9 @@ let settingSpecs: [SettingSpec] = [
     choice(22, "progress_thickness", "Progress Thickness", \.setting_progress_thickness, \.progress_thickness,
            ["Thin", "Standard", "Thick"], [["0"], ["1"], ["2"]], default: 1),
     choice(26, "stopped_behavior", "When Music Stops", \.setting_stopped_behavior, \.stopped_behavior,
-           ["Show Companion", "Keep Last Track", "Hide Widget"], [["companion", "0"], ["keep_last_track", "keep", "1"], ["hide", "2"]], default: 0)
+           ["Show Companion", "Keep Last Track", "Hide Widget"], [["companion", "0"], ["keep_last_track", "keep", "1"], ["hide", "2"]], default: 0),
+    choice(27, "scroll_action", "Scroll Action", \.setting_scroll_action, \.scroll_action, ["Off", "Volume", "Seek"],
+           [["off"], ["volume"], ["seek"]], default: 0)
 ]
 
 private let specsByKey = Dictionary(uniqueKeysWithValues: settingSpecs.map { ($0.key, $0) })
@@ -318,6 +321,12 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
 
     # Open track and artist links when clicking their names [true, false]
     clickable_names = \(values["clickable_names"]!)
+
+    # Synced lyrics under the progress bar, from lrclib.net (sends title and artist) [true, false]
+    lyrics = \(values["lyrics"]!)
+
+    # Scrolling on the widget changes the volume or seeks [off, volume, seek]
+    scroll_action = \(values["scroll_action"]!)
 
     # Prevent dragging the widget [true, false]
     position_locked = \(values["position_locked"]!)

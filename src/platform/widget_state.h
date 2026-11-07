@@ -37,6 +37,10 @@ typedef struct {
     bool setting_clickable_names;
     bool setting_position_locked;
     uint8_t setting_stopped_behavior;
+    bool setting_lyrics;
+    uint8_t setting_scroll_action;    // 0: off, 1: volume, 2: seek
+    double volume_hint;               // 0...1, shown on the progress bar while volume_hint_until is ahead
+    double volume_hint_until;
     bool media_stopped;
     bool setting_hide_progress;
     bool setting_show_controls;

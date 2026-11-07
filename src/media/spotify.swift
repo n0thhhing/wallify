@@ -32,18 +32,21 @@ final class SpotifyEvents {
     private var pending: Int32 = -1
     private var helperPID: Int32 = -1
     private var observer: NSObjectProtocol?
+    private var payload: [AnyHashable: Any]?
 
     func observe() {
         guard observer == nil else { return }
         observer = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.spotify.client.PlaybackStateChanged"),
-            object: nil, queue: nil) { [self] _ in notify() }
+            object: nil, queue: nil) { [self] note in notify(note.userInfo) }
     }
 
-    func notify() {
+    // A nil payload (a wake without a Spotify event) makes the worker query AppleScript.
+    func notify(_ info: [AnyHashable: Any]? = nil) {
         lock.lock()
         let signal = pending == -1
         pending = 1
+        payload = info
         let pid = helperPID
         lock.unlock()
         if signal { semaphore.signal() }
@@ -56,6 +59,14 @@ final class SpotifyEvents {
         let state = pending
         pending = -1
         return state
+    }
+
+    func takePayload() -> [AnyHashable: Any]? {
+        lock.lock()
+        defer { lock.unlock() }
+        let info = payload
+        payload = nil
+        return info
     }
 
     func wait(milliseconds: UInt64) -> Int32 {
@@ -140,16 +151,27 @@ public func seekSpotify(_ position: Double) {
     autoreleasepool { _ = NSAppleScript(source: source)?.executeAndReturnError(nil) }
 }
 
+// Spotify's PlaybackStateChanged notification carries the track, state, position and duration but
+// not the artwork URL, and is not posted for seeks. Builds the AppleScript reply format from it.
+func spotifyNotificationReply(_ info: [AnyHashable: Any], artwork: String) -> (trackID: String, reply: [UInt8])? {
+    guard let name = info["Name"] as? String, let state = info["Player State"] as? String,
+          let trackID = info["Track ID"] as? String, !trackID.isEmpty else { return nil }
+    let artist = info["Artist"] as? String ?? ""
+    let position = (info["Playback Position"] as? NSNumber)?.doubleValue ?? 0
+    let duration = ((info["Duration"] as? NSNumber)?.doubleValue ?? 0) / 1000
+    return (trackID, Array("\(name)|||\(artist)|||\(state.lowercased())|||\(position)|||\(duration)|||\(artwork)|||\(trackID)".utf8))
+}
+
 let spotifyQueryScript = """
   tell application id "com.spotify.client"
     try
-      set {tName, tArtist, tState, tPos, tDur} to {name of current track, artist of current track, player state as string, player position as string, duration of current track}
+      set {tName, tArtist, tState, tPos, tDur, tID} to {name of current track, artist of current track, player state as string, player position as string, duration of current track, id of current track}
       set tDur to (tDur / 1000.0) as string
       set tArt to ""
       try
         set tArt to artwork url of current track
       end try
-      return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt
+      return tName & "|||" & tArtist & "|||" & tState & "|||" & tPos & "|||" & tDur & "|||" & tArt & "|||" & tID
     on error message number code
       if code is -1728 then return "NO_TRACK"
       error message number code

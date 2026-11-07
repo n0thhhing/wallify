@@ -95,16 +95,18 @@ func checkConfigurationGolden() {
     let position = ["widget_margin_left": "0", "widget_margin_top": "0", "widget_grid_x": "0", "widget_grid_y": "0"]
     let bools = ["artwork_glow", "native_glass", "aurora", "animations", "dim_paused_artwork", "widget_debug", "hide_text",
                  "hide_progress", "show_controls", "show_timestamps", "artwork_border", "compact_gradient", "waveform",
-                 "clickable_names", "position_locked"]
+                 "clickable_names", "position_locked", "lyrics"]
     var low = WallifyWidgetState()
     var expected = position.merging(Dictionary(uniqueKeysWithValues: bools.map { ($0, "false") })) { $1 }
     expected.merge(["frame_strength": "off", "glow_intensity": "low", "animation_speed": "slow", "media_source": "now_playing",
                      "widget_mode": "1x1", "idle_style": "spotify", "track_transition": "default", "font_scale": "small",
-                     "media_key_target": "off", "stopped_behavior": "companion", "artwork_radius": "0", "progress_thickness": "0"]) { $1 }
+                     "media_key_target": "off", "stopped_behavior": "companion", "artwork_radius": "0", "progress_thickness": "0",
+                     "scroll_action": "off"]) { $1 }
     precondition(configurationValues(low) == expected)
     for path: WritableKeyPath<WallifyWidgetState, Bool> in [\.setting_glow, \.setting_native_glass, \.setting_aurora, \.setting_animations,
         \.setting_dim, \.setting_debug, \.setting_hide_text, \.setting_hide_progress, \.setting_show_controls, \.setting_show_timestamps,
-        \.setting_artwork_border, \.setting_compact_gradient, \.setting_waveform, \.setting_clickable_names, \.setting_position_locked] {
+        \.setting_artwork_border, \.setting_compact_gradient, \.setting_waveform, \.setting_clickable_names, \.setting_position_locked,
+        \.setting_lyrics] {
         low[keyPath: path] = true
     }
     low.setting_frame = 2; low.setting_intensity = 2; low.setting_speed = 2; low.setting_source = 3; low.setting_mode = 4
@@ -131,6 +133,16 @@ func checkConfigurationGolden() {
     precondition(parsed.setting_mode == 1 && parsed.setting_idle_style == 2 && parsed.setting_transition == 3)
     precondition(parsed.setting_media_key_target == 1 && parsed.setting_frame == 1 && parsed.setting_progress_thickness == 2)
     precondition(parsed.setting_hide_text && !parsed.setting_waveform)
+    parseConfiguration("scroll_action = seek", into: &parsed)
+    precondition(parsed.setting_scroll_action == 2 && configurationValues(parsed)["scroll_action"] == "seek")
+    // A trackpad swipe of 10 px is one line: 2 % volume or 2 s; natural scrolling flips the sign back.
+    precondition(scrollAmount(deltaY: 10, precise: true, inverted: false) == 2)
+    precondition(scrollAmount(deltaY: 10, precise: true, inverted: true) == -2)
+    precondition(scrollAmount(deltaY: -1, precise: false, inverted: false) == -2)
+    precondition(volumeScript(target: 140) == "set volume output volume 100" && volumeScript(target: -5) == "set volume output volume 0")
+    let lyrics = parseSyncedLyrics("[ar:NEET]\n[00:13.13]Yeah\n[00:16.56]\n[01:02.50][00:20.00]Twice\nplain line")
+    precondition(lyrics.map(\.time) == [13.13, 16.56, 20, 62.5] && lyrics.map(\.text) == ["Yeah", "", "Twice", "Twice"])
+    precondition(!renderConfiguration(parsed).contains("[Other]") && configurationValues(parsed)["lyrics"] == "false")
     // Every current setting is documented in the config template, so nothing lands in the fallback section.
     precondition(!renderConfiguration(parsed).contains("[Other]"))
 }

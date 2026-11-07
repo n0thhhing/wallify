@@ -209,10 +209,26 @@ struct SettingsBridgeCheck {
         state.pointee.media_stopped = false
         _ = stateFlag(0, 1, false); _ = stateFlag(1, 1, true)
         updateTrackText(Array("Track".utf8), Array("Artist".utf8), state: state)
-        let links = view.accessibilityChildren() as! [NSAccessibilityElement]
-        precondition(links.count == 2 && links[0].accessibilityRole() == .link && links[1].accessibilityLabel() == "Artist")
+        state.pointee.global_duration = 200; state.pointee.global_elapsed = 65; state.pointee.global_rate = 0
+        func elements() -> [NSAccessibilityElement] { view.accessibilityChildren() as! [NSAccessibilityElement] }
+        let links = elements()
+        precondition(links[0].accessibilityRole() == .link && links[1].accessibilityLabel() == "Artist")
+        precondition((view.accessibilityValue() as! String) == "Paused: Track, Artist")
         state.pointee.setting_clickable_names = false
-        precondition(view.accessibilityChildren()!.isEmpty)
+        let plain = elements()
+        precondition(plain[0].accessibilityRole() == .staticText && plain[0].accessibilityLabel() == "Track")
+        let layout = sceneLayout
+        let buttons = plain.filter { $0.accessibilityRole() == .button }.map { $0.accessibilityLabel() ?? "" }
+        precondition(buttons == (layout.controlsVisible(true) ? ["Previous Track", "Play", "Next Track"] : []))
+        if let slider = plain.first(where: { $0.accessibilityRole() == .slider }) {
+            precondition(slider.accessibilityValueDescription() == "1:05 of 3:20" && (slider.accessibilityValue() as! Double) == 65)
+        } else { precondition(!layout.progressVisible(false)) }
+        state.pointee.setting_show_controls = false; state.pointee.setting_hide_progress = true
+        precondition(!elements().contains { [.button, .slider].contains($0.accessibilityRole()) })
+        state.pointee.setting_show_controls = true; state.pointee.setting_hide_progress = false
+        state.pointee.media_stopped = true; state.pointee.setting_stopped_behavior = 0; state.pointee.setting_idle_style = 0
+        precondition(elements().map { $0.accessibilityLabel() } == ["Open Spotify"] && (view.accessibilityValue() as! String) == "Nothing playing")
+        state.pointee.media_stopped = false
         state.pointee.setting_clickable_names = true
         let tab = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
             windowNumber: panel.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48)!
@@ -221,7 +237,7 @@ struct SettingsBridgeCheck {
         view.keyDown(with: tab)
         precondition(state.pointee.global_hover_target == 9)
         state.pointee.setting_hide_text = true
-        precondition(view.accessibilityChildren()!.isEmpty)
+        precondition(!elements().contains { [.link, .staticText].contains($0.accessibilityRole()) })
         state.pointee.setting_hide_text = false
         view.updateTrackingAreas()
         view.updateTrackingAreas()
@@ -1116,7 +1132,7 @@ struct SettingsBridgeCheck {
         let artwork = lines.firstIndex(of: "set tArt to artwork url of current track")!
         precondition(lines[artwork - 1] == "try" && lines[artwork + 1] == "end try")
         precondition(spotifyQueryScript.contains("set tArt to \"\""))
-        precondition(spotifyQueryScript.contains("set {tName, tArtist, tState, tPos, tDur}"))
+        precondition(spotifyQueryScript.contains("set {tName, tArtist, tState, tPos, tDur, tID}") && spotifyQueryScript.contains("& \"|||\" & tID"))
         precondition(spotifyQueryScript.contains("tell application id \"com.spotify.client\""))
         precondition(spotifyQueryScript.contains("if code is -1728 then return \"NO_TRACK\""))
         precondition(spotifyQueryScript.contains("error message number code"))
@@ -1137,6 +1153,11 @@ struct SettingsBridgeCheck {
         events.notify()
         precondition(events.takeState() == 1 && events.takeState() == -1)
         precondition(events.wait(milliseconds: 0) == 1)
+        events.notify(["Name": "Track"])
+        precondition(events.takePayload()?["Name"] as? String == "Track" && events.takePayload() == nil)
+        events.notify(["Name": "Track"]); events.notify()
+        precondition(events.takePayload() == nil)
+        _ = events.wait(milliseconds: 0)
         let wake = DispatchSemaphore(value: 0)
         DispatchQueue.global().async {
             precondition(events.wait(milliseconds: 1000) == 1)

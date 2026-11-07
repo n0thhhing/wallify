@@ -165,7 +165,11 @@ private struct SettingsView: View {
                 } else { Text("Audio waveform requires macOS 14.2 or later.").foregroundColor(.secondary) }
                 picker(22, "")
             }
+            section("Scrolling") {
+                picker(27, "Scroll on the widget to change the volume or seek.")
+            }
             section("Text") {
+                toggle(28, "Shown under the progress bar in place of the times. Sends the title and artist to lrclib.net.")
                 picker(17, "")
             }
         case "Desktop":
