@@ -108,7 +108,7 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     }
     let playback = playbackFrameInterval(playing: state.global_rate > 0, dragging: state.global_is_dragging, playerVisible: state.idle_mix < 1,
         progressVisible: layout.progressVisible(state.setting_hide_progress), timestampsVisible: !state.setting_hide_text && state.setting_show_timestamps && layout.geometry.compact_mix <= 0.12,
-        // shortcut: assumes a 2x Retina backing scale; on 1x displays it redraws twice as often as needed.
+        // Assumes a 2x Retina backing scale; on 1x displays this redraws twice as often as needed.
         secondsPerPixel: state.waveform_mix > 0 || state.global_duration <= 0 ? 0 : state.global_duration / (max(1, layout.geometry.bar_w) * 2))
     if playback > 0 && !high && now - lastDraw >= playback { result.draw = true }
     let iconTarget: Double = state.global_rate > 0 ? 1 : 0

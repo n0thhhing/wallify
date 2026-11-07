@@ -12,8 +12,5 @@ compile_commands.json
 *.sock
 zls.json
 
-.agents/
-.rtk/
-AGENTS.md
 widget-settings.conf
 config/widget-settings.conf
