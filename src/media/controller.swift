@@ -324,7 +324,8 @@ public func runMetadataWorker() {
             let running = source == 1 && reply == Array("CLOSED".utf8) && isSpotifyRunning() != 0
             let retry = coordinator.apply(reply, source: source, spotifyRunning: running, now: monotonicTime())
             if let retry { Thread.sleep(forTimeInterval: retry) }
-            else if source == 1 { _ = waitForSpotifyEvent(2000) }
+            // Polling only catches seeks; Spotify notifications still wake a hidden widget for play/pause/track changes.
+            else if source == 1 { _ = waitForSpotifyEvent(stateFlag(3, 0, false) ? 2000 : 30000) }
             else { Thread.sleep(forTimeInterval: 1) }
         }
     }

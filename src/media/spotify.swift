@@ -72,7 +72,7 @@ final class SpotifyEvents {
     }
 }
 
-private let spotifyEvents = SpotifyEvents()
+let spotifyEvents = SpotifyEvents()
 
 @_cdecl("widget_spotify_observe")
 public func observeSpotify() { spotifyEvents.observe() }

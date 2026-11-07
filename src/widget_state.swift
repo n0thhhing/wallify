@@ -128,7 +128,7 @@ public func setWidgetVisible(_ visible: Bool) {
     flags[3] = visible
     if changed { flags[2] = true }
     flagLock.unlock()
-    if changed && visible { wakeFrame() }
+    if changed && visible { wakeFrame(); spotifyEvents.notify() }  // refresh the position polled less while hidden
     if !visible { audioWaveform.update(active: false) }
 }
 
