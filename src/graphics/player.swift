@@ -45,6 +45,22 @@ func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, s
         let hover = [state.hover_amount.0, state.hover_amount.1, state.hover_amount.2]
         for index in 0..<3 where hover[index] > 0.001 { canvas.fill(layout.buttonBounds(index), SIMD4(1, 1, 1, Float(hover[index] * 31 / 255))) }
     }
+    // Up Next sits on a dark fade across the bottom of the artwork in the 2 × 2 size.
+    if state.setting_mode == 4 && !state.mode_transition_active && state.global_title_len > 0 && spotifyAccount.connected {
+        let g = layout.geometry, title = withUnsafeBytes(of: state.global_title) { String(decoding: $0.prefix(state.global_title_len), as: UTF8.self) }
+        if let next = upNextStore.line(title: title, artist: trackArtist(state)) {
+            canvas.add(Int32(WALLIFY_GRADIENT), 0, cardRect(g.art_x, g.art_y + g.art_size - 52, g.art_size, 52, g.art_radius), SIMD4(0, 0, 0, 0.75))
+            textCache.draw(canvas, "Up next", g.art_x + 12, g.art_y + g.art_size - 42, g.art_size - 24, 10, 1, true, SIMD4(1, 1, 1, 0.7))
+            textCache.draw(canvas, next, g.art_x + 12, g.art_y + g.art_size - 28, g.art_size - 24, 12, 1, false, primaryTextColor)
+        }
+    }
+    let like = layout.likeBounds()
+    if like.w > 0, let liked = likeStore.state {
+        if state.global_hover_target == 10 { canvas.fill(like, SIMD4(1, 1, 1, 31 / 255)) }
+        // The icon texture is a 48 pt canvas centred on the glyph.
+        let icon = cardRect(like.x + like.w / 2 - 24, like.y + like.h / 2 - 24, 48, 48)
+        canvas.imageTint(liked ? .heartFill : .heart, icon, liked ? SIMD4(0.12, 0.84, 0.38, 1) : SIMD4(1, 1, 1, 0.7))
+    }
     drawPlayerLabels(canvas, elapsed: elapsed, layout: layout, state: state)
 }
 
@@ -96,7 +112,8 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
         textCache.draw(canvas, artist, g.text_x, g.artist_y, g.text_width, 11 * scale, 1, false, secondary)
         return
     }
-    textCache.draw(canvas, title, g.text_x, g.title_y, g.text_width, 17 * scale, (15 + 2 * expanded) / 17, true, primaryTextColor)
+    let titleWidth = g.text_width - (layout.likeBounds().w > 0 ? 26 : 0)  // room for the like button
+    textCache.draw(canvas, title, g.text_x, g.title_y, titleWidth, 17 * scale, (15 + 2 * expanded) / 17, true, primaryTextColor)
     textCache.draw(canvas, artist.isEmpty ? "Play something to get started" : artist, g.text_x, g.artist_y, g.text_width, 14 * scale, (11 + 3 * expanded) / 14, false, secondary)
     guard expanded >= 0.88 else { return }
     // A synced lyric line takes the time row; the progress bar still shows the position.

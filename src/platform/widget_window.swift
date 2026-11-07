@@ -39,6 +39,8 @@ final class WidgetView: NSView {
     private let progress = WidgetElement(.slider, help: "Adjust to seek 10 seconds")
     private let idleElement = WidgetElement(.button)
     private let lyricElement = WidgetElement(.staticText)
+    private let likeElement = WidgetElement(.button)
+    private let upNextElement = WidgetElement(.staticText)
     private var keyboardLabel = -1
 
     override var isFlipped: Bool { true }
@@ -94,6 +96,14 @@ final class WidgetView: NSView {
                 controls[index].press = actions[index]
                 children.append(place(controls[index], layout.buttonBounds(index), labels[index]))
             }
+        }
+        if state.setting_mode == 4, let next = upNextStore.cachedLine() {
+            children.append(place(upNextElement, cardRect(g.art_x, g.art_y + g.art_size - 52, g.art_size, 52), "Up next: " + next))
+        }
+        let like = layout.likeBounds()
+        if like.w > 0, let liked = likeStore.state {
+            likeElement.press = { likeStore.toggle() }
+            children.append(place(likeElement, like, liked ? "Remove from Liked Songs" : "Save to Liked Songs"))
         }
         if state.setting_lyrics, g.compact_mix <= 0.12, let line = lyricsStore.cachedLine(at: elapsed) {
             children.append(place(lyricElement, cardRect(g.text_x, g.timestamp_y, g.text_width, 18), line))

@@ -2,6 +2,7 @@ import Foundation
 
 func checkMediaCoordination() {
     checkSpotifyNotificationReply()
+    checkSpotifyAccount()
     let state = widgetStatePointer()
     let original = state.pointee
     let closed = stateFlag(0, 0, false), track = stateFlag(1, 0, false)
@@ -111,4 +112,61 @@ func checkSpotifyNotificationReply() {
     precondition(parseMediaPayload(spotifyNotificationReply(paused, artwork: "")!.reply, format: 0)!.rate == 0)
     // Stopped events omit the track; the worker then falls back to AppleScript.
     precondition(spotifyNotificationReply(["Player State": "Stopped"], artwork: "") == nil)
+}
+
+// Spotify login: PKCE, callback parsing and token handling against a fake network.
+func checkSpotifyAccount() {
+    // RFC 7636 appendix B test vector.
+    precondition(pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk") == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+    precondition(randomURLSafe(64).count == 86 && !randomURLSafe(16).contains("="))
+    precondition(validSpotifyClientID(String(repeating: "a1", count: 16)) && !validSpotifyClientID("abc") && !validSpotifyClientID(String(repeating: "z", count: 32)))
+    precondition(spotifyCallback("GET /callback?code=abc&state=s1 HTTP/1.1\r\n", expectedState: "s1") == (true, "abc", nil))
+    precondition(spotifyCallback("GET /callback?code=abc&state=evil HTTP/1.1", expectedState: "s1").code == nil)
+    precondition(spotifyCallback("GET /callback?error=access_denied&state=s1 HTTP/1.1", expectedState: "s1").error == "Spotify login failed: access_denied.")
+    precondition(!spotifyCallback("GET /favicon.ico HTTP/1.1", expectedState: "s1").handled)
+
+    var responses: [(String, Int)] = [], requests: [URLRequest] = [], stored: [String?] = []
+    let account = SpotifyAccount(send: { request, completion in
+        requests.append(request)
+        let (body, status) = responses.removeFirst()
+        completion(Data(body.utf8), status)
+    }, load: { "refresh-1" }, store: { stored.append($0) }, clientID: { "client" })
+    precondition(account.connected)
+    // First call refreshes the access token, keeping a rotated refresh token.
+    responses = [(#"{"access_token":"a1","expires_in":3600,"refresh_token":"refresh-2"}"#, 200), ("{}", 200)]
+    var status = 0
+    account.request("GET", "/me/player/queue") { _, code in status = code }
+    precondition(status == 200 && requests.count == 2 && stored == ["refresh-2"])
+    let form = String(decoding: requests[0].httpBody!, as: UTF8.self)
+    precondition(form == "client_id=client&grant_type=refresh_token&refresh_token=refresh-1")
+    precondition(requests[1].value(forHTTPHeaderField: "Authorization") == "Bearer a1" && requests[1].url!.path == "/v1/me/player/queue")
+    // A 401 refreshes once and retries with the new token.
+    responses = [("", 401), (#"{"access_token":"a2","expires_in":3600}"#, 200), ("{}", 204)]
+    account.request("PUT", "/me/tracks?ids=x") { _, code in status = code }
+    precondition(status == 204 && requests.last!.value(forHTTPHeaderField: "Authorization") == "Bearer a2" && requests.last!.httpMethod == "PUT")
+    // A revoked refresh token disconnects and clears the Keychain entry.
+    responses = [("", 401), (#"{"error":"invalid_grant"}"#, 400)]
+    account.request("GET", "/me/tracks/contains?ids=x") { _, code in status = code }
+    precondition(status == 401 && !account.connected && stored.last! == nil)
+
+    let likeAccount = SpotifyAccount(send: { request, completion in
+        requests.append(request)
+        let (body, code) = responses.removeFirst()
+        completion(Data(body.utf8), code)
+    }, load: { "refresh" }, store: { _ in }, clientID: { "client" })
+    let likes = LikeStore(account: likeAccount)
+    responses = [(#"{"access_token":"t","expires_in":3600}"#, 200), ("[true]", 200)]
+    likes.track("spotify:track:abc")
+    precondition(likes.state == true && requests.last!.url!.query == "ids=abc")
+    responses = [("", 200)]
+    likes.toggle()
+    precondition(likes.state == false && requests.last!.httpMethod == "DELETE")
+    responses = [("", 500)]  // a failed save puts the heart back
+    likes.toggle()
+    precondition(likes.state == false && requests.last!.httpMethod == "PUT")
+    likes.track("")
+    precondition(likes.state == nil)
+    let queue = #"{"currently_playing":{"name":"Now"},"queue":[{"name":"Clozapine","artists":[{"name":"NEET"},{"name":"Guest"}]},{"name":"Later"}]}"#
+    precondition(upNextLine(Data(queue.utf8)) == "Clozapine — NEET, Guest")
+    precondition(upNextLine(Data(#"{"queue":[]}"#.utf8)) == nil && upNextLine(Data("oops".utf8)) == nil)
 }

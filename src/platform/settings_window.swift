@@ -8,11 +8,15 @@ final class SettingsModel: ObservableObject {
     @Published var renderer = WallifyRendererStats()
     @Published var loginEnabled = false
     @Published var loginError: String?
+    @Published var accountConnected = false
+    @Published var accountError: String?
 
     func refresh() {
         wallify_settings_get_snapshot(&snapshot)
         wallify_debug_renderer_stats(&renderer)
         loginEnabled = launchAtLoginEnabled()
+        accountConnected = spotifyAccount.connected
+        accountError = spotifyAccount.lastError
     }
 
     func toggle(_ key: Int32, _ field: KeyPath<WallifySettingsSnapshot, Bool>) -> Binding<Bool> {
@@ -49,6 +53,7 @@ private struct SettingsView: View {
     @ObservedObject var model: SettingsModel
     @State private var page: String? = "General"
     @State private var confirmRestore = false
+    @AppStorage(spotifyClientIDKey) private var clientID = ""
     private let pages = [
         ("General", "slider.horizontal.3"), ("Appearance", "paintbrush"),
         ("Playback", "play.circle"), ("Desktop", "rectangle.on.rectangle"),
@@ -110,6 +115,15 @@ private struct SettingsView: View {
             }
             section("Media Keys") {
                 picker(18, "Route F7, F8 and F9 through Wallify.")
+            }
+            section("Spotify Account", footer: "Needed for Like and Up Next. In your Spotify app's settings, add \(SpotifyAccount.redirectURI) as a redirect URI.") {
+                TextField("Client ID", text: $clientID, prompt: Text("32-character client ID"))
+                buttonRow("Account", model.accountError ?? (model.accountConnected ? "Connected" : "Not connected"),
+                          model.accountConnected ? "Disconnect" : "Connect…") {
+                    if model.accountConnected { spotifyAccount.disconnect() } else { spotifyAccount.connect { NSWorkspace.shared.open($0) } }
+                    model.refresh()
+                }
+                .disabled(!model.accountConnected && !validSpotifyClientID(clientID.trimmingCharacters(in: .whitespaces)))
             }
             section("Startup") {
                 if #available(macOS 13, *) {

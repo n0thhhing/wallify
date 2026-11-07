@@ -392,6 +392,7 @@ public func runMetadataWorker() {
                 reply = autoreleasepool { queryMediaSource(source) }
                 let fields = String(decoding: reply, as: UTF8.self).components(separatedBy: "|||")
                 if source == 1 && fields.count >= 7 { spotifyArtwork = fields[5]; spotifyTrackID = fields[6] }
+                likeStore.track(source == 1 && fields.count >= 7 ? spotifyTrackID : "")
             }
             guard activeMediaSource() == source else { continue }
             let running = source == 1 && reply == Array("CLOSED".utf8) && isSpotifyRunning() != 0

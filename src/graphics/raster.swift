@@ -55,9 +55,9 @@ public func drawRasterText(_ pixels: UnsafeMutablePointer<UInt32>?, _ width: UIn
 
 private let rasterSymbols: [(CGImage, NSSize)?] = {
     autoreleasepool {
-        ["play.fill", "pause.fill", "backward.fill", "forward.fill"].enumerated().map { index, name in
+        ["play.fill", "pause.fill", "backward.fill", "forward.fill", "heart", "heart.fill"].enumerated().map { index, name in
             guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil),
-                  let configured = symbol.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: index < 2 ? 28 : 17, weight: .regular)) else { return nil }
+                  let configured = symbol.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: index < 2 ? 28 : index < 4 ? 17 : 15, weight: .regular)) else { return nil }
             let size = configured.size
             // An owned bitmap avoids lockFocus's implicit offscreen window/focus stack.
             guard let raster = NSBitmapImageRep(bitmapDataPlanes: nil,
@@ -79,7 +79,7 @@ private let rasterSymbols: [(CGImage, NSSize)?] = {
 
 @_cdecl("widget_draw_symbol")
 public func drawRasterSymbol(_ pointer: UnsafeMutableRawPointer?, _ kind: Int32) -> Int32 {
-    guard let pointer = pointer, kind >= 0, kind < 4, let (image, size) = rasterSymbols[Int(kind)] else { return 0 }
+    guard let pointer = pointer, kind >= 0, kind < 6, let (image, size) = rasterSymbols[Int(kind)] else { return 0 }
     let context = Unmanaged<CGContext>.fromOpaque(pointer).takeUnretainedValue()
     let rect = CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height)
     context.saveGState()
@@ -102,7 +102,7 @@ private func rasterTriangle(_ context: CGContext, x: CGFloat, width: CGFloat, he
 public func drawRasterIcon(_ pixels: UnsafeMutablePointer<UInt32>?, _ width: UInt, _ height: UInt,
                            _ x: Double, _ y: Double, _ kind: Int32, _ hover: Double,
                            _ opacity: Double, _ scale: Double) {
-    guard kind >= 0, kind < 4, x.isFinite, y.isFinite, opacity.isFinite, scale.isFinite, scale > 0,
+    guard kind >= 0, kind < 6, x.isFinite, y.isFinite, opacity.isFinite, scale.isFinite, scale > 0,
           let context = rasterContext(pixels, width: width, height: height) else { return }
     context.translateBy(x: x, y: Double(height) - y)
     context.scaleBy(x: scale, y: scale)
@@ -121,6 +121,7 @@ public func drawRasterIcon(_ pixels: UnsafeMutablePointer<UInt32>?, _ width: UIn
             context.addPath(CGPath(roundedRect: CGRect(x: x, y: -12, width: 6, height: 24), cornerWidth: 1.8, cornerHeight: 1.8, transform: nil))
         }
         context.fillPath()
+    case 4, 5: break  // the heart has no hand-drawn fallback
     default:
         if kind == 2 { context.scaleBy(x: -1, y: 1) }
         rasterTriangle(context, x: -8, width: 9, height: 12)

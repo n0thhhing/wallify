@@ -47,6 +47,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private(set) var play: NSMenuItem!
     private var timer: Timer?
     private var open: NSMenuItem!
+    private var like: NSMenuItem!
 
     // Keep this order and naming in step with WidgetContextMenu.
     override init() {
@@ -62,6 +63,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         play = add("Play", #selector(playPause))
         add("Previous Track", #selector(previous), symbol: "backward.fill")
         add("Next Track", #selector(next), symbol: "forward.fill")
+        like = add("Save to Liked Songs", #selector(toggleLike))
         menu.addItem(.separator())
         addSettingsSection(to: menu, target: self, action: #selector(chooseSetting(_:)))
         menu.addItem(.separator())
@@ -106,6 +108,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         if #available(macOS 14.4, *) { track.subtitle = artist.title }
         track.image = NSImage(systemSymbolName: snapshot.playing ? "waveform" : "music.note", accessibilityDescription: nil)
         open.title = snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify"
+        let liked = likeStore.state
+        like.isHidden = liked == nil
+        like.title = liked == true ? "Remove from Liked Songs" : "Save to Liked Songs"
+        like.image = NSImage(systemSymbolName: liked == true ? "heart.fill" : "heart", accessibilityDescription: nil)
         play.title = snapshot.playing ? "Pause" : "Play"
         play.image = NSImage(systemSymbolName: snapshot.playing ? "pause.fill" : "play.fill",
                              accessibilityDescription: play.title)
@@ -125,6 +131,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     @objc func playPause() { wallify_menu_play_pause() }
+    @objc func toggleLike() { likeStore.toggle() }
     @objc func previous() { wallify_menu_previous() }
     @objc func next() { wallify_menu_next() }
     @objc private func settings() { showSettingsWindow() }
@@ -153,6 +160,18 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 @_cdecl("widget_application_init")
 @MainActor public func initializeApplication() {
     NSApplication.shared.setActivationPolicy(.accessory)
+    // An accessory app shows no menu bar, but text fields still need an Edit menu for ⌘X, ⌘C, ⌘V, ⌘A and ⌘Z.
+    let edit = NSMenu(title: "Edit")
+    for (title, action, key) in [("Undo", "undo:", "z"), ("Redo", "redo:", "Z"), ("Cut", "cut:", "x"),
+                                 ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
+        edit.addItem(NSMenuItem(title: title, action: Selector(action), keyEquivalent: key))
+    }
+    let main = NSMenu()
+    main.addItem(NSMenuItem(title: "Wallify", action: nil, keyEquivalent: ""))
+    let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+    editItem.submenu = edit
+    main.addItem(editItem)
+    NSApplication.shared.mainMenu = main
 }
 
 @_cdecl("widget_application_run")

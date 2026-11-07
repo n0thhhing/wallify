@@ -76,6 +76,9 @@ func settingTag(_ tag: Int) -> (spec: SettingSpec, value: Int32)? {
         menu.addItem(item(snapshot.playing ? "Pause" : "Play", 1, snapshot.playing ? "pause.fill" : "play.fill"))
         menu.addItem(item("Previous Track", 2, "backward.fill"))
         menu.addItem(item("Next Track", 3, "forward.fill"))
+        if let liked = likeStore.state {
+            menu.addItem(item(liked ? "Remove from Liked Songs" : "Save to Liked Songs", 6, liked ? "heart.fill" : "heart"))
+        }
         menu.addItem(.separator())
         addSettingsSection(to: menu, target: self, action: #selector(choose(_:)))
         menu.addItem(.separator())

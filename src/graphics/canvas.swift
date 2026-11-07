@@ -5,6 +5,7 @@ enum Texture: Int32 {
     case play, pause, previous, next, raccoon, textStart
     case cachedScene = 63
     case waveform = 29
+    case heart = 30, heartFill = 31
 }
 
 func cardRect(_ x: Double, _ y: Double, _ w: Double, _ h: Double, _ radius: Double = 0) -> WallifyCardRect {

@@ -27,7 +27,7 @@ final class SceneAssets {
         var white: UInt32 = 0xffffffff
         loadMetalTexture(Texture.white.rawValue, &white, 1, 1)
         var pixels = [UInt32](repeating: 0, count: 96 * 96)
-        for (index, texture) in [Texture.play, .pause, .previous, .next].enumerated() {
+        for (index, texture) in [Texture.play, .pause, .previous, .next, .heart, .heartFill].enumerated() {
             pixels = [UInt32](repeating: 0, count: pixels.count)
             pixels.withUnsafeMutableBufferPointer { drawRasterIcon($0.baseAddress, 96, 96, 48, 48, Int32(index), 0, 1, 2) }
             pixels.withUnsafeBufferPointer { loadMetalTexture(texture.rawValue, $0.baseAddress, 96, 96) }

@@ -70,6 +70,11 @@ struct SceneLayout {
         let radius: Double = index == 1 ? 20 : 15, button = buttons[index]
         return cardRect(button.x - radius, button.y - radius, radius * 2, radius * 2, radius)
     }
+    // The like button at the right end of the title row; empty when there is no like state to show.
+    func likeBounds() -> WallifyCardRect {
+        guard likeStore.state != nil, geometry.compact_mix <= 0.5 else { return WallifyCardRect() }
+        return cardRect(geometry.text_x + geometry.text_width - 22, geometry.title_y + 1, 22, 22, 11)
+    }
     func controlsVisible(_ enabled: Bool) -> Bool { enabled && geometry.compact_mix <= 0.5 }
     func progressVisible(_ hidden: Bool) -> Bool { !hidden && geometry.compact_mix <= 0.5 }
     func labelBounds(_ artist: Bool, state: WallifyWidgetState) -> WallifyCardRect {
@@ -92,7 +97,7 @@ struct SceneLayout {
         WallifyInputGeometry(card: card, art: cardRect(geometry.art_x, geometry.art_y, geometry.art_size, geometry.art_size, 14),
             bar: cardRect(geometry.bar_x, geometry.bar_y - 14, geometry.bar_w, geometry.bar_h + 28, 3),
             buttons: (buttonBounds(0), buttonBounds(1), buttonBounds(2)),
-            title: labelBounds(false, state: state), artist: labelBounds(true, state: state), bar_x: geometry.bar_x, bar_width: geometry.bar_w,
+            title: labelBounds(false, state: state), artist: labelBounds(true, state: state), like: likeBounds(), bar_x: geometry.bar_x, bar_width: geometry.bar_w,
             controls_visible: controlsVisible(state.setting_show_controls), progress_visible: progressVisible(state.setting_hide_progress))
     }
 }

@@ -3,7 +3,7 @@ import AppKit
 enum PointerAction: Equatable {
     case redraw, menu, startDrag, hidePreview, preview(SnapFeedback)
     case dragDebug(Bool), save, openIdle, toggle, command(UInt32), seek(Double)
-    case move(Int32, Int32), openTrack, searchArtist
+    case move(Int32, Int32), openTrack, searchArtist, like
 }
 
 // The reducer shares geometry with rendering and leaves native side effects to the caller.
@@ -28,6 +28,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
     let buttons = [geometry.buttons.0, geometry.buttons.1, geometry.buttons.2]
     var target: Int32 = 1
     if geometry.controls_visible && !idle, let index = buttons.firstIndex(where: contains) { target = Int32(index + 5) }
+    else if !idle && geometry.like.w > 0 && contains(geometry.like) { target = 10 }
     else if !idle && contains(geometry.title) { target = 8 }
     else if !idle && contains(geometry.artist) { target = 9 }
     else if geometry.progress_visible && !idle && contains(geometry.bar) { target = 4 }
@@ -41,7 +42,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
         if state.pointee.global_duration > 0 && target == 4 {
             state.pointee.global_is_dragging = true; changed = true
         }
-        if !state.pointee.setting_position_locked && contains(geometry.card) && !(5...9).contains(target) && !state.pointee.global_is_dragging {
+        if !state.pointee.setting_position_locked && contains(geometry.card) && !(5...10).contains(target) && !state.pointee.global_is_dragging {
             state.pointee.global_panel_dragging = true
             state.pointee.widget_drag_start_mouse_x = mouse.x; state.pointee.widget_drag_start_mouse_y = mouse.y
             state.pointee.widget_drag_start_margin_left = state.pointee.widget_margin_left
@@ -102,6 +103,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
         case 6: actions.append(.toggle)
         case 7: actions.append(.command(4))
         case 8: actions.append(.openTrack)
+        case 10: actions.append(.like)
         case 9: actions.append(.searchArtist)
         default: break
         }
@@ -130,7 +132,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
                                 width: width, height: height, geometry: geometry.pointee, state: state, idle: spotifyIsIdle()) {
         widget_nearby_panel_snap($0, $1, geometry.pointee.card.x, geometry.pointee.card.y, width, height)
     }
-    let hoveringLabel = (8...9).contains(state.pointee.global_hover_target) && !state.pointee.global_panel_dragging
+    let hoveringLabel = [8, 9, 10].contains(state.pointee.global_hover_target) && !state.pointee.global_panel_dragging
     sceneLock.unlock()
     (hoveringLabel ? NSCursor.pointingHand : NSCursor.arrow).set()
     for action in actions {
@@ -149,6 +151,7 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
         case .seek(let position): enqueueMediaSeek(position)
         case .openTrack: openMediaLabel(artist: false)
         case .searchArtist: openMediaLabel(artist: true)
+        case .like: likeStore.toggle()
         }
     }
 }
