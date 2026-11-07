@@ -19,12 +19,15 @@ concurrency:
 jobs:
   macos:
     name: macOS / Swift
-    runs-on: xcode-27-arm64
-    timeout-minutes: 15
+    runs-on: macos-26
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Install the Metal toolchain
+        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
 
       - name: Check build cache, packaging recovery, watch filtering, and native tests
         run: |

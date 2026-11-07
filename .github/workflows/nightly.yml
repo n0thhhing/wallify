@@ -1,0 +1,47 @@
+name: Nightly
+
+# Every push to main or combine replaces the rolling "nightly" pre-release with a fresh DMG.
+# Wallify's update check only looks at full releases, so nightlies never prompt stable users.
+on:
+  push:
+    branches: [main, combine]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    name: Build and publish nightly
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install the Metal toolchain
+        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Build and test
+        run: ./scripts/build.sh --test
+
+      - name: Package
+        run: |
+          ./scripts/package-app.sh --dmg
+          mv build/Wallify.dmg build/Wallify-nightly.dmg
+
+      - name: Publish the nightly pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly build/Wallify-nightly.dmg --prerelease --target "$GITHUB_SHA" \
+            --title "Wallify Nightly" \
+            --notes "Built from \`${GITHUB_SHA::7}\` on \`$GITHUB_REF_NAME\` ($(date -u '+%Y-%m-%d %H:%M UTC')). Pre-release builds may be unstable. The app is not notarized: right-click it and choose Open the first time."

@@ -1,0 +1,41 @@
+name: Release
+
+# Pushing a version tag (scripts/release.sh does this) builds, tests and publishes that release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check the tag matches VERSION
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "Tag $GITHUB_REF_NAME does not match VERSION ($version)."; exit 1; }
+
+      - name: Install the Metal toolchain
+        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Build and test
+        run: ./scripts/build.sh --test
+
+      - name: Package
+        run: |
+          ./scripts/package-app.sh --dmg
+          mv build/Wallify.dmg "build/Wallify-${GITHUB_REF_NAME#v}.dmg"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "build/Wallify-${GITHUB_REF_NAME#v}.dmg" \
+            --title "Wallify ${GITHUB_REF_NAME#v}" --generate-notes
