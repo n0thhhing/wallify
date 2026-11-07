@@ -60,7 +60,7 @@
       place($(".bar"), g.bar[0], g.bar[1], g.bar[2], 5, 2.5);
       place(elapsed, tx, g.time, 100, 18);
       place(total, tx, g.time, tw, 18);
-      place($(".lyrics"), tx, g.time, tw, 19);
+      place($(".lyrics"), tx, g.time - 6, tw, 19);  // raised 6 pt like the app, clear of the play button's hover circle
       controls.forEach((button, i) => {
         const box = i === 1 ? 40 : 30;
         place(button, g.buttons[0] + (i - 1) * 46 - box / 2, g.buttons[1] - box / 2, box, box, box / 2);
@@ -72,7 +72,7 @@
     const fit = () => {
       const g = layouts[size];
       // The scene's fixed height, minus its menu bar and padding, bounds tall sizes so the page never jumps.
-      const room = parseFloat(getComputedStyle(desk).minHeight) - 80;
+      const room = parseFloat(getComputedStyle(desk).minHeight) - 96;  // title bar, padding and border
       const scale = Math.min(1, (desk.clientWidth - 40) / g.w, room / g.h);
       widget.style.transform = `scale(${scale})`;
       Object.assign(frame.style, { width: `${g.w * scale}px`, height: `${g.h * scale}px` });
