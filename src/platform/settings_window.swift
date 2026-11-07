@@ -56,19 +56,26 @@ private struct SettingsView: View {
     ]
 
     var body: some View {
-        HStack(spacing: 0) {
-            List(selection: $page) {
-                ForEach(pages, id: \.0) { title, symbol in Label(title, systemImage: symbol).tag(title) }
+        Group {
+            if #available(macOS 13, *) {
+                // The system split view gives the modern floating sidebar and puts the page title in the toolbar.
+                NavigationSplitView {
+                    sidebar.navigationSplitViewColumnWidth(200).modifier(NoSidebarToggle())
+                } detail: {
+                    Form { pageContent }.formStyle(.grouped).navigationTitle(page ?? "General")
+                }
+            } else {
+                HStack(spacing: 0) {
+                    sidebar.frame(width: 190)
+                    Divider()
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(page ?? "General").font(.title2.bold()).padding([.horizontal, .top], 20)
+                            .accessibilityAddTraits(.isHeader)
+                        ScrollView { Form { pageContent }.padding(20) }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            .listStyle(.sidebar)
-            .safeAreaInset(edge: .bottom) {
-                Button("Restore Defaults…") { confirmRestore = true }.frame(maxWidth: .infinity).padding(12)
-            }
-            .frame(width: 190)
-            Divider()
-            Form { pageContent }
-                .modifier(GroupedForm())
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 720, minHeight: 500)
         .onChange(of: page) { _ in model.refresh() }
@@ -80,6 +87,13 @@ private struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: { Text("All Wallify preferences will be reset.") }
         .onAppear { model.refresh() }
+    }
+
+    private var sidebar: some View {
+        List(selection: $page) {
+            ForEach(pages, id: \.0) { title, symbol in Label(title, systemImage: symbol).tag(title) }
+        }
+        .listStyle(.sidebar)
     }
 
     @ViewBuilder private var pageContent: some View {
@@ -170,14 +184,17 @@ private struct SettingsView: View {
             section("Position") {
                 toggle("Lock Position", "Prevent accidental dragging. Playback controls remain usable.", 25, \.position_locked)
                 if !terminalMode {
-                    LabeledRow("Display", WidgetPanel.current?.screen?.localizedName ?? "Unavailable")
-                    Menu("Move to Display") {
-                        ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in
-                            Button("\(index + 1) — \(screen.localizedName)") { moveWidgetToDisplay(screen); model.refresh() }
-                        }
-                    }
+                    Picker(selection: Binding(get: { NSScreen.screens.firstIndex { $0 == WidgetPanel.current?.screen } ?? 0 }, set: {
+                        if NSScreen.screens.indices.contains($0) { moveWidgetToDisplay(NSScreen.screens[$0]); model.refresh() }
+                    })) {
+                        ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in Text(screen.localizedName).tag(index) }
+                    } label: { label("Display", "The screen the widget is placed on.") }
                 }
-                Button("Reset Position") { wallify_settings_reset_position(); model.refresh() }
+                HStack {
+                    label("Reset Position", "Move the widget back to the top-left corner of its display.")
+                    Spacer(minLength: 12)
+                    Button("Reset") { wallify_settings_reset_position(); model.refresh() }
+                }
                 Text("Drag the widget to move it. Placement is remembered separately for each display.")
                     .font(.caption).foregroundColor(.secondary)
             }
@@ -204,6 +221,11 @@ private struct SettingsView: View {
                 HStack {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
                     Button("Open Config") { NSWorkspace.shared.open(configURL) }
+                }
+                HStack {
+                    label("Restore Defaults", "Reset every Wallify preference.")
+                    Spacer(minLength: 12)
+                    Button("Restore…", role: .destructive) { confirmRestore = true }
                 }
             }
         }
@@ -243,10 +265,10 @@ private struct SettingsView: View {
     }
 }
 
-// System Settings-style grouped rows on macOS 13+; a scrolling form on macOS 12.
-private struct GroupedForm: ViewModifier {
+// A settings sidebar should not collapse, matching System Settings.
+private struct NoSidebarToggle: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(macOS 13, *) { content.formStyle(.grouped) } else { ScrollView { content.padding(20) } }
+        if #available(macOS 14, *) { content.toolbar(removing: .sidebarToggle) } else { content }
     }
 }
 
@@ -271,14 +293,16 @@ private final class SettingsWindow {
     func show() {
         if window == nil {
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 560),
-                                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                  backing: .buffered, defer: false)
             panel.title = "Wallify Settings"
+            panel.toolbarStyle = .unified
             panel.isReleasedWhenClosed = false
             panel.isRestorable = false
             panel.tabbingMode = .disallowed
             panel.collectionBehavior = .fullScreenAuxiliary
-            panel.contentView = NSHostingView(rootView: SettingsView(model: model))
+            // A hosting controller bridges the split view's toolbar and title into the window.
+            panel.contentViewController = NSHostingController(rootView: SettingsView(model: model))
             panel.contentMinSize = NSSize(width: 720, height: 500)
             panel.center()
             panel.setFrameAutosaveName("Wallify.SettingsWindow")
