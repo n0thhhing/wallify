@@ -116,6 +116,7 @@ public func applyWidgetInt(_ key: Int32, _ value: Int32) {
     guard let spec = specsByKey[key], case .choice(let path, _) = spec.storage else { return }
     let state = widgetStatePointer(), stored = spec.storedValue(Int(value))
     if key == 14 {
+        guard !state.pointee.setting_position_locked else { return }
         if state.pointee.setting_mode != stored {
             beginWidgetMode(stored, Double(wallify_width()), Double(wallify_height()), state.pointee.setting_animations)
             if !state.pointee.mode_transition_active {
@@ -328,7 +329,7 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
     # Scrolling on the widget changes the volume or seeks [off, volume, seek]
     scroll_action = \(values["scroll_action"]!)
 
-    # Prevent dragging the widget [true, false]
+    # Prevent dragging and resizing the widget [true, false]
     position_locked = \(values["position_locked"]!)
     
     # Hide progress/scrubber bar [true, false]

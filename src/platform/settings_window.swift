@@ -105,7 +105,8 @@ private struct SettingsView: View {
         switch page ?? "General" {
         case "General":
             section("Widget") {
-                picker(14, "")
+                picker(14, model.snapshot.position_locked ? "Turn off Lock Position to change the widget size." : "")
+                    .disabled(model.snapshot.position_locked)
                 picker(13, "Where Wallify reads what's playing.")
             }
             section("Idle Behavior", footer: "Paused tracks always stay visible.") {
@@ -189,7 +190,7 @@ private struct SettingsView: View {
             }
         case "Desktop":
             section("Position", footer: "Drag the widget to move it. Placement is remembered for each display.") {
-                toggle(25, "Playback controls stay usable.")
+                toggle(25, "Prevents dragging and resizing. Playback controls stay usable.")
                 if !terminalMode {
                     Picker(selection: Binding(get: { NSScreen.screens.firstIndex { $0 == WidgetPanel.current?.screen } ?? 0 }, set: {
                         if NSScreen.screens.indices.contains($0) { moveWidgetToDisplay(NSScreen.screens[$0]); model.refresh() }

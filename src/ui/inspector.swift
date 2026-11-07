@@ -115,6 +115,7 @@ func hideInspector() {
     sceneLock.lock()
     defer { sceneLock.unlock() }
     let state = widgetStatePointer(), desktop = DesktopInteraction.shared
+    if state.pointee.setting_position_locked && (1001...1002).contains(key) { return }
     switch key {
     case 1000: desktop.modeMix = min(1, max(0, Double(value) / 100))
     case 1001: desktop.width = max(1, Double(value)); resizeMetalWidget(Int32(desktop.width), metalWidgetHeight())

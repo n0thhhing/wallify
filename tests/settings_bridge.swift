@@ -433,6 +433,14 @@ struct SettingsBridgeCheck {
         precondition(menu.items.last!.title == "Quit Wallify")
         let lock = menu.items.first { $0.title == "Lock Position" }!
         precondition(lock.state == .on)
+        precondition(children("Widget Size", in: menu).allSatisfy { !$0.isEnabled })
+        let state = widgetStatePointer()
+        let wasLocked = state.pointee.setting_position_locked
+        let mode = state.pointee.setting_mode
+        state.pointee.setting_position_locked = true
+        applyWidgetInt(14, mode == 0 ? 1 : 0)
+        precondition(state.pointee.setting_mode == mode)
+        state.pointee.setting_position_locked = wasLocked
         target.choose(lock)
         precondition(contextSelection == 3500)
         precondition(!menu.items.contains { $0.title == "Track Transition" })
@@ -462,6 +470,7 @@ struct SettingsBridgeCheck {
         precondition(children("Companion", in: refreshed).first { $0.tag == 2502 }!.state == .on)
         precondition(settingTag(2302)!.spec.key == 13 && settingTag(2302)!.value == 2 && settingTag(90) == nil)
         precondition(refreshed.items.first { $0.title == "Lock Position" }!.state == .off)
+        precondition(children("Widget Size", in: refreshed).allSatisfy { $0.isEnabled })
     }
 
     @MainActor static func checkDesktopSnap() {

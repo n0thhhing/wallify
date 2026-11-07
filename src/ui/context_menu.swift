@@ -34,6 +34,7 @@ func settingTag(_ tag: Int) -> (spec: SettingSpec, value: Int32)? {
     for item in menu.items {
         if let submenu = item.submenu { updateSettingStates(submenu, snapshot) }
         guard let (spec, value) = settingTag(item.tag) else { continue }
+        if spec.key == 14 { item.isEnabled = !snapshot.position_locked }
         switch spec.storage {
         case .bool(_, let field): item.state = snapshot[keyPath: field] ? .on : .off
         case .choice(_, let field): item.state = snapshot[keyPath: field] == value ? .on : .off
