@@ -1,5 +1,32 @@
 import Foundation
 
+// Heart press, like Spotify's: liking dips to 80 %, springs past full size to 122 % and settles
+// (0.45 s); unliking only dips to 82 % and back (0.3 s).
+let likeBurstDuration = 0.4
+func likePopScale(_ elapsed: Double, liked: Bool) -> Double {
+    guard elapsed >= 0 else { return 1 }
+    func ease(_ from: Double, _ to: Double, _ start: Double, _ end: Double) -> Double {
+        from + (to - from) * smoothTransition((elapsed - start) / (end - start))
+    }
+    if liked {
+        switch elapsed {
+        case ..<0.08: return ease(1, 0.8, 0, 0.08)
+        case ..<0.26: return ease(0.8, 1.22, 0.08, 0.26)
+        case ..<0.45: return ease(1.22, 1, 0.26, 0.45)
+        default: return 1
+        }
+    }
+    switch elapsed {
+    case ..<0.1: return ease(1, 0.82, 0, 0.1)
+    case ..<0.3: return ease(0.82, 1, 0.1, 0.3)
+    default: return 1
+    }
+}
+
+// A lyric line spans the full time row, so it sits this far above the time labels to clear the play
+// button's hover circle (radius 20 around button_y) while staying below the progress bar.
+let lyricRaise = 6.0
+
 let primaryTextColor = SIMD4<Float>(245 / 255, 245 / 255, 247 / 255, 1)
 
 func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayout, state: WallifyWidgetState, hasArtwork: Bool) {
@@ -58,9 +85,22 @@ func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, s
     if like.w > 0, let liked = likeStore.state {
         let hover = state.hover_amount.3
         if hover > 0.001 { canvas.fill(like, SIMD4(1, 1, 1, Float(hover * 31 / 255))) }
-        // The icon texture is a 48 pt canvas centred on the glyph.
-        let icon = cardRect(like.x + like.w / 2 - 24, like.y + like.h / 2 - 24, 48, 48)
-        canvas.imageTint(liked ? .heartFill : .heart, icon, liked ? SIMD4(0.12, 0.84, 0.38, 1) : SIMD4(1, 1, 1, 0.7))
+        let green = SIMD4<Float>(0.12, 0.84, 0.38, 1), press = likeStore.press(now: monotonicTime())
+        let cx = like.x + like.w / 2, cy = like.y + like.h / 2
+        // Liking bursts six green dots outward from the heart as it pops.
+        if press.liked && press.elapsed < likeBurstDuration {
+            let t = press.elapsed / likeBurstDuration, ease = 1 - pow(1 - t, 3)
+            let radius = 6 + 12 * ease, dot = 3.2 - 1.6 * t
+            for index in 0..<6 {
+                let angle = Double(index) * .pi / 3 - .pi / 2
+                canvas.fill(cardRect(cx + cos(angle) * radius - dot / 2, cy + sin(angle) * radius - dot / 2, dot, dot, dot / 2),
+                            SIMD4(green.x, green.y, green.z, Float(1 - t)))
+            }
+        }
+        // The icon texture is a 48 pt canvas centred on the glyph; the press scales it around its centre.
+        let size = 48 * likePopScale(press.elapsed, liked: press.liked)
+        let icon = cardRect(cx - size / 2, cy - size / 2, size, size)
+        canvas.imageTint(liked ? .heartFill : .heart, icon, liked ? green : SIMD4(1, 1, 1, 0.7))
     }
     drawPlayerLabels(canvas, elapsed: elapsed, layout: layout, state: state)
 }
@@ -125,7 +165,7 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
         func line(_ text: String, _ offset: Double, _ alpha: Float) {
             guard alpha > 0.01, !text.isEmpty else { return }
             let note = text == "♪"
-            textCache.draw(canvas, text, g.text_x, g.timestamp_y + offset, g.text_width, 12.5 * scale, 1, !note,
+            textCache.draw(canvas, text, g.text_x, g.timestamp_y - lyricRaise + offset, g.text_width, 12.5 * scale, 1, !note,
                            note ? SIMD4(secondary.x, secondary.y, secondary.z, 0.6 * alpha) : SIMD4(1, 1, 1, 0.95 * alpha), 0, false, false)
         }
         if ease < 1 { line(lyric.previous, -rise * Double(ease), 1 - ease) }

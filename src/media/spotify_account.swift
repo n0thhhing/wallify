@@ -249,10 +249,18 @@ final class LikeStore: @unchecked Sendable {
     private let lock = NSLock()
     private var trackID = ""
     private var liked: Bool?
+    private var pressedAt = -Double.infinity
+    private var pressLiked = false
     private let account: SpotifyAccount
     init(account: SpotifyAccount) { self.account = account }
 
     var state: Bool? { lock.lock(); defer { lock.unlock() }; return liked }
+
+    // Seconds since the last press and whether it liked; drives the heart animation.
+    func press(now: Double) -> (elapsed: Double, liked: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        return (now - pressedAt, pressLiked)
+    }
 
     // Called with the current Spotify track URI ("spotify:track:…"), or "" when Spotify is not the source.
     func track(_ uri: String) {
@@ -279,13 +287,15 @@ final class LikeStore: @unchecked Sendable {
         guard let current = liked, !trackID.isEmpty else { lock.unlock(); return }
         let id = trackID
         liked = !current
+        pressedAt = monotonicTime()
+        pressLiked = !current
         lock.unlock()
         requestWidgetFrame()
         announceWidgetChange()
         account.request(current ? "DELETE" : "PUT", "/me/tracks?ids=" + id) { [self] _, status in
             guard !(200..<300).contains(status) else { return }
             lock.lock()
-            if trackID == id { liked = current }
+            if trackID == id { liked = current; pressedAt = -.infinity }  // a failed like reverts without celebrating
             lock.unlock()
             requestWidgetFrame()
         }

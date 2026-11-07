@@ -23,6 +23,8 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     var result = AnimationStep(), high = false, visual = false, ambient = false
     var idleInterval: Double = 0
     if state.animation_time < state.art_transition_until { result.draw = true; visual = true }
+    // The heart's press animation and burst run at 30 FPS until they finish.
+    if likeStore.press(now: now).elapsed < 0.5 { result.draw = true; visual = true }
     // One extra frame after the volume hint expires puts the position back.
     if state.volume_hint_until > 0 && state.animation_time < state.volume_hint_until + 0.1 { result.draw = true; visual = true }
     if !state.setting_animations {

@@ -149,6 +149,17 @@ func checkConfigurationGolden() {
     precondition(lyricFrame(lyrics, at: 17)!.line == "♪" && lyricFrame(lyrics, at: 17)!.previous == "Yeah")
     precondition(lyricFrame(lyrics, at: 62.6)! == LyricFrame(line: "Twice", previous: "Twice", progress: 1, untilNext: nil))
     precondition(lyricFrame([], at: 1) == nil)
+    // Liking dips, overshoots and settles; unliking only dips; both rest at full size.
+    precondition(likePopScale(0.08, liked: true) == 0.8 && likePopScale(0.26, liked: true) == 1.22 && likePopScale(0.6, liked: true) == 1)
+    precondition(likePopScale(0.1, liked: false) == 0.82 && likePopScale(0.3, liked: false) == 1 && likePopScale(-1, liked: true) == 1)
+    precondition((0...45).map { likePopScale(Double($0) / 100, liked: true) }.allSatisfy { (0.79...1.23).contains($0) })
+    // In every size with a lyric row, the line sits between the progress bar and the play button's hover circle.
+    for mode in Int32(1)...4 {
+        var g = WallifyLayoutGeometry()
+        precondition(widgetLayoutGeometry(mode, mode, 1, &g))
+        let top = g.timestamp_y - lyricRaise, bottom = top + 12.5 * 1.5
+        precondition(top >= g.bar_y + g.bar_h && bottom <= g.button_y - 20, "lyrics overlap in mode \(mode)")
+    }
     precondition(compareVersions("1.10.0", "1.9.0") == 1 && compareVersions("1.2", "1.2.0") == 0 && compareVersions("0.9", "1.0.0") == -1)
     let release = #"{"tag_name":"v1.2.0","html_url":"https://github.com/n0thhhing/wallify/releases/tag/v1.2.0","draft":false}"#
     let page = URL(string: "https://github.com/n0thhhing/wallify/releases/tag/v1.2.0")!
