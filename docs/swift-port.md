@@ -35,6 +35,12 @@ Saved preferences retain XDG precedence, the macOS Application Support path, leg
 
 Current checks also cover optional track/artist links, position locking,
 paused-versus-stopped presentation, per-display placement, and the Inspector's
-shared snapshot fields and companion mapping. See the [Settings guide](settings.md)
+shared snapshot fields and companion mapping. They also pin every setting's
+config spelling, the menus built from the settings table, the widget's VoiceOver
+elements, Spotify notification payloads, the Spotify login (PKCE vector, callback
+parsing, refresh, 401 retry and revocation against a fake network), Liked Songs
+and Up Next, lyric parsing and timing, scroll amounts, update version and commit
+comparison, playback redraw intervals, lyric clearance from the controls, and the
+like animation curve. See the [Settings guide](settings.md)
 for the current page organization. Restart an existing app after packaging to
 load the new executable.

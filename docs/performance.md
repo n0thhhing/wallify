@@ -66,8 +66,8 @@ Snap previews now ignore unchanged geometry/radius and repeated hides.
 Unchanged previews also avoid the player-window query and window ordering.
 Hiding clears the visible state so showing the same target again still works.
 
-Settings exposes renderer status under Performance, with profiling instructions
-and diagnostic controls inside Advanced. The Inspector also reports whether a
+Settings → Advanced shows renderer status, profiling instructions and
+diagnostic controls. The Inspector also reports whether a
 widget is hidden by stopped-music behavior, separately from window occlusion.
 Stopped Hide Widget presentation suppresses desktop drawing; new track metadata
 wakes native presentation even while the render loop is asleep. Pausing retains
@@ -99,3 +99,24 @@ versus scalar 0.591 µs. Scalar runs ranged from 0.577 to 0.632 µs, so the 3%
 difference did not exceed normal variation. Both checksums were 29624600;
 tie-breaking checks passed. Discarded the SIMD implementation and retained
 the benchmark and equal-distance regression check.
+
+## Playback redraws and Spotify polling
+
+Measured November 7, 2026 on the installed ReleaseFast app with Spotify playing.
+Frame preparation stayed at 0.8 µs, so these changes target how often Wallify
+draws and queries Spotify rather than per-frame cost.
+
+Playback used to redraw at 20 FPS just to move the progress bar. It now redraws
+when the bar gains a pixel (about 4 FPS for a 3-minute song on the 3×1 bar),
+at least once a second while time labels show, and still at 20 FPS while the live
+waveform is visible. With the widget visible and the waveform on, Wallify averaged
+2.8 % CPU over 30 seconds; dragging the seek bar briefly reaches about 10 % while
+drawing at 60 FPS.
+
+Spotify metadata used to be read with a six-property AppleScript query every
+2 seconds, even while the widget was covered; each query takes about 0.2 s of
+Spotify's time. Wallify now applies Spotify's `PlaybackStateChanged` notification
+directly and queries only for new tracks and a 15-second check while visible
+(30 seconds while covered). Spotify measured 2.1 % CPU during playback afterwards
+versus 4.7 % before; the earlier reading had the widget visible with the waveform,
+so treat this as a rough comparison.
