@@ -99,9 +99,9 @@ func reducePointer(_ x: Double, _ y: Double, kind: Int32, mouse: NSPoint, now: D
     }
     if release && !state.pointee.global_is_dragging && state.pointee.global_click_target == target {
         switch target {
-        case 5: actions.append(.command(5))
+        case 5: actions.append(.command(5)); controlPress = (0, now)
         case 6: actions.append(.toggle)
-        case 7: actions.append(.command(4))
+        case 7: actions.append(.command(4)); controlPress = (2, now)
         case 8: actions.append(.openTrack)
         case 10: actions.append(.like)
         case 9: actions.append(.searchArtist)

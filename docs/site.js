@@ -56,13 +56,14 @@
       artist.style.fontSize = `${artistSize}px`;
       place(title, tx, g.title, tw - (compact ? 0 : 26), titleSize * 1.5);  // the title leaves room for the like button
       place(artist, tx, g.artist, tw, artistSize * 1.5);
-      place(like, tx + tw - 22, g.title + 1, 22, 22, 11);
+      place(like, tx + tw - 24, g.title - 1, 26, 26, 13);
       place($(".bar"), g.bar[0], g.bar[1], g.bar[2], 5, 2.5);
       place(elapsed, tx, g.time, 100, 18);
       place(total, tx, g.time, tw, 18);
-      place($(".lyrics"), tx, g.time - 6, tw, 19);  // raised 6 pt like the app, clear of the play button's hover circle
+      // Like the app: just above the play button's 22 pt hover radius, never below the time row.
+      place($(".lyrics"), tx, Math.min(g.time, g.buttons[1] - 22 - 18.75), tw, 19);
       controls.forEach((button, i) => {
-        const box = i === 1 ? 40 : 30;
+        const box = i === 1 ? 44 : 36;  // Wallify's hover circles
         place(button, g.buttons[0] + (i - 1) * 46 - box / 2, g.buttons[1] - box / 2, box, box, box / 2);
       });
       fit();
@@ -131,20 +132,42 @@
       jumped = true;
     };
 
+    // Like the app: jumps of more than 2 % of the bar (a skip, a new track) slide over 0.35 s; dragging follows the pointer.
+    const smooth = (t) => t * t * t * (10 + t * (-15 + 6 * t));
+    let slide = { from: 0, at: -Infinity }, lastShown = 0;
+    const shownProgress = (target, now) => {
+      const t = (now - slide.at) / 350;
+      if (widget.dataset.seeking === "true" || reduceMotion.matches) { slide.at = -Infinity; return (lastShown = target); }
+      if (t >= 0 && t < 1) return (lastShown = slide.from + (target - slide.from) * smooth(t));
+      if (Number.isFinite(slide.at)) { slide.at = -Infinity; return (lastShown = target); }
+      if (Math.abs(target - lastShown) > 0.02) { slide = { from: lastShown, at: now }; return lastShown; }
+      return (lastShown = target);
+    };
+
     const tick = (now) => {
       if (playing) position += (now - last) / 1000;
       last = now;
       const track = tracks[index];
       if (position >= track.length) load(index + 1);
-      progress.style.width = `${(position / track.length) * 100}%`;
+      progress.style.width = `${shownProgress(position / track.length, now) * 100}%`;
       elapsed.textContent = clock(position);
       showLine(lineAt(track, position), !jumped);
       jumped = false;
       requestAnimationFrame(tick);
     };
 
-    $("[data-prev]").addEventListener("click", () => load(position > 3 ? index : index - 1));
-    $("[data-next-btn]").addEventListener("click", () => load(index + 1));
+    // Skip buttons nudge 5 pt toward their direction and spring back, as in Wallify; the whole button moves
+    // so its hover circle travels with the icon.
+    const nudge = (button, direction) => {
+      if (reduceMotion.matches) return;
+      button.animate([
+        { transform: "translateX(0)", easing: "cubic-bezier(.45, 0, .55, 1)" },
+        { transform: `translateX(${5 * direction}px)`, offset: 0.29, easing: "cubic-bezier(.45, 0, .55, 1)" },
+        { transform: "translateX(0)" }
+      ], { duration: 350 });
+    };
+    $("[data-prev]").addEventListener("click", (event) => { nudge(event.currentTarget, -1); load(position > 3 ? index : index - 1); });
+    $("[data-next-btn]").addEventListener("click", (event) => { nudge(event.currentTarget, 1); load(index + 1); });
     // Wallify's press: the icon shrinks to half in 0.09 s, swaps, then springs back over 0.24 s.
     play.addEventListener("click", () => {
       playing = !playing;

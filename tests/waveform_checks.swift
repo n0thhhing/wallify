@@ -16,8 +16,11 @@ func checkWaveform() {
     state.setting_mode = 2; state.mode_from = 2; state.mode_mix = 1
     state.waveform_mix = 1
     var layout = SceneLayout(); layout.update(width: 540, height: 180, state: state)
+    // These checks measure bar geometry at fixed positions, so start each draw with no slide in progress.
+    let settle = { (elapsed: Double) in progressSlide = (0, -.infinity, min(1, elapsed / 100)) }
     for elapsed in [0.0, 50, 150] {
         let canvas = Canvas(clip: layout.card)
+        settle(elapsed)
         drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state)
         let waves = canvas.commands.filter { $0.kind == Int32(WALLIFY_WAVEFORM) }
         precondition(waves.count == (elapsed > 0 ? 1 : 0))
@@ -29,10 +32,12 @@ func checkWaveform() {
     }
     let fallback = Canvas(clip: layout.card)
     state.waveform_mix = 0
+    settle(50)
     drawPlayerProgress(fallback, elapsed: 50, layout: layout, state: state)
     precondition(fallback.commands.count == 2 && fallback.commands.allSatisfy { $0.kind != Int32(WALLIFY_WAVEFORM) })
     state.waveform_mix = 0.5 // A paused waveform fades using the last uploaded texture.
     let transition = Canvas(clip: layout.card)
+    settle(50)
     drawPlayerProgress(transition, elapsed: 50, layout: layout, state: state)
     precondition(transition.commands.count == 3)
     precondition(transition.commands[1].alpha == 0.5 && transition.commands[1].dh == 3)

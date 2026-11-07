@@ -24,7 +24,11 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     var idleInterval: Double = 0
     if state.animation_time < state.art_transition_until { result.draw = true; visual = true }
     // The heart's press animation and burst run at 30 FPS until they finish.
-    if likeStore.press(now: now).elapsed < 0.5 { result.draw = true; visual = true }
+    if likeStore.press(now: now).elapsed < 0.5 || likeStore.change(now: now).elapsed < likeFadeDuration + 0.05 {
+        result.draw = true; visual = true  // the heart's press pop, burst or crossfade
+    }
+    if now - controlPress.at < controlNudgeDuration + 0.05 { result.draw = true; visual = true }  // skip-button nudge
+    if now - progressSlide.at < progressSlideDuration + 0.05 { result.draw = true; visual = true }  // progress slide
     // One extra frame after the volume hint expires puts the position back.
     if state.volume_hint_until > 0 && state.animation_time < state.volume_hint_until + 0.1 { result.draw = true; visual = true }
     if !state.setting_animations {

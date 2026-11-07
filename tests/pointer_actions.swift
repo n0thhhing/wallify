@@ -29,6 +29,11 @@ func checkPointerActions() {
     precondition(!pointer(344, 132, 2).contains(.toggle))
     _ = pointer(298, 132, 1)
     precondition(!pointer(390, 132, 2).contains(.command(4)))
+    // A completed click on Next skips and starts its rightward nudge.
+    let savedPress = controlPress
+    _ = pointer(390, 132, 1)
+    precondition(pointer(390, 132, 2).contains(.command(4)) && controlPress.index == 2 && controlPress.at == 10)
+    controlPress = savedPress
     _ = pointer(344, 84, 1)
     precondition(state.pointee.global_is_dragging && state.pointee.global_elapsed == 100)
     _ = pointer(-100, 84, 0)

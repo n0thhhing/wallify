@@ -166,6 +166,24 @@ func checkSpotifyAccount() {
     responses = [("", 500)]  // a failed save puts the heart back
     likes.toggle()
     precondition(likes.state == false && requests.last!.httpMethod == "PUT")
+    // Skipping keeps the heart showing until the new track's state arrives, instead of flickering off.
+    var held: ((Data?, Int) -> Void)?
+    let slowAccount = SpotifyAccount(send: { request, completion in
+        if request.url!.host == "accounts.spotify.com" { completion(Data(#"{"access_token":"t","expires_in":3600}"#.utf8), 200) }
+        else { held = completion }
+    }, load: { "refresh" }, store: { _ in }, clientID: { "client" })
+    let slow = LikeStore(account: slowAccount)
+    slow.track("spotify:track:one"); held!(Data("[true]".utf8), 200)
+    precondition(slow.state == true)
+    slow.track("spotify:track:two")
+    precondition(slow.state == true)  // still shown while loading
+    held!(Data("[false]".utf8), 200)
+    precondition(slow.state == false)
+    // The different state crossfades from the previous one; a press does not count as a track change.
+    let change = slow.change(now: monotonicTime())
+    precondition(change.previous == true && change.elapsed >= 0 && change.elapsed < likeFadeDuration)
+    slow.track("spotify:track:three"); held!(nil, 500)
+    precondition(slow.state == nil)  // a failed lookup hides it rather than showing a stale state
     likes.track("")
     precondition(likes.state == nil)
     let queue = #"{"currently_playing":{"name":"Now"},"queue":[{"name":"Clozapine","artists":[{"name":"NEET"},{"name":"Guest"}]},{"name":"Later"}]}"#

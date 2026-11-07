@@ -20,7 +20,8 @@ struct StaticSceneKey: Equatable {
     let generation: UInt64
     init(layout: SceneLayout, state: WallifyWidgetState, hasArtwork: Bool, generation: UInt64) {
         geometry = [layout.width, layout.height, state.mode_mix, state.idle_mix, state.global_anim_art_t, state.play_pause_mix,
-                    state.art_transition_until > state.animation_time ? state.animation_time : 0]
+                    state.art_transition_until > state.animation_time ? state.animation_time : 0,
+                    controlNudge(0, now: monotonicTime()), controlNudge(2, now: monotonicTime())]
         settings = [state.mode_from, state.setting_mode, state.setting_artwork_radius, state.setting_frame,
                     state.setting_intensity, state.setting_transition, state.extracted_r, state.extracted_g, state.extracted_b]
         flags = [state.setting_native_glass, state.setting_glow, state.setting_dim, state.setting_compact_gradient,

@@ -67,13 +67,14 @@ struct SceneLayout {
     var card: WallifyCardRect { cardRect(8, 8, max(0, width - 16), max(0, height - 16), 26) }
     var buttons: [(x: Double, y: Double)] { [-1.0, 0, 1].map { (geometry.button_center + $0 * 46, geometry.button_y) } }
     func buttonBounds(_ index: Int) -> WallifyCardRect {
-        let radius: Double = index == 1 ? 20 : 15, button = buttons[index]
+        // Hover circles leave room around the icons: 44 pt for play/pause, 36 pt for the skips.
+        let radius: Double = index == 1 ? 22 : 18, button = buttons[index]
         return cardRect(button.x - radius, button.y - radius, radius * 2, radius * 2, radius)
     }
     // The like button at the right end of the title row; empty when there is no like state to show.
     func likeBounds() -> WallifyCardRect {
         guard likeStore.state != nil, geometry.compact_mix <= 0.5 else { return WallifyCardRect() }
-        return cardRect(geometry.text_x + geometry.text_width - 22, geometry.title_y + 1, 22, 22, 11)
+        return cardRect(geometry.text_x + geometry.text_width - 24, geometry.title_y - 1, 26, 26, 13)  // centred where the 22 pt one was
     }
     func controlsVisible(_ enabled: Bool) -> Bool { enabled && geometry.compact_mix <= 0.5 }
     func progressVisible(_ hidden: Bool) -> Bool { !hidden && geometry.compact_mix <= 0.5 }

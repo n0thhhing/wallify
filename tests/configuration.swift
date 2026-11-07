@@ -153,12 +153,30 @@ func checkConfigurationGolden() {
     precondition(likePopScale(0.08, liked: true) == 0.8 && likePopScale(0.26, liked: true) == 1.22 && likePopScale(0.6, liked: true) == 1)
     precondition(likePopScale(0.1, liked: false) == 0.82 && likePopScale(0.3, liked: false) == 1 && likePopScale(-1, liked: true) == 1)
     precondition((0...45).map { likePopScale(Double($0) / 100, liked: true) }.allSatisfy { (0.79...1.23).contains($0) })
+    // Skip buttons nudge 5 pt toward their direction and come back; only the pressed one moves.
+    let savedPress = controlPress
+    controlPress = (2, 10)
+    let near = { (a: Double, b: Double) in abs(a - b) < 1e-6 }
+    precondition(near(controlNudge(2, now: 10.1), 5) && near(controlNudge(2, now: 10.35), 0) && controlNudge(0, now: 10.1) == 0)
+    controlPress = (0, 10)
+    precondition(near(controlNudge(0, now: 10.1), -5) && controlNudge(0, now: 9) == 0)
+    controlPress = savedPress
+    // The bar slides on jumps but follows normal playback and dragging directly.
+    let savedSlide = progressSlide
+    progressSlide = (0, -.infinity, 0.6)
+    precondition(shownProgress(0.605, now: 20, dragging: false) == 0.605)        // playback step: no slide
+    precondition(shownProgress(0, now: 20.01, dragging: false) == 0.605)          // skip: starts from the old spot
+    let halfway = shownProgress(0, now: 20.01 + progressSlideDuration / 2, dragging: false)
+    precondition(halfway > 0.2 && halfway < 0.4)                                  // eased midway back
+    precondition(shownProgress(0, now: 20.5, dragging: false) == 0)               // finished
+    precondition(shownProgress(0.9, now: 20.6, dragging: true) == 0.9)            // dragging follows the pointer
+    progressSlide = savedSlide
     // In every size with a lyric row, the line sits between the progress bar and the play button's hover circle.
     for mode in Int32(1)...4 {
         var g = WallifyLayoutGeometry()
         precondition(widgetLayoutGeometry(mode, mode, 1, &g))
-        let top = g.timestamp_y - lyricRaise, bottom = top + 12.5 * 1.5
-        precondition(top >= g.bar_y + g.bar_h && bottom <= g.button_y - 20, "lyrics overlap in mode \(mode)")
+        let top = lyricRowY(g), bottom = top + lyricLineHeight
+        precondition(top >= g.bar_y + g.bar_h && bottom <= g.button_y - 22, "lyrics overlap in mode \(mode)")  // play hover radius
     }
     precondition(compareVersions("1.10.0", "1.9.0") == 1 && compareVersions("1.2", "1.2.0") == 0 && compareVersions("0.9", "1.0.0") == -1)
     let release = #"{"tag_name":"v1.2.0","html_url":"https://github.com/n0thhhing/wallify/releases/tag/v1.2.0","draft":false}"#

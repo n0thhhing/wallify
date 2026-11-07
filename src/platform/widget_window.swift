@@ -91,7 +91,11 @@ final class WidgetView: NSView {
         }
         if layout.controlsVisible(state.setting_show_controls) {
             let labels = ["Previous Track", state.global_rate > 0 ? "Pause" : "Play", "Next Track"]
-            let actions: [() -> Void] = [{ enqueueMediaCommand(5) }, { toggleWidgetPlayback() }, { enqueueMediaCommand(4) }]
+            let skip = { (index: Int, command: UInt32) in
+                sceneLock.lock(); controlPress = (index, monotonicTime()); sceneLock.unlock()
+                enqueueMediaCommand(command); requestWidgetFrame()
+            }
+            let actions: [() -> Void] = [{ skip(0, 5) }, { toggleWidgetPlayback() }, { skip(2, 4) }]
             for index in 0..<3 {
                 controls[index].press = actions[index]
                 children.append(place(controls[index], layout.buttonBounds(index), labels[index]))
@@ -106,7 +110,7 @@ final class WidgetView: NSView {
             children.append(place(likeElement, like, liked ? "Remove from Liked Songs" : "Save to Liked Songs"))
         }
         if state.setting_lyrics, g.compact_mix <= 0.12, let lyric = lyricsStore.cachedFrame(at: elapsed), lyric.line != "♪" {
-            children.append(place(lyricElement, cardRect(g.text_x, g.timestamp_y - lyricRaise, g.text_width, 18), lyric.line))
+            children.append(place(lyricElement, cardRect(g.text_x, lyricRowY(g), g.text_width, 18), lyric.line))
         }
         if layout.progressVisible(state.setting_hide_progress) && state.global_duration > 0 {
             progress.setAccessibilityMinValue(0)

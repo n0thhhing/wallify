@@ -1,7 +1,47 @@
 import Foundation
 
+// Skip buttons nudge toward their direction when pressed: 5 pt out in 0.1 s, then back over 0.25 s.
+// Index 0 is previous (left), 2 is next (right). Guarded by sceneLock.
+var controlPress: (index: Int, at: Double) = (0, -.infinity)
+let controlNudgeDuration = 0.35
+func controlNudge(_ index: Int, now: Double) -> Double {
+    guard controlPress.index == index else { return 0 }
+    let t = now - controlPress.at, direction: Double = index == 0 ? -1 : 1
+    guard t >= 0, t < controlNudgeDuration else { return 0 }
+    return direction * 5 * (t < 0.1 ? smoothTransition(t / 0.1) : 1 - smoothTransition((t - 0.1) / 0.25))
+}
+
+// Jumps in the progress bar (a skip, a new track, a seek made elsewhere) slide over 0.35 s instead of
+// snapping; normal playback and dragging follow the position directly. Guarded by sceneLock.
+var progressSlide: (from: Double, at: Double, last: Double) = (0, -.infinity, 0)
+let progressSlideDuration = 0.35
+func shownProgress(_ target: Double, now: Double, dragging: Bool) -> Double {
+    let t = now - progressSlide.at
+    if dragging {
+        progressSlide = (target, -.infinity, target)
+        return target
+    }
+    if t >= 0 && t < progressSlideDuration {
+        let shown = progressSlide.from + (target - progressSlide.from) * smoothTransition(t / progressSlideDuration)
+        progressSlide.last = shown
+        return shown
+    }
+    if progressSlide.at.isFinite {
+        // A slide just finished: land on the position before watching for the next jump.
+        progressSlide = (target, -.infinity, target)
+        return target
+    }
+    if abs(target - progressSlide.last) > 0.02 {
+        progressSlide = (progressSlide.last, now, progressSlide.last)  // start sliding from what was on screen
+        return progressSlide.from
+    }
+    progressSlide.last = target
+    return target
+}
+
 // Heart press, like Spotify's: liking dips to 80 %, springs past full size to 122 % and settles
 // (0.45 s); unliking only dips to 82 % and back (0.3 s).
+let likeFadeDuration = 0.25
 let likeBurstDuration = 0.4
 func likePopScale(_ elapsed: Double, liked: Bool) -> Double {
     guard elapsed >= 0 else { return 1 }
@@ -23,9 +63,10 @@ func likePopScale(_ elapsed: Double, liked: Bool) -> Double {
     }
 }
 
-// A lyric line spans the full time row, so it sits this far above the time labels to clear the play
-// button's hover circle (radius 20 around button_y) while staying below the progress bar.
-let lyricRaise = 6.0
+// A lyric line spans the full time row, so it ends just above the play button's hover circle
+// (radius 22 around button_y), never lower than the time labels, and stays below the progress bar.
+let lyricLineHeight = 12.5 * 1.5
+func lyricRowY(_ g: WallifyLayoutGeometry) -> Double { min(g.timestamp_y, g.button_y - 22 - lyricLineHeight) }
 
 let primaryTextColor = SIMD4<Float>(245 / 255, 245 / 255, 247 / 255, 1)
 
@@ -61,7 +102,8 @@ func drawPlayerStatic(_ canvas: Canvas, card: WallifyCardRect, layout: SceneLayo
         for (index, button) in layout.buttons.enumerated() {
             let texture: Texture = index == 0 ? .previous : index == 2 ? .next : state.play_pause_mix < 0.5 ? .play : .pause
             let size = 48 * (index == 1 ? playbackIconScale(state.play_pause_mix, state.global_rate > 0) : 1)
-            canvas.image(texture, cardRect(button.x - size / 2, button.y - size / 2, size, size))
+            let nudge = controlNudge(index, now: monotonicTime())
+            canvas.image(texture, cardRect(button.x + nudge - size / 2, button.y - size / 2, size, size))
         }
     }
 }
@@ -70,7 +112,11 @@ func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, s
     drawPlayerProgress(canvas, elapsed: elapsed, layout: layout, state: state)
     if layout.controlsVisible(state.setting_show_controls) {
         let hover = [state.hover_amount.0, state.hover_amount.1, state.hover_amount.2]
-        for index in 0..<3 where hover[index] > 0.001 { canvas.fill(layout.buttonBounds(index), SIMD4(1, 1, 1, Float(hover[index] * 31 / 255))) }
+        for index in 0..<3 where hover[index] > 0.001 {
+            var circle = layout.buttonBounds(index)
+            circle.x += controlNudge(index, now: monotonicTime())  // the hover circle travels with a nudging icon
+            canvas.fill(circle, SIMD4(1, 1, 1, Float(hover[index] * 31 / 255)))
+        }
     }
     // Up Next sits on a dark fade across the bottom of the artwork in the 2 × 2 size.
     if state.setting_mode == 4 && !state.mode_transition_active && state.global_title_len > 0 && spotifyAccount.connected {
@@ -98,9 +144,16 @@ func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, s
             }
         }
         // The icon texture is a 48 pt canvas centred on the glyph; the press scales it around its centre.
-        let size = 48 * likePopScale(press.elapsed, liked: press.liked)
-        let icon = cardRect(cx - size / 2, cy - size / 2, size, size)
-        canvas.imageTint(liked ? .heartFill : .heart, icon, liked ? green : SIMD4(1, 1, 1, 0.7))
+        // A new track's different state crossfades over 0.25 s, the new heart settling from 92 %.
+        let change = likeStore.change(now: monotonicTime())
+        let fade = change.elapsed < likeFadeDuration ? smoothTransition(change.elapsed / likeFadeDuration) : 1
+        func heart(_ filled: Bool, scale: Double, alpha: Double) {
+            let size = 48 * scale, color = filled ? green : SIMD4(1, 1, 1, 0.7)
+            canvas.imageTint(filled ? .heartFill : .heart, cardRect(cx - size / 2, cy - size / 2, size, size),
+                             SIMD4(color.x, color.y, color.z, color.w * Float(alpha)))
+        }
+        if fade < 1, let old = change.previous { heart(old, scale: 1, alpha: 1 - fade) }
+        heart(liked, scale: likePopScale(press.elapsed, liked: press.liked) * (0.92 + 0.08 * fade), alpha: fade)
     }
     drawPlayerLabels(canvas, elapsed: elapsed, layout: layout, state: state)
 }
@@ -119,7 +172,9 @@ func drawPlayerProgress(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, 
             let level = bar.w * min(1, max(0, state.volume_hint))
             if level > 0 { canvas.fill(cardRect(bar.x, bar.y + (height - trackHeight) / 2, level, trackHeight, trackHeight / 2), SIMD4(0.55, 0.78, 1, 1)) }
         } else if state.global_duration > 0 {
-            var progress = bar; progress.w *= min(1, max(0, elapsed / state.global_duration))
+            let fraction = shownProgress(min(1, max(0, elapsed / state.global_duration)), now: monotonicTime(),
+                                         dragging: state.global_is_dragging)
+            var progress = bar; progress.w *= fraction
             if progress.w > 0 {
                 if mix < 1 {
                     let normal = cardRect(progress.x, bar.y + (height - trackHeight) / 2, progress.w, trackHeight, trackHeight / 2)
@@ -165,7 +220,7 @@ func drawPlayerLabels(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, st
         func line(_ text: String, _ offset: Double, _ alpha: Float) {
             guard alpha > 0.01, !text.isEmpty else { return }
             let note = text == "♪"
-            textCache.draw(canvas, text, g.text_x, g.timestamp_y - lyricRaise + offset, g.text_width, 12.5 * scale, 1, !note,
+            textCache.draw(canvas, text, g.text_x, lyricRowY(g) + offset, g.text_width, 12.5 * scale, 1, !note,
                            note ? SIMD4(secondary.x, secondary.y, secondary.z, 0.6 * alpha) : SIMD4(1, 1, 1, 0.95 * alpha), 0, false, false)
         }
         if ease < 1 { line(lyric.previous, -rise * Double(ease), 1 - ease) }

@@ -156,7 +156,7 @@ section { padding-block: clamp(56px, 9vw, 112px); }
 .widget > .bar { transition: left .45s var(--morph), top .45s var(--morph), width .45s var(--morph), height .45s var(--morph),
   transform .22s cubic-bezier(.2, .9, .3, 1.25); }
 .widget[data-seeking="true"] .bar { transform: scaleY(1.8); }
-.like svg { width: 17px; height: 17px; fill: none; stroke: #ffffffb3; stroke-width: 2; transition: transform .2s; }
+.like svg { width: 17px; height: 17px; fill: #1fd66000; stroke: #ffffffb3; stroke-width: 2; transition: transform .2s, fill .25s, stroke .25s; }
 .like[aria-pressed="true"] svg { fill: #1fd660; stroke: #1fd660; transform: scale(1.08); }
 .upnext { position: absolute; inset: auto 0 0; padding: 22px 12px 10px; background: linear-gradient(transparent, #000000bf); font-size: 12px; opacity: 0; transition: opacity .3s; }
 .upnext b { display: block; font-size: 10px; font-weight: 700; color: #ffffffb3; }

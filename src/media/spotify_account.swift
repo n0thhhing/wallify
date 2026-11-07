@@ -251,10 +251,18 @@ final class LikeStore: @unchecked Sendable {
     private var liked: Bool?
     private var pressedAt = -Double.infinity
     private var pressLiked = false
+    private var changedAt = -Double.infinity
+    private var previous: Bool?
     private let account: SpotifyAccount
     init(account: SpotifyAccount) { self.account = account }
 
     var state: Bool? { lock.lock(); defer { lock.unlock() }; return liked }
+
+    // When a new track's state differs from what was shown, the heart crossfades from the previous state.
+    func change(now: Double) -> (elapsed: Double, previous: Bool?) {
+        lock.lock(); defer { lock.unlock() }
+        return (now - changedAt, previous)
+    }
 
     // Seconds since the last press and whether it liked; drives the heart animation.
     func press(now: Double) -> (elapsed: Double, liked: Bool) {
@@ -268,14 +276,19 @@ final class LikeStore: @unchecked Sendable {
         lock.lock()
         guard id != trackID else { lock.unlock(); return }
         trackID = id
-        liked = nil
+        // Keep showing the heart while the new track's state loads, so skipping doesn't make it flicker;
+        // it only goes away when Spotify stops being the source or no account is connected.
+        if id.isEmpty || !account.connected { liked = nil }
         lock.unlock()
         requestWidgetFrame()
         guard !id.isEmpty, account.connected else { return }
         account.request("GET", "/me/tracks/contains?ids=" + id) { [self] data, status in
             let saved = status == 200 ? (data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [Bool] })?.first : nil
             lock.lock()
-            if trackID == id { liked = saved }
+            if trackID == id && saved != liked {
+                if saved != nil { previous = liked; changedAt = monotonicTime() }
+                liked = saved  // a failed lookup hides the heart rather than showing a stale state
+            }
             lock.unlock()
             requestWidgetFrame()
         }

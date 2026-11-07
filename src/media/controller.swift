@@ -375,6 +375,7 @@ public func runMetadataWorker() {
     while true {
         let source = activeMediaSource()
         coordinator.select(source)
+        if source != 1 { likeStore.track("") }  // the like button is Spotify-only
         if source == 0 {
             runNowPlayingHelper { bytes in
                 guard activeMediaSource() == 0 else { return false }
@@ -392,7 +393,8 @@ public func runMetadataWorker() {
                 reply = autoreleasepool { queryMediaSource(source) }
                 let fields = String(decoding: reply, as: UTF8.self).components(separatedBy: "|||")
                 if source == 1 && fields.count >= 7 { spotifyArtwork = fields[5]; spotifyTrackID = fields[6] }
-                likeStore.track(source == 1 && fields.count >= 7 ? spotifyTrackID : "")
+                // Spotify briefly answers "no track" mid-skip, so only a real track ID updates the heart.
+                if source == 1 && fields.count >= 7 { likeStore.track(spotifyTrackID) }
             }
             guard activeMediaSource() == source else { continue }
             let running = source == 1 && reply == Array("CLOSED".utf8) && isSpotifyRunning() != 0
