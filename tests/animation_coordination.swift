@@ -12,7 +12,7 @@ func checkAnimationCoordination() {
     precondition(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: true, timestampsVisible: false, secondsPerPixel: .nan) == 1 / 20)
     var state = widgetStatePointer().pointee
     state.global_rate = 1; state.play_pause_mix = 1; state.global_anim_art_t = 1
-    state.idle_mix = 0; state.global_is_dragging = false; state.global_hover_target = 0; state.hover_amount = (0, 0, 0)
+    state.idle_mix = 0; state.global_is_dragging = false; state.global_hover_target = 0; state.hover_amount = (0, 0, 0, 0)
     state.seek_expansion = 0; state.seek_velocity = 0; state.setting_native_glass = false; state.setting_aurora = false
     state.aurora_mix = 0; state.art_transition_until = 0; state.mode_transition_active = false
     state.panel_position_dirty = false; state.panel_snap_active = false; state.setting_animations = true
@@ -40,6 +40,12 @@ func checkAnimationCoordination() {
     state.panel_position_dirty = true
     let positionOnly = step(0.31, previous: 0.3)
     precondition(positionOnly.move && !positionOnly.draw)
+    state.global_hover_target = 10
+    precondition(step(0.4, previous: 0.3).draw && state.hover_amount.3 > 0)
+    let likeHover = state.hover_amount.3
+    state.global_hover_target = 0
+    precondition(step(0.5, previous: 0.4).draw && state.hover_amount.3 > 0 && state.hover_amount.3 < likeHover)
+    state.hover_amount.3 = 0
     state.panel_snap_active = true; state.panel_snap_elapsed = 0; state.panel_save_after_snap = true
     state.panel_snap_start_left = 8; state.panel_snap_target_left = 188; state.panel_snap_start_top = 8; state.panel_snap_target_top = 8
     let snapStep = step(0.1)

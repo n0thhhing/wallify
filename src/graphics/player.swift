@@ -56,7 +56,8 @@ func drawPlayerDynamic(_ canvas: Canvas, elapsed: Double, layout: SceneLayout, s
     }
     let like = layout.likeBounds()
     if like.w > 0, let liked = likeStore.state {
-        if state.global_hover_target == 10 { canvas.fill(like, SIMD4(1, 1, 1, 31 / 255)) }
+        let hover = state.hover_amount.3
+        if hover > 0.001 { canvas.fill(like, SIMD4(1, 1, 1, Float(hover * 31 / 255))) }
         // The icon texture is a 48 pt canvas centred on the glyph.
         let icon = cardRect(like.x + like.w / 2 - 24, like.y + like.h / 2 - 24, 48, 48)
         canvas.imageTint(liked ? .heartFill : .heart, icon, liked ? SIMD4(0.12, 0.84, 0.38, 1) : SIMD4(1, 1, 1, 0.7))

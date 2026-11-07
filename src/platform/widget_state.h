@@ -31,7 +31,7 @@ typedef struct {
     double seek_expansion;
     double seek_velocity;
     double aurora_mix;
-    double hover_amount[3];
+    double hover_amount[4];
     WallifyPlaybackClock clock;
     bool setting_hide_text;
     bool setting_clickable_names;

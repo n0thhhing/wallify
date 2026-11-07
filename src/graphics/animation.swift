@@ -124,15 +124,15 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
     if state.play_pause_mix != iconTarget {
         visual = true; state.play_pause_mix = advancePlaybackIcon(state.play_pause_mix, state.global_rate > 0, dt); result.draw = true
     }
-    var hover = [state.hover_amount.0, state.hover_amount.1, state.hover_amount.2]
-    for index in 0..<3 {
-        let target: Double = state.global_hover_target == Int32(index + 5) ? 1 : 0
+    var hover = [state.hover_amount.0, state.hover_amount.1, state.hover_amount.2, state.hover_amount.3]
+    for (index, button) in ([5, 6, 7, 10] as [Int32]).enumerated() {
+        let target: Double = state.global_hover_target == button ? 1 : 0
         if abs(hover[index] - target) > 0.001 {
             visual = visual || state.setting_animations
             hover[index] += (target - hover[index]) * (state.setting_animations ? 1 - exp(-dt * 10) : 1); result.draw = true
         }
     }
-    state.hover_amount = (hover[0], hover[1], hover[2])
+    state.hover_amount = (hover[0], hover[1], hover[2], hover[3])
     if state.global_rate > 0 && state.global_anim_art_t < 1 {
         visual = true; state.global_anim_art_t = min(1, state.global_anim_art_t + dt / 0.3); result.draw = true
     } else if state.global_rate == 0 && state.global_anim_art_t > 0 {
