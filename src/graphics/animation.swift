@@ -1,8 +1,12 @@
 import Foundation
 
-func playbackFrameInterval(playing: Bool, dragging: Bool, playerVisible: Bool, progressVisible: Bool, timestampsVisible: Bool) -> Double {
+// secondsPerPixel > 0 lets a static progress bar redraw only when it gains a pixel instead of at 20 FPS.
+func playbackFrameInterval(playing: Bool, dragging: Bool, playerVisible: Bool, progressVisible: Bool, timestampsVisible: Bool,
+                           secondsPerPixel: Double = 0) -> Double {
     guard playing, !dragging, playerVisible else { return 0 }
-    return progressVisible ? 1 / 20 : timestampsVisible ? 1 : 0
+    guard progressVisible else { return timestampsVisible ? 1 : 0 }
+    guard secondsPerPixel.isFinite, secondsPerPixel > 0 else { return 1 / 20 }
+    return max(1 / 20, timestampsVisible ? min(1, secondsPerPixel) : secondsPerPixel)
 }
 
 struct AnimationStep {
@@ -103,7 +107,9 @@ func advanceAnimations(_ state: inout WallifyWidgetState, now: Double, previous:
         result.draw = true
     }
     let playback = playbackFrameInterval(playing: state.global_rate > 0, dragging: state.global_is_dragging, playerVisible: state.idle_mix < 1,
-        progressVisible: layout.progressVisible(state.setting_hide_progress), timestampsVisible: !state.setting_hide_text && state.setting_show_timestamps && layout.geometry.compact_mix <= 0.12)
+        progressVisible: layout.progressVisible(state.setting_hide_progress), timestampsVisible: !state.setting_hide_text && state.setting_show_timestamps && layout.geometry.compact_mix <= 0.12,
+        // shortcut: assumes a 2x Retina backing scale; on 1x displays it redraws twice as often as needed.
+        secondsPerPixel: state.waveform_mix > 0 || state.global_duration <= 0 ? 0 : state.global_duration / (max(1, layout.geometry.bar_w) * 2))
     if playback > 0 && !high && now - lastDraw >= playback { result.draw = true }
     let iconTarget: Double = state.global_rate > 0 ? 1 : 0
     if state.play_pause_mix != iconTarget {

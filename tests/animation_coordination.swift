@@ -5,6 +5,11 @@ func checkAnimationCoordination() {
     precondition(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: false, timestampsVisible: true) == 1)
     precondition(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: false, timestampsVisible: false) == 0)
     precondition(playbackFrameInterval(playing: true, dragging: true, playerVisible: true, progressVisible: true, timestampsVisible: true) == 0)
+    // 3-minute track on a 344 pt bar at 2x: one pixel every ~0.26 s instead of 20 FPS.
+    precondition(abs(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: true, timestampsVisible: false, secondsPerPixel: 180.0 / 688) - 180.0 / 688) < 1e-12)
+    precondition(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: true, timestampsVisible: true, secondsPerPixel: 30) == 1)
+    precondition(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: true, timestampsVisible: false, secondsPerPixel: 0.001) == 1 / 20)
+    precondition(playbackFrameInterval(playing: true, dragging: false, playerVisible: true, progressVisible: true, timestampsVisible: false, secondsPerPixel: .nan) == 1 / 20)
     var state = widgetStatePointer().pointee
     state.global_rate = 1; state.play_pause_mix = 1; state.global_anim_art_t = 1
     state.idle_mix = 0; state.global_is_dragging = false; state.global_hover_target = 0; state.hover_amount = (0, 0, 0)
