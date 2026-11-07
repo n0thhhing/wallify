@@ -173,11 +173,10 @@ section { padding-block: clamp(56px, 9vw, 112px); }
 .demo-note { text-align: center; color: var(--faint); font-size: .82rem; margin-top: 10px; }
 
 /* Captures */
-.capture-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.capture { background: var(--raise); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(12px, 2vw, 20px); }
-.capture.wide { grid-column: 1 / -1; }
-.capture img { width: 100%; height: auto; border-radius: 12px; }
-.capture figcaption { color: var(--muted); font-size: .9rem; margin-top: 12px; }
+.capture-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(20px, 3vw, 36px); }
+/* The captures sit on white; clip each to the widget's own rounded card (measured from the 1080 × 360 images). */
+.capture img { width: 100%; height: auto; clip-path: inset(4.6% 1.6% round 4.9% / 14.6%); }
+.capture figcaption { color: var(--muted); font-size: .9rem; margin-top: 6px; max-width: 46ch; }
 
 /* Features */
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
