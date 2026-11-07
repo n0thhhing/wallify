@@ -39,6 +39,7 @@ typedef struct {
     uint8_t setting_stopped_behavior;
     bool setting_lyrics;
     bool setting_check_updates;
+    uint8_t setting_update_channel;   // 0: stable, 1: nightly
     uint8_t setting_scroll_action;    // 0: off, 1: volume, 2: seek
     double volume_hint;               // 0...1, shown on the progress bar while volume_hint_until is ahead
     double volume_hint_until;

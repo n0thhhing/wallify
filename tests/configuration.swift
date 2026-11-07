@@ -101,7 +101,7 @@ func checkConfigurationGolden() {
     expected.merge(["frame_strength": "off", "glow_intensity": "low", "animation_speed": "slow", "media_source": "now_playing",
                      "widget_mode": "1x1", "idle_style": "spotify", "track_transition": "default", "font_scale": "small",
                      "media_key_target": "off", "stopped_behavior": "companion", "artwork_radius": "0", "progress_thickness": "0",
-                     "scroll_action": "off"]) { $1 }
+                     "scroll_action": "off", "update_channel": "stable"]) { $1 }
     precondition(configurationValues(low) == expected)
     for path: WritableKeyPath<WallifyWidgetState, Bool> in [\.setting_glow, \.setting_native_glass, \.setting_aurora, \.setting_animations,
         \.setting_dim, \.setting_debug, \.setting_hide_text, \.setting_hide_progress, \.setting_show_controls, \.setting_show_timestamps,
@@ -151,9 +151,16 @@ func checkConfigurationGolden() {
     precondition(lyricFrame([], at: 1) == nil)
     precondition(compareVersions("1.10.0", "1.9.0") == 1 && compareVersions("1.2", "1.2.0") == 0 && compareVersions("0.9", "1.0.0") == -1)
     let release = #"{"tag_name":"v1.2.0","html_url":"https://github.com/n0thhhing/wallify/releases/tag/v1.2.0","draft":false}"#
-    precondition(parseLatestRelease(Data(release.utf8))! == ("1.2.0", URL(string: "https://github.com/n0thhhing/wallify/releases/tag/v1.2.0")!))
+    let page = URL(string: "https://github.com/n0thhhing/wallify/releases/tag/v1.2.0")!
+    precondition(evaluateRelease(Data(release.utf8), nightly: false, version: "1.0.0", commit: "") == ReleaseCheck(label: "Version 1.2.0", page: page, newer: true))
+    precondition(evaluateRelease(Data(release.utf8), nightly: false, version: "1.2.0", commit: "")!.newer == false)
+    // The nightly is newer when built from a different commit.
+    let nightly = #"{"tag_name":"nightly","target_commitish":"77ba70a1234567890abcdef1234567890abcdef0","html_url":"https://github.com/n0thhhing/wallify/releases/tag/nightly"}"#
+    precondition(evaluateRelease(Data(nightly.utf8), nightly: true, version: "1.0.0", commit: "77ba70a12345")!.newer == false)
+    precondition(evaluateRelease(Data(nightly.utf8), nightly: true, version: "1.0.0", commit: "42e5d842b9e5")! ==
+                 ReleaseCheck(label: "Nightly 77ba70a", page: URL(string: "https://github.com/n0thhhing/wallify/releases/tag/nightly")!, newer: true))
     // Only github.com pages are opened from the response.
-    precondition(parseLatestRelease(Data(#"{"tag_name":"v9","html_url":"https://evil.example/x"}"#.utf8)) == nil)
+    precondition(evaluateRelease(Data(#"{"tag_name":"v9","html_url":"https://evil.example/x"}"#.utf8), nightly: false, version: "1", commit: "") == nil)
     precondition(!renderConfiguration(parsed).contains("[Other]") && configurationValues(parsed)["lyrics"] == "false")
     // Every current setting is documented in the config template, so nothing lands in the fallback section.
     precondition(!renderConfiguration(parsed).contains("[Other]"))

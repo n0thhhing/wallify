@@ -84,7 +84,9 @@ let settingSpecs: [SettingSpec] = [
     choice(26, "stopped_behavior", "When Music Stops", \.setting_stopped_behavior, \.stopped_behavior,
            ["Show Companion", "Keep Last Track", "Hide Widget"], [["companion", "0"], ["keep_last_track", "keep", "1"], ["hide", "2"]], default: 0),
     choice(27, "scroll_action", "Scroll Action", \.setting_scroll_action, \.scroll_action, ["Off", "Volume", "Seek"],
-           [["off"], ["volume"], ["seek"]], default: 0)
+           [["off"], ["volume"], ["seek"]], default: 0),
+    choice(30, "update_channel", "Update Channel", \.setting_update_channel, \.update_channel, ["Stable", "Nightly"],
+           [["stable"], ["nightly"]], default: 0)
 ]
 
 private let specsByKey = Dictionary(uniqueKeysWithValues: settingSpecs.map { ($0.key, $0) })
@@ -130,6 +132,7 @@ public func applyWidgetInt(_ key: Int32, _ value: Int32) {
     }
     if key == 18 { updateMediaKeyTap(Int32(stored)) }
     if key == 26 { refreshStoppedPresentation() }
+    if key == 30 { updateChecker.check() }  // switching channel re-checks right away
     saveConfiguration()
     requestWidgetFrame()
 }
@@ -372,6 +375,9 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
     [Updates]
     # Check GitHub daily for a newer Wallify release [true, false]
     check_updates = \(values["check_updates"]!)
+
+    # Stable releases, or the nightly build of every push [stable, nightly]
+    update_channel = \(values["update_channel"]!)
 
     [Debug]
     # Show developer diagnostics overlay window [true, false]

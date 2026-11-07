@@ -52,7 +52,10 @@ public func drawPet(_ style: Int32, _ card: UnsafePointer<WallifyCardRect>?, _ c
         output[0].sx = Float(petFrame(time, fps: 3, frames: 5)) / 5
         output[0].sw = 0.2
     }
-    let color: (Float, Float, Float, Float) = petted ? (211 / 255, 134 / 255, 155 / 255, 235 / 255) : (235 / 255, 219 / 255, 178 / 255, 210 / 255)
+    // Precomputed constants keep this within older compilers' type-checking limits.
+    let heartColor: (Float, Float, Float, Float) = (0.827, 0.525, 0.608, 0.922)   // 211, 134, 155, 235 / 255
+    let sleepColor: (Float, Float, Float, Float) = (0.922, 0.859, 0.698, 0.824)   // 235, 219, 178, 210 / 255
+    let color = petted ? heartColor : sleepColor
     for index in 0..<3 {
         let value = time / 3.6 + Double(index) / 3
         let remainder = value.truncatingRemainder(dividingBy: 1)

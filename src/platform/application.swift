@@ -111,7 +111,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         track.image = NSImage(systemSymbolName: snapshot.playing ? "waveform" : "music.note", accessibilityDescription: nil)
         open.title = snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify"
         update.isHidden = updateChecker.available == nil
-        update.title = updateChecker.available.map { "Update Available: \($0.version)…" } ?? "Update Available…"
+        update.title = updateChecker.available.map { "Update Available: \($0.version.replacingOccurrences(of: "Version ", with: ""))…" } ?? "Update Available…"
         let liked = likeStore.state
         like.isHidden = liked == nil
         like.title = liked == true ? "Remove from Liked Songs" : "Save to Liked Songs"

@@ -219,8 +219,9 @@ private struct SettingsView: View {
             }
             section("Updates") {
                 toggle(29, "Checks GitHub once a day. Nothing is downloaded automatically.")
+                picker(30, model.snapshot.update_channel == 1 ? "Builds of every change; may be unstable." : "Tested releases.")
                 if let update = updateChecker.available {
-                    buttonRow("Version \(updateChecker.current)", "Version \(update.version) is available.", "Download…") { updateChecker.openRelease() }
+                    buttonRow("Version \(updateChecker.current)", "\(update.version) is available.", "Download…") { updateChecker.openRelease() }
                 } else {
                     buttonRow("Version \(updateChecker.current)", updateChecker.lastStatus, "Check Now") { updateChecker.check() }
                 }

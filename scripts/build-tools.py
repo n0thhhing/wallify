@@ -28,7 +28,8 @@ def identity(root, mode, inspector, architecture):
     info = {"configuration": mode, "inspector": inspector == "true", "architecture": architecture,
                 "commit": commit, "modified": dirty, "label": label}
     write_changed(root / "build-info.json", json.dumps(info, indent=2) + "\n")
-    write_changed(root / "BuildIdentity.swift", "enum WallifyBuildIdentity {\n    static let label = " + json.dumps(label, ensure_ascii=False) + "\n}\n")
+    write_changed(root / "BuildIdentity.swift", "enum WallifyBuildIdentity {\n    static let label = " + json.dumps(label, ensure_ascii=False) +
+                  "\n    static let commit = " + json.dumps(commit) + "\n}\n")
     print(label)
 
 
