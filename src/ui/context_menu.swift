@@ -1,5 +1,60 @@
 import AppKit
 
+// Setting menu items carry tag 1000 + key * 100 + value; both menus decode it with settingTag(_:).
+private let settingTagBase = 1000
+
+@MainActor func settingMenuItem(_ key: Int32, target: AnyObject, action: Selector) -> NSMenuItem {
+    let spec = settingSpec(key)!
+    let item = NSMenuItem(title: spec.title, action: nil, keyEquivalent: "")
+    if case .choice = spec.storage {
+        let submenu = NSMenu(title: spec.title)
+        submenu.autoenablesItems = false
+        for (value, label) in spec.labels.enumerated() {
+            let option = NSMenuItem(title: label, action: action, keyEquivalent: "")
+            option.target = target
+            option.tag = settingTagBase + Int(key) * 100 + value
+            submenu.addItem(option)
+        }
+        item.submenu = submenu
+    } else {
+        item.action = action
+        item.target = target
+        item.tag = settingTagBase + Int(key) * 100
+    }
+    return item
+}
+
+func settingTag(_ tag: Int) -> (spec: SettingSpec, value: Int32)? {
+    guard tag >= settingTagBase, let spec = settingSpec(Int32((tag - settingTagBase) / 100)) else { return nil }
+    return (spec, Int32((tag - settingTagBase) % 100))
+}
+
+// Checkmarks follow the snapshot: a toggle is on when enabled, a choice when it is the current value.
+@MainActor func updateSettingStates(_ menu: NSMenu, _ snapshot: WallifySettingsSnapshot) {
+    for item in menu.items {
+        if let submenu = item.submenu { updateSettingStates(submenu, snapshot) }
+        guard let (spec, value) = settingTag(item.tag) else { continue }
+        switch spec.storage {
+        case .bool(_, let field): item.state = snapshot[keyPath: field] ? .on : .off
+        case .choice(_, let field): item.state = snapshot[keyPath: field] == value ? .on : .off
+        }
+    }
+}
+
+// Both menus share one layout: playback, widget settings, Quick Preferences, Lock Position, then Open, Settings and Quit.
+@MainActor func addSettingsSection(to menu: NSMenu, target: AnyObject, action: Selector) {
+    for key: Int32 in [14, 13, 15] { menu.addItem(settingMenuItem(key, target: target, action: action)) }
+    let preferences = NSMenu(title: "Quick Preferences")
+    preferences.autoenablesItems = false
+    for key: Int32 in [5, 0, 1, 2, 3] { preferences.addItem(settingMenuItem(key, target: target, action: action)) }
+    preferences.addItem(.separator())
+    preferences.addItem(settingMenuItem(10, target: target, action: action))
+    let quick = NSMenuItem(title: preferences.title, action: nil, keyEquivalent: "")
+    quick.submenu = preferences
+    menu.addItem(quick)
+    menu.addItem(settingMenuItem(25, target: target, action: action))
+}
+
 @MainActor final class WidgetContextMenu: NSObject {
     static let shared = WidgetContextMenu()
     private var showing = false
@@ -11,62 +66,28 @@ import AppKit
     func build(_ snapshot: WallifySettingsSnapshot) -> NSMenu {
         let menu = NSMenu(title: "Wallify")
         menu.autoenablesItems = false
-        func item(_ title: String, _ tag: Int, _ selected: Bool = false) -> NSMenuItem {
+        func item(_ title: String, _ tag: Int, _ symbol: String? = nil) -> NSMenuItem {
             let result = NSMenuItem(title: title, action: #selector(choose(_:)), keyEquivalent: "")
             result.target = self
             result.tag = tag
-            result.state = selected ? .on : .off
+            if let symbol { result.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) }
             return result
         }
-        func group(_ title: String, _ labels: [String], _ tags: [Int], _ selected: Int32,
-                   _ values: [Int32]? = nil, in parent: NSMenu) {
-            let submenu = NSMenu(title: title)
-            submenu.autoenablesItems = false
-            for index in labels.indices {
-                submenu.addItem(item(labels[index], tags[index], selected == (values?[index] ?? Int32(index))))
-            }
-            let entry = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            entry.submenu = submenu
-            parent.addItem(entry)
-        }
-        // Keep this order and naming in step with StatusMenu.
-        for (title, tag, symbol) in [(snapshot.playing ? "Pause" : "Play", 1, snapshot.playing ? "pause.fill" : "play.fill"),
-                                     ("Previous Track", 2, "backward.fill"), ("Next Track", 3, "forward.fill")] {
-            let entry = item(title, tag)
-            entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
-            menu.addItem(entry)
-        }
+        menu.addItem(item(snapshot.playing ? "Pause" : "Play", 1, snapshot.playing ? "pause.fill" : "play.fill"))
+        menu.addItem(item("Previous Track", 2, "backward.fill"))
+        menu.addItem(item("Next Track", 3, "forward.fill"))
         menu.addItem(.separator())
-        group("Widget Size", ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"],
-              [60, 61, 62, 63, 64], snapshot.widget_mode, in: menu)
-        group("Media Source", ["Now Playing", "Spotify", "Spotifast", "Auto"], [50, 51, 52, 53], snapshot.media_source, in: menu)
-        group("Companion", ["Pixel Cat", "Banana Cat", "Raccoon", "Spotify Launcher"],
-              [81, 82, 83, 80], snapshot.idle_style, [0, 1, 3, 2], in: menu)
-        let preferences = NSMenu(title: "Quick Preferences")
-        preferences.autoenablesItems = false
-        for (title, tag, enabled) in [("Native Glass", 13, snapshot.native_glass), ("Artwork Glow", 5, snapshot.glow),
-                                      ("Aurora", 6, snapshot.aurora), ("Animations", 7, snapshot.animations),
-                                      ("Dim Artwork When Paused", 8, snapshot.dim_paused)] {
-            preferences.addItem(item(title, tag, enabled))
-        }
-        preferences.addItem(.separator())
-        group("Frame Strength", ["Off", "Subtle", "Strong"], [10, 11, 12], snapshot.frame_strength, in: preferences)
-        let quick = NSMenuItem(title: preferences.title, action: nil, keyEquivalent: "")
-        quick.submenu = preferences
-        menu.addItem(quick)
-        menu.addItem(item("Lock Position", 9, snapshot.position_locked))
+        addSettingsSection(to: menu, target: self, action: #selector(choose(_:)))
         menu.addItem(.separator())
-        let open = item(snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify", 4)
-        open.image = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: open.title)
-        menu.addItem(open)
-        let settings = item("Settings…", 90)
+        menu.addItem(item(snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify", 4, "arrow.up.forward.app"))
+        let settings = item("Settings…", 90, "gearshape")
         settings.keyEquivalent = ","
-        settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
         menu.addItem(settings)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Wallify", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApplication.shared
         menu.addItem(quit)
+        updateSettingStates(menu, snapshot)
         return menu
     }
 

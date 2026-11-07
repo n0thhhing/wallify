@@ -87,4 +87,50 @@ func checkConfigurationStorage() {
         preconditionFailure("Saving under a file should fail")
     } catch {}
     precondition(try! String(contentsOf: url, encoding: .utf8) == content)
+    checkConfigurationGolden()
+}
+
+// Pins every setting's config spelling so refactors of the settings plumbing cannot drift.
+func checkConfigurationGolden() {
+    let position = ["widget_margin_left": "0", "widget_margin_top": "0", "widget_grid_x": "0", "widget_grid_y": "0"]
+    let bools = ["artwork_glow", "native_glass", "aurora", "animations", "dim_paused_artwork", "widget_debug", "hide_text",
+                 "hide_progress", "show_controls", "show_timestamps", "artwork_border", "compact_gradient", "waveform",
+                 "clickable_names", "position_locked"]
+    var low = WallifyWidgetState()
+    var expected = position.merging(Dictionary(uniqueKeysWithValues: bools.map { ($0, "false") })) { $1 }
+    expected.merge(["frame_strength": "off", "glow_intensity": "low", "animation_speed": "slow", "media_source": "now_playing",
+                     "widget_mode": "1x1", "idle_style": "spotify", "track_transition": "default", "font_scale": "small",
+                     "media_key_target": "off", "stopped_behavior": "companion", "artwork_radius": "0", "progress_thickness": "0"]) { $1 }
+    precondition(configurationValues(low) == expected)
+    for path: WritableKeyPath<WallifyWidgetState, Bool> in [\.setting_glow, \.setting_native_glass, \.setting_aurora, \.setting_animations,
+        \.setting_dim, \.setting_debug, \.setting_hide_text, \.setting_hide_progress, \.setting_show_controls, \.setting_show_timestamps,
+        \.setting_artwork_border, \.setting_compact_gradient, \.setting_waveform, \.setting_clickable_names, \.setting_position_locked] {
+        low[keyPath: path] = true
+    }
+    low.setting_frame = 2; low.setting_intensity = 2; low.setting_speed = 2; low.setting_source = 3; low.setting_mode = 4
+    low.setting_idle_style = 3; low.setting_transition = 5; low.setting_font_scale = 2; low.setting_media_key_target = 3
+    low.setting_stopped_behavior = 2; low.setting_artwork_radius = 2; low.setting_progress_thickness = 2
+    expected.merge(Dictionary(uniqueKeysWithValues: bools.map { ($0, "true") })) { $1 }
+    expected.merge(["frame_strength": "strong", "glow_intensity": "high", "animation_speed": "fast", "media_source": "auto",
+                     "widget_mode": "2x2", "idle_style": "raccoon", "track_transition": "glitch", "font_scale": "large",
+                     "media_key_target": "spotifast", "stopped_behavior": "hide", "artwork_radius": "2", "progress_thickness": "2"]) { $1 }
+    precondition(configurationValues(low) == expected)
+    low.setting_frame = 9; low.setting_mode = 9
+    precondition(configurationValues(low)["frame_strength"] == "subtle" && configurationValues(low)["widget_mode"] == "3x1")
+    var parsed = WallifyWidgetState()
+    parseConfiguration("""
+    widget_mode = medium
+    idle_style = banana
+    track_transition = card_flip
+    media_key_target = active
+    frame_strength = bogus
+    progress_thickness = 2
+    hide_text = on
+    waveform = maybe
+    """, into: &parsed)
+    precondition(parsed.setting_mode == 1 && parsed.setting_idle_style == 2 && parsed.setting_transition == 3)
+    precondition(parsed.setting_media_key_target == 1 && parsed.setting_frame == 1 && parsed.setting_progress_thickness == 2)
+    precondition(parsed.setting_hide_text && !parsed.setting_waveform)
+    // Every current setting is documented in the config template, so nothing lands in the fallback section.
+    precondition(!renderConfiguration(parsed).contains("[Other]"))
 }

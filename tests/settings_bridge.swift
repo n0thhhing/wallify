@@ -154,22 +154,22 @@ struct SettingsBridgeCheck {
         let quickMenu = status.menu.items.first { $0.title == "Quick Preferences" }!.submenu!
         precondition(status.menu.items.firstIndex { $0.title == "Quick Preferences" }! < status.menu.items.firstIndex { $0.title == "Settings…" }!)
         precondition(!status.menu.items.contains { $0.title == "Track Transition" })
-        for (name, key) in [("Media Source", 13), ("Widget Size", 14), ("Companion", 15), ("Frame Strength", 10)] {
+        for (name, key) in [("Media Source", 13), ("Widget Size", 14), ("Companion", 15), ("Custom Border", 10)] {
             let items = (status.menu.items + quickMenu.items).first { $0.title == name }!.submenu!.items
             for (value, item) in items.enumerated() {
-                status.choose(item)
+                status.chooseSetting(item)
                 precondition(lastInt?.0 == Int32(key) && lastInt?.1 == Int32(value))
                 precondition(items.filter { $0.state == .on }.count == 1 && item.state == .on)
             }
         }
-        let toggles = quickMenu.items.filter { $0.action == #selector(StatusMenu.toggle(_:)) } +
+        let toggles = quickMenu.items.filter { $0.submenu == nil && $0.action != nil } +
             [status.menu.items.first { $0.title == "Lock Position" }!]
         for item in toggles {
             let previous = item.state
             // A stale displayed checkmark must not change the toggle's meaning.
             item.state = previous == .on ? .off : .on
-            status.toggle(item)
-            precondition(lastBool?.0 == Int32(item.tag))
+            status.chooseSetting(item)
+            precondition(lastBool?.0 == settingTag(item.tag)!.spec.key)
             precondition(item.state != previous)
         }
         status.playPause(); status.previous(); status.next()
@@ -418,9 +418,9 @@ struct SettingsBridgeCheck {
         let lock = menu.items.first { $0.title == "Lock Position" }!
         precondition(lock.state == .on)
         target.choose(lock)
-        precondition(contextSelection == 9)
+        precondition(contextSelection == 3500)
         precondition(!menu.items.contains { $0.title == "Track Transition" })
-        for (title, selected) in [("Media Source", 52), ("Widget Size", 64), ("Companion", 83)] {
+        for (title, selected) in [("Media Source", 2302), ("Widget Size", 2404), ("Companion", 2503)] {
             let items = children(title, in: menu)
             precondition(items.filter { $0.state == .on }.map(\.tag) == [selected])
             for item in items {
@@ -430,7 +430,7 @@ struct SettingsBridgeCheck {
         }
         let preferences = menu.items.first { $0.title == "Quick Preferences" }!.submenu!
         precondition(preferences.items[0].title == "Native Glass" && preferences.items[1].state == .on && preferences.items[2].state == .off)
-        precondition(children("Frame Strength", in: preferences).filter { $0.state == .on }.map(\.tag) == [12])
+        precondition(children("Custom Border", in: preferences).filter { $0.state == .on }.map(\.tag) == [2002])
         precondition(!preferences.items.contains { ["Glow Intensity", "Animation Speed", "Restore Defaults"].contains($0.title) })
         let settings = menu.items.first { $0.tag == 90 }!
         precondition(settings.keyEquivalent == ",")
@@ -442,8 +442,9 @@ struct SettingsBridgeCheck {
         snapshot.position_locked = false
         let refreshed = target.build(snapshot)
         precondition(refreshed.items[0].title == "Play")
-        precondition(children("Media Source", in: refreshed).filter { $0.state == .on }.map(\.tag) == [53])
-        precondition(children("Companion", in: refreshed).first { $0.tag == 80 }!.state == .on)
+        precondition(children("Media Source", in: refreshed).filter { $0.state == .on }.map(\.tag) == [2303])
+        precondition(children("Companion", in: refreshed).first { $0.tag == 2502 }!.state == .on)
+        precondition(settingTag(2302)!.spec.key == 13 && settingTag(2302)!.value == 2 && settingTag(90) == nil)
         precondition(refreshed.items.first { $0.title == "Lock Position" }!.state == .off)
     }
 

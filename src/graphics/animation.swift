@@ -155,21 +155,18 @@ public func takeContextSelection() -> Int32 {
 
 func applyContextSelection(_ tag: Int32) {
     let state = widgetStatePointer()
+    if let (spec, value) = settingTag(Int(tag)) {
+        switch spec.storage {
+        case .bool(let path, _): applyWidgetBool(spec.key, !state.pointee[keyPath: path])
+        case .choice: applyWidgetInt(spec.key, value)
+        }
+        return
+    }
     switch tag {
     case 1: toggleWidgetPlayback()
     case 2: enqueueMediaCommand(5)
     case 3: enqueueMediaCommand(4)
     case 4: if state.pointee.setting_source == 2 { openSpotifast() } else { openSpotify() }
-    case 5: applyWidgetBool(0, !state.pointee.setting_glow)
-    case 6: applyWidgetBool(1, !state.pointee.setting_aurora)
-    case 7: applyWidgetBool(2, !state.pointee.setting_animations)
-    case 8: applyWidgetBool(3, !state.pointee.setting_dim)
-    case 9: applyWidgetBool(25, !state.pointee.setting_position_locked)
-    case 10...12: applyWidgetInt(10, tag - 10)
-    case 13: applyWidgetBool(5, !state.pointee.setting_native_glass)
-    case 50...53: applyWidgetInt(13, tag - 50)
-    case 60...64: applyWidgetInt(14, tag - 60)
-    case 80...83: applyWidgetInt(15, tag == 80 ? 2 : tag == 81 ? 0 : tag == 82 ? 1 : 3)
     case 90: showSettingsWindow()
     default: break
     }

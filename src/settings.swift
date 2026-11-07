@@ -1,24 +1,97 @@
 import Foundation
 
-private let boolSettingKeys: [Int32: WritableKeyPath<WallifyWidgetState, Bool>] = [
-    0: \.setting_glow, 1: \.setting_aurora, 2: \.setting_animations, 3: \.setting_dim,
-    4: \.setting_debug, 5: \.setting_native_glass, 6: \.setting_hide_text,
-    7: \.setting_hide_progress, 8: \.setting_show_controls, 9: \.setting_show_timestamps,
-    19: \.setting_artwork_border, 20: \.setting_compact_gradient, 23: \.setting_waveform,
-    24: \.setting_clickable_names, 25: \.setting_position_locked
+// Every user setting, described once. Config parsing and writing, apply, restore defaults,
+// the settings snapshot and the menus all read this table; a new setting is one entry here
+// plus its state field.
+struct SettingSpec {
+    enum Storage {
+        case bool(WritableKeyPath<WallifyWidgetState, Bool>, WritableKeyPath<WallifySettingsSnapshot, Bool>)
+        case choice(WritableKeyPath<WallifyWidgetState, UInt8>, WritableKeyPath<WallifySettingsSnapshot, Int32>)
+    }
+    let key: Int32
+    let name: String          // config file key
+    let title: String         // UI title
+    let storage: Storage
+    var values: [[String]] = []  // config spellings per stored value; the first is written
+    var labels: [String] = []    // UI labels per public value
+    var stored: [UInt8]? = nil   // public value -> stored value, where they differ
+    var defaultValue: UInt8 = 0  // stored value; 1 = on for bools
+
+    func storedValue(_ value: Int) -> UInt8 {
+        let clamped = max(0, min(labels.count - 1, value))
+        return stored?[clamped] ?? UInt8(clamped)
+    }
+    func publicValue(_ value: UInt8) -> Int32 { Int32(stored?.firstIndex(of: value) ?? Int(value)) }
+}
+
+private func toggle(_ key: Int32, _ name: String, _ title: String, _ path: WritableKeyPath<WallifyWidgetState, Bool>,
+                    _ snapshot: WritableKeyPath<WallifySettingsSnapshot, Bool>, on: Bool) -> SettingSpec {
+    SettingSpec(key: key, name: name, title: title, storage: .bool(path, snapshot), defaultValue: on ? 1 : 0)
+}
+
+private func choice(_ key: Int32, _ name: String, _ title: String, _ path: WritableKeyPath<WallifyWidgetState, UInt8>,
+                    _ snapshot: WritableKeyPath<WallifySettingsSnapshot, Int32>, _ labels: [String], _ values: [[String]],
+                    stored: [UInt8]? = nil, default value: UInt8) -> SettingSpec {
+    SettingSpec(key: key, name: name, title: title, storage: .choice(path, snapshot), values: values, labels: labels,
+                stored: stored, defaultValue: value)
+}
+
+let settingSpecs: [SettingSpec] = [
+    toggle(0, "artwork_glow", "Artwork Glow", \.setting_glow, \.glow, on: true),
+    toggle(1, "aurora", "Aurora", \.setting_aurora, \.aurora, on: true),
+    toggle(2, "animations", "Animations", \.setting_animations, \.animations, on: true),
+    toggle(3, "dim_paused_artwork", "Dim Artwork When Paused", \.setting_dim, \.dim_paused, on: true),
+    toggle(4, "widget_debug", "Debug Console", \.setting_debug, \.debug_hud, on: false),
+    toggle(5, "native_glass", "Native Glass", \.setting_native_glass, \.native_glass, on: false),
+    toggle(6, "hide_text", "Hide Track Text", \.setting_hide_text, \.hide_text, on: false),
+    toggle(7, "hide_progress", "Hide Progress Bar", \.setting_hide_progress, \.hide_progress, on: false),
+    toggle(8, "show_controls", "Playback Controls", \.setting_show_controls, \.show_controls, on: true),
+    toggle(9, "show_timestamps", "Time Labels", \.setting_show_timestamps, \.show_timestamps, on: true),
+    toggle(19, "artwork_border", "Artwork Border", \.setting_artwork_border, \.artwork_border, on: true),
+    toggle(20, "compact_gradient", "Compact Contrast", \.setting_compact_gradient, \.compact_gradient, on: true),
+    toggle(23, "waveform", "System Audio Waveform", \.setting_waveform, \.waveform, on: false),
+    toggle(24, "clickable_names", "Clickable Names", \.setting_clickable_names, \.clickable_names, on: false),
+    toggle(25, "position_locked", "Lock Position", \.setting_position_locked, \.position_locked, on: false),
+    choice(10, "frame_strength", "Custom Border", \.setting_frame, \.frame_strength, ["Off", "Subtle", "Strong"],
+           [["off", "0"], ["subtle", "1"], ["strong", "2"]], default: 1),
+    choice(11, "glow_intensity", "Glow Intensity", \.setting_intensity, \.glow_intensity, ["Low", "Normal", "High"],
+           [["low", "0"], ["normal", "1"], ["high", "2"]], default: 1),
+    choice(12, "animation_speed", "Animation Speed", \.setting_speed, \.animation_speed, ["Slow", "Normal", "Fast"],
+           [["slow", "0"], ["normal", "1"], ["fast", "2"]], default: 1),
+    choice(13, "media_source", "Media Source", \.setting_source, \.media_source, ["Now Playing", "Spotify", "Spotifast", "Auto"],
+           [["now_playing", "system", "0"], ["spotify", "1"], ["spotifast", "fastpotify", "2"], ["auto", "3"]], default: 0),
+    // Config mode integers predate the five-mode UI; numeric 1 must remain 3×1.
+    choice(14, "widget_mode", "Widget Size", \.setting_mode, \.widget_mode, ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"],
+           [["1x1", "compact", "0"], ["2x1", "two_by_one", "medium"], ["3x1", "expanded", "three_by_one", "wide", "1", "2"],
+            ["1x2", "one_by_two", "3"], ["2x2", "two_by_two", "4"]], default: 2),
+    // Stored values predate the menu order: 0 is the Spotify launcher, 1 the pixel cat.
+    choice(15, "idle_style", "Companion", \.setting_idle_style, \.idle_style, ["Pixel Cat", "Banana Cat", "Spotify Launcher", "Raccoon"],
+           [["spotify", "0"], ["cat", "pixel_cat", "1"], ["banana_cat", "banana", "2"], ["raccoon", "3"]], stored: [1, 2, 0, 3], default: 1),
+    choice(16, "track_transition", "Track Transition", \.setting_transition, \.track_transition,
+           ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"],
+           [["default", "0"], ["cinematic", "1"], ["ripple", "liquid_ripple", "2"], ["flip", "card_flip", "3"],
+            ["vinyl", "vinyl_spin", "4"], ["glitch", "cyber_glitch", "5"]], default: 1),
+    choice(17, "font_scale", "Font Size", \.setting_font_scale, \.font_scale, ["Small", "Normal", "Large"],
+           [["small"], ["normal"], ["large"]], default: 1),
+    choice(18, "media_key_target", "Media Key Target", \.setting_media_key_target, \.media_key_target,
+           ["Off", "Active", "Spotify", "Spotifast"], [["off"], ["active"], ["spotify"], ["spotifast"]], default: 0),
+    choice(21, "artwork_radius", "Artwork Corners", \.setting_artwork_radius, \.artwork_radius, ["Soft", "Rounded", "Large"],
+           [["0"], ["1"], ["2"]], default: 1),
+    choice(22, "progress_thickness", "Progress Thickness", \.setting_progress_thickness, \.progress_thickness,
+           ["Thin", "Standard", "Thick"], [["0"], ["1"], ["2"]], default: 1),
+    choice(26, "stopped_behavior", "When Music Stops", \.setting_stopped_behavior, \.stopped_behavior,
+           ["Show Companion", "Keep Last Track", "Hide Widget"], [["companion", "0"], ["keep_last_track", "keep", "1"], ["hide", "2"]], default: 0)
 ]
-private let intSettingKeys: [Int32: (WritableKeyPath<WallifyWidgetState, UInt8>, Int32)] = [
-    10: (\.setting_frame, 2), 11: (\.setting_intensity, 2), 12: (\.setting_speed, 2),
-    13: (\.setting_source, 3), 16: (\.setting_transition, 5), 17: (\.setting_font_scale, 2),
-    18: (\.setting_media_key_target, 3), 21: (\.setting_artwork_radius, 2), 22: (\.setting_progress_thickness, 2),
-    26: (\.setting_stopped_behavior, 2)
-]
+
+private let specsByKey = Dictionary(uniqueKeysWithValues: settingSpecs.map { ($0.key, $0) })
+private let specsByName = Dictionary(uniqueKeysWithValues: settingSpecs.map { ($0.name, $0) })
+func settingSpec(_ key: Int32) -> SettingSpec? { specsByKey[key] }
 
 @_cdecl("wallify_native_apply_bool")
 public func applyWidgetBool(_ key: Int32, _ value: Bool) {
     sceneLock.lock()
     defer { sceneLock.unlock() }
-    guard let path = boolSettingKeys[key] else { return }
+    guard case .bool(let path, _)? = specsByKey[key]?.storage else { return }
     widgetStatePointer().pointee[keyPath: path] = value
     if key == 25 && value {
         let state = widgetStatePointer()
@@ -32,26 +105,25 @@ public func applyWidgetBool(_ key: Int32, _ value: Bool) {
     requestWidgetFrame()
 }
 
+// `value` is the public value, the index into the setting's labels.
 @_cdecl("wallify_native_apply_int")
 public func applyWidgetInt(_ key: Int32, _ value: Int32) {
     sceneLock.lock()
     defer { sceneLock.unlock() }
-    let state = widgetStatePointer()
+    guard let spec = specsByKey[key], case .choice(let path, _) = spec.storage else { return }
+    let state = widgetStatePointer(), stored = spec.storedValue(Int(value))
     if key == 14 {
-        let mode = UInt8(max(0, min(4, value)))
-        if state.pointee.setting_mode != mode {
-            beginWidgetMode(mode, Double(wallify_width()), Double(wallify_height()), state.pointee.setting_animations)
+        if state.pointee.setting_mode != stored {
+            beginWidgetMode(stored, Double(wallify_width()), Double(wallify_height()), state.pointee.setting_animations)
             if !state.pointee.mode_transition_active {
-                let (w, h) = modeDimensions(mode)
+                let (w, h) = modeDimensions(stored)
                 resizeMetalWidget(Int32(w), Int32(h))
             }
         }
-    } else if key == 15 {
-        state.pointee.setting_idle_style = value == 0 ? 1 : value == 1 ? 2 : value == 3 ? 3 : 0
-    } else if let (path, maximum) = intSettingKeys[key] {
-        state.pointee[keyPath: path] = UInt8(max(0, min(maximum, value)))
-        if key == 18 { updateMediaKeyTap(Int32(state.pointee.setting_media_key_target)) }
-    } else { return }
+    } else {
+        state.pointee[keyPath: path] = stored
+    }
+    if key == 18 { updateMediaKeyTap(Int32(stored)) }
     if key == 26 { refreshStoppedPresentation() }
     saveConfiguration()
     requestWidgetFrame()
@@ -73,64 +145,19 @@ public func restoreWidgetDefaults() {
     sceneLock.lock()
     defer { sceneLock.unlock() }
     let state = widgetStatePointer()
-    for (key, path) in boolSettingKeys { state.pointee[keyPath: path] = ![4, 5, 6, 7, 23, 24, 25].contains(key) }
-    for (key, (path, _)) in intSettingKeys { state.pointee[keyPath: path] = [13, 18].contains(key) ? 0 : 1 }
-    state.pointee.setting_idle_style = 1
-    state.pointee.setting_stopped_behavior = 0
+    for spec in settingSpecs where spec.key != 14 {  // the size changes through its animated transition below
+        switch spec.storage {
+        case .bool(let path, _): state.pointee[keyPath: path] = spec.defaultValue != 0
+        case .choice(let path, _): state.pointee[keyPath: path] = spec.defaultValue
+        }
+    }
     refreshStoppedPresentation()
     audioWaveform.update(active: false)
-    beginWidgetMode(2, Double(wallify_width()), Double(wallify_height()), true)
+    beginWidgetMode(specsByKey[14]!.defaultValue, Double(wallify_width()), Double(wallify_height()), true)
     widget_debug_window_hide()
-    updateMediaKeyTap(0)
+    updateMediaKeyTap(Int32(specsByKey[18]!.defaultValue))
     saveConfiguration()
     requestWidgetFrame()
-}
-
-private let boolSettings: [(String, WritableKeyPath<WallifyWidgetState, Bool>)] = [
-    ("artwork_glow", \.setting_glow), ("native_glass", \.setting_native_glass),
-    ("aurora", \.setting_aurora), ("animations", \.setting_animations),
-    ("dim_paused_artwork", \.setting_dim), ("widget_debug", \.setting_debug),
-    ("hide_text", \.setting_hide_text), ("hide_progress", \.setting_hide_progress),
-    ("show_controls", \.setting_show_controls), ("show_timestamps", \.setting_show_timestamps),
-    ("artwork_border", \.setting_artwork_border), ("compact_gradient", \.setting_compact_gradient),
-    ("waveform", \.setting_waveform), ("clickable_names", \.setting_clickable_names),
-    ("position_locked", \.setting_position_locked)
-]
-
-// Config mode integers predate the five-mode UI; numeric 1 must remain 3×1.
-private let enumNames: [[[String]]] = [
-    [["off", "0"], ["subtle", "1"], ["strong", "2"]],
-    [["low", "0"], ["normal", "1"], ["high", "2"]],
-    [["slow", "0"], ["normal", "1"], ["fast", "2"]],
-    [["now_playing", "system", "0"], ["spotify", "1"], ["spotifast", "fastpotify", "2"], ["auto", "3"]],
-    [["1x1", "compact", "0"], ["2x1", "two_by_one", "medium"], ["3x1", "expanded", "three_by_one", "wide", "1", "2"], ["1x2", "one_by_two", "3"], ["2x2", "two_by_two", "4"]],
-    [["spotify", "0"], ["cat", "pixel_cat", "1"], ["banana_cat", "banana", "2"], ["raccoon", "3"]],
-    [["default", "0"], ["cinematic", "1"], ["ripple", "liquid_ripple", "2"], ["flip", "card_flip", "3"], ["vinyl", "vinyl_spin", "4"], ["glitch", "cyber_glitch", "5"]],
-    [["small"], ["normal"], ["large"]],
-    [["off"], ["active"], ["spotify"], ["spotifast"]],
-    [["companion", "0"], ["keep_last_track", "keep", "1"], ["hide", "2"]]
-]
-private let enumDefaults: [UInt8] = [1, 1, 1, 0, 2, 1, 1, 1, 0, 0]
-private let enumSettings: [(String, WritableKeyPath<WallifyWidgetState, UInt8>, Int)] = [
-    ("frame_strength", \.setting_frame, 0), ("glow_intensity", \.setting_intensity, 1),
-    ("animation_speed", \.setting_speed, 2), ("media_source", \.setting_source, 3),
-    ("widget_mode", \.setting_mode, 4), ("idle_style", \.setting_idle_style, 5),
-    ("track_transition", \.setting_transition, 6), ("font_scale", \.setting_font_scale, 7),
-    ("media_key_target", \.setting_media_key_target, 8),
-    ("stopped_behavior", \.setting_stopped_behavior, 9)
-]
-
-func parseSettingEnum(_ kind: Int, _ raw: String) -> UInt8 {
-    guard enumNames.indices.contains(kind) else { return 0 }
-    let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    return enumNames[kind].firstIndex(where: { $0.contains(value) }).map(UInt8.init) ?? enumDefaults[kind]
-}
-
-@_cdecl("wallify_parse_setting_enum")
-public func parseSettingEnumBridge(_ kind: Int32, _ bytes: UnsafePointer<UInt8>?, _ count: Int) -> UInt8 {
-    guard count >= 0, count <= 4096, let bytes,
-          let raw = String(bytes: UnsafeBufferPointer(start: bytes, count: count), encoding: .utf8) else { return 0 }
-    return parseSettingEnum(Int(kind), raw)
 }
 
 func parseConfiguration(_ content: String, into state: inout WallifyWidgetState) {
@@ -142,18 +169,21 @@ func parseConfiguration(_ content: String, into state: inout WallifyWidgetState)
         guard pair.count >= 2 else { continue }
         let key = pair[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let value = pair[1].trimmingCharacters(in: .whitespacesAndNewlines)
-        if let (_, path) = boolSettings.first(where: { $0.0 == key }) {
-            switch value.lowercased() {
-            case "true", "1", "yes", "on": state[keyPath: path] = true
-            case "false", "0", "no", "off": state[keyPath: path] = false
-            default: break
+        if let spec = specsByName[key] {
+            switch spec.storage {
+            case .bool(let path, _):
+                // An unrecognised boolean keeps the current value.
+                switch value.lowercased() {
+                case "true", "1", "yes", "on": state[keyPath: path] = true
+                case "false", "0", "no", "off": state[keyPath: path] = false
+                default: break
+                }
+            case .choice(let path, _):
+                // An unrecognised choice falls back to the default.
+                state[keyPath: path] = spec.values.firstIndex { $0.contains(value.lowercased()) }.map(UInt8.init) ?? spec.defaultValue
             }
-        } else if let (_, path, kind) = enumSettings.first(where: { $0.0 == key }) {
-            state[keyPath: path] = parseSettingEnum(kind, value)
         } else {
             switch key {
-            case "artwork_radius": state.setting_artwork_radius = min(2, UInt8(value) ?? 1)
-            case "progress_thickness": state.setting_progress_thickness = min(2, UInt8(value) ?? 1)
             case "widget_grid_x": if let v = UInt8(value) { state.widget_grid_x = min(20, v) }
             case "widget_grid_y": if let v = UInt8(value) { state.widget_grid_y = min(20, v) }
             case "widget_margin_left": if let v = Int32(value) { state.widget_margin_left = max(0, v); savedMargins = true }
@@ -169,13 +199,15 @@ func parseConfiguration(_ content: String, into state: inout WallifyWidgetState)
 }
 
 func configurationValues(_ state: WallifyWidgetState) -> [String: String] {
-    var values = Dictionary(uniqueKeysWithValues: boolSettings.map { ($0.0, state[keyPath: $0.1] ? "true" : "false") })
-    for (key, path, kind) in enumSettings {
-        let index = Int(state[keyPath: path])
-        values[key] = enumNames[kind][enumNames[kind].indices.contains(index) ? index : Int(enumDefaults[kind])][0]
+    var values = [String: String]()
+    for spec in settingSpecs {
+        switch spec.storage {
+        case .bool(let path, _): values[spec.name] = state[keyPath: path] ? "true" : "false"
+        case .choice(let path, _):
+            let index = Int(state[keyPath: path])
+            values[spec.name] = spec.values[spec.values.indices.contains(index) ? index : Int(spec.defaultValue)][0]
+        }
     }
-    values["artwork_radius"] = String(state.setting_artwork_radius)
-    values["progress_thickness"] = String(state.setting_progress_thickness)
     values["widget_margin_left"] = String(state.widget_margin_left)
     values["widget_margin_top"] = String(state.widget_margin_top)
     values["widget_grid_x"] = String(state.widget_grid_x)
@@ -231,7 +263,7 @@ public func renderConfigurationBridge(_ output: UnsafeMutablePointer<UInt8>?, _ 
 
 func renderConfiguration(_ state: WallifyWidgetState) -> String {
     let values = configurationValues(state)
-    return """
+    let documented = """
     # ==============================================================================
     # Wallify Configuration
     #
@@ -331,6 +363,9 @@ func renderConfiguration(_ state: WallifyWidgetState) -> String {
     widget_debug = \(values["widget_debug"]!)
     
     """ + "\n"
+    // Settings added to the table but not yet documented above are still saved.
+    let undocumented = settingSpecs.filter { !documented.contains("\n\($0.name) = ") }
+    return undocumented.isEmpty ? documented : documented + "[Other]\n" + undocumented.map { "\($0.name) = \(values[$0.name]!)\n" }.joined()
 }
 
 @_cdecl("wallify_native_settings_snapshot")
@@ -340,37 +375,16 @@ public func widgetSettingsSnapshot(_ output: UnsafeMutablePointer<WallifySetting
     guard let output else { return }
     let state = widgetStatePointer().pointee
     var value = WallifySettingsSnapshot()
-    value.native_glass = state.setting_native_glass
-    value.glow = state.setting_glow
-    value.aurora = state.setting_aurora
-    value.animations = state.setting_animations
-    value.dim_paused = state.setting_dim
-    value.debug_hud = state.setting_debug
+    for spec in settingSpecs {
+        switch spec.storage {
+        case .bool(let path, let field): value[keyPath: field] = state[keyPath: path]
+        case .choice(let path, let field): value[keyPath: field] = spec.publicValue(state[keyPath: path])
+        }
+    }
     value.margin_left = state.widget_margin_left
     value.margin_top = state.widget_margin_top
     value.grid_x = Int32(state.widget_grid_x)
     value.grid_y = Int32(state.widget_grid_y)
-    value.hide_text = state.setting_hide_text
-    value.clickable_names = state.setting_clickable_names
-    value.position_locked = state.setting_position_locked
-    value.stopped_behavior = Int32(state.setting_stopped_behavior)
-    value.hide_progress = state.setting_hide_progress
-    value.show_controls = state.setting_show_controls
-    value.show_timestamps = state.setting_show_timestamps
-    value.artwork_border = state.setting_artwork_border
-    value.compact_gradient = state.setting_compact_gradient
-    value.waveform = state.setting_waveform
-    value.frame_strength = Int32(state.setting_frame)
-    value.glow_intensity = Int32(state.setting_intensity)
-    value.animation_speed = Int32(state.setting_speed)
-    value.media_source = Int32(state.setting_source)
-    value.widget_mode = Int32(state.setting_mode)
-    value.track_transition = Int32(state.setting_transition)
-    value.artwork_radius = Int32(state.setting_artwork_radius)
-    value.progress_thickness = Int32(state.setting_progress_thickness)
-    value.font_scale = Int32(state.setting_font_scale)
-    value.media_key_target = Int32(state.setting_media_key_target)
-    value.idle_style = state.setting_idle_style == 1 ? 0 : state.setting_idle_style == 2 ? 1 : state.setting_idle_style == 3 ? 3 : 2
     value.playing = state.global_rate > 0
     withUnsafeMutableBytes(of: &value.title) { destination in
         withUnsafeBytes(of: state.global_title) { destination.copyBytes(from: $0.prefix(min(256, state.global_title_len))) }

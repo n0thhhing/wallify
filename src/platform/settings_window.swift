@@ -100,19 +100,16 @@ private struct SettingsView: View {
         switch page ?? "General" {
         case "General":
             section("Widget") {
-                picker("Widget Size", "", 14, \.widget_mode, ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
-                picker("Media Source", "Where Wallify reads what's playing.", 13, \.media_source,
-                       ["Now Playing", "Spotify", "Spotifast", "Auto"])
+                picker(14, "")
+                picker(13, "Where Wallify reads what's playing.")
             }
             section("Idle Behavior", footer: "Paused tracks always stay visible.") {
-                picker("When Music Stops", "", 26, \.stopped_behavior, ["Show Companion", "Keep Last Track", "Hide Widget"])
-                picker("Companion", model.snapshot.stopped_behavior == 0 ? "" : "Choose Show Companion above to use this.", 15, \.idle_style,
-                       ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
+                picker(26, "")
+                picker(15, model.snapshot.stopped_behavior == 0 ? "" : "Choose Show Companion above to use this.")
                     .disabled(model.snapshot.stopped_behavior != 0)
             }
             section("Media Keys") {
-                picker("Media Key Target", "Route F7, F8 and F9 through Wallify.", 18, \.media_key_target,
-                       ["Off", "Active", "Spotify", "Spotifast"])
+                picker(18, "Route F7, F8 and F9 through Wallify.")
             }
             section("Startup") {
                 if #available(macOS 13, *) {
@@ -126,43 +123,39 @@ private struct SettingsView: View {
             }
         case "Appearance":
             section("Material") {
-                toggle("Native Glass", "", 5, \.native_glass)
-                toggle("Artwork Glow", "Ambient color from the album artwork.", 0, \.glow)
-                picker("Glow Intensity", model.snapshot.glow ? "" : "Turn on Artwork Glow to adjust this.", 11, \.glow_intensity,
-                       ["Low", "Normal", "High"]).disabled(!model.snapshot.glow)
-                toggle("Aurora", model.snapshot.native_glass ? "Turn off Native Glass to use this." : "Animated background gradient.", 1, \.aurora)
+                toggle(5, "")
+                toggle(0, "Ambient color from the album artwork.")
+                picker(11, model.snapshot.glow ? "" : "Turn on Artwork Glow to adjust this.").disabled(!model.snapshot.glow)
+                toggle(1, model.snapshot.native_glass ? "Turn off Native Glass to use this." : "Animated background gradient.")
                     .disabled(model.snapshot.native_glass)
-                picker("Custom Border", model.snapshot.native_glass ? "Turn off Native Glass to use this." : "", 10, \.frame_strength,
-                       ["Off", "Subtle", "Strong"]).disabled(model.snapshot.native_glass)
+                picker(10, model.snapshot.native_glass ? "Turn off Native Glass to use this." : "").disabled(model.snapshot.native_glass)
             }
             section("Artwork") {
-                toggle("Artwork Border", "", 19, \.artwork_border)
-                toggle("Compact Contrast", "A subtle fade behind text in 1 × 1 mode.", 20, \.compact_gradient)
-                picker("Artwork Corners", "", 21, \.artwork_radius, ["Soft", "Rounded", "Large"])
+                toggle(19, "")
+                toggle(20, "A subtle fade behind text in 1 × 1 mode.")
+                picker(21, "")
             }
             section("Motion") {
-                toggle("Animations", "", 2, \.animations)
-                picker("Track Transition", model.snapshot.animations ? "" : "Turn on Animations to use this.", 16, \.track_transition,
-                       ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"])
+                toggle(2, "")
+                picker(16, model.snapshot.animations ? "" : "Turn on Animations to use this.")
                     .disabled(!model.snapshot.animations)
-                picker("Animation Speed", model.snapshot.animations ? "" : "Turn on Animations to use this.", 12, \.animation_speed,
-                       ["Slow", "Normal", "Fast"]).disabled(!model.snapshot.animations)
-                toggle("Dim When Paused", "", 3, \.dim_paused)
+                picker(12, model.snapshot.animations ? "" : "Turn on Animations to use this.").disabled(!model.snapshot.animations)
+                toggle(3, "")
             }
         case "Playback":
             section("Visibility") {
-                toggle("Hide Track Text", "", 6, \.hide_text)
-                toggle("Clickable Names", model.snapshot.hide_text ? "Turn off Hide Track Text to use this." : "Open the track or search the artist when clicked.", 24, \.clickable_names)
+                toggle(6, "")
+                toggle(24, model.snapshot.hide_text ? "Turn off Hide Track Text to use this." : "Open the track or search the artist when clicked.")
                     .disabled(model.snapshot.hide_text)
-                toggle("Hide Progress Bar", "", 7, \.hide_progress)
-                toggle("Playback Controls", "", 8, \.show_controls)
-                toggle("Time Labels", "", 9, \.show_timestamps)
+                toggle(7, "")
+                toggle(8, "")
+                toggle(9, "")
             }
             section("Progress") {
                 if #available(macOS 14.2, *) {
                     let blocked = model.snapshot.hide_progress || !model.snapshot.animations
-                    toggle("System Audio Waveform", blocked ? "Needs the progress bar shown and Animations on." :
-                           model.snapshot.waveform ? audioWaveform.status : "Live audio on the progress bar. Nothing is saved.", 23, \.waveform)
+                    toggle(23, blocked ? "Needs the progress bar shown and Animations on." :
+                           model.snapshot.waveform ? audioWaveform.status : "Live audio on the progress bar. Nothing is saved.")
                         .disabled(blocked)
                     if model.snapshot.waveform && !blocked {
                         buttonRow("Audio Capture Permission", "", "Open…") {
@@ -170,14 +163,14 @@ private struct SettingsView: View {
                         }
                     }
                 } else { Text("Audio waveform requires macOS 14.2 or later.").foregroundColor(.secondary) }
-                picker("Progress Thickness", "", 22, \.progress_thickness, ["Thin", "Standard", "Thick"])
+                picker(22, "")
             }
             section("Text") {
-                picker("Font Size", "", 17, \.font_scale, ["Small", "Normal", "Large"])
+                picker(17, "")
             }
         case "Desktop":
             section("Position", footer: "Drag the widget to move it. Placement is remembered for each display.") {
-                toggle("Lock Position", "Playback controls stay usable.", 25, \.position_locked)
+                toggle(25, "Playback controls stay usable.")
                 if !terminalMode {
                     Picker(selection: Binding(get: { NSScreen.screens.firstIndex { $0 == WidgetPanel.current?.screen } ?? 0 }, set: {
                         if NSScreen.screens.indices.contains($0) { moveWidgetToDisplay(NSScreen.screens[$0]); model.refresh() }
@@ -199,7 +192,7 @@ private struct SettingsView: View {
                 }
             }
             section("Diagnostics") {
-                toggle("Debug Console", "Live runtime and diagnostics.", 4, \.debug_hud)
+                toggle(4, "Live runtime and diagnostics.")
                 buttonRow("Inspector", "", "Open") { wallify_open_inspector() }
                 valueRow("Build", WallifyBuildIdentity.label)
                 valueRow("Placement", "Margins \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
@@ -236,18 +229,21 @@ private struct SettingsView: View {
         }
     }
 
-    private func toggle(_ title: String, _ detail: String, _ key: Int32,
-                        _ field: KeyPath<WallifySettingsSnapshot, Bool>) -> some View {
-        Toggle(isOn: model.toggle(key, field)) { label(title, detail) }
-            .toggleStyle(.switch)
+    // Titles, option labels and snapshot fields come from the shared settings table.
+    @ViewBuilder private func toggle(_ key: Int32, _ detail: String) -> some View {
+        if let spec = settingSpec(key), case .bool(_, let field) = spec.storage {
+            Toggle(isOn: model.toggle(key, field)) { label(spec.title, detail) }
+                .toggleStyle(.switch)
+        }
     }
 
-    private func picker(_ title: String, _ detail: String, _ key: Int32,
-                        _ field: KeyPath<WallifySettingsSnapshot, Int32>, _ options: [String]) -> some View {
-        Picker(selection: model.selection(key, field)) {
-            ForEach(options.indices, id: \.self) { Text(options[$0]).tag(Int32($0)) }
-        } label: { label(title, detail) }
-        .accessibilityLabel(title)
+    @ViewBuilder private func picker(_ key: Int32, _ detail: String) -> some View {
+        if let spec = settingSpec(key), case .choice(_, let field) = spec.storage {
+            Picker(selection: model.selection(key, field)) {
+                ForEach(spec.labels.indices, id: \.self) { Text(spec.labels[$0]).tag(Int32($0)) }
+            } label: { label(spec.title, detail) }
+            .accessibilityLabel(spec.title)
+        }
     }
 
     // A labeled row with its action button on the trailing edge, as in System Settings.
