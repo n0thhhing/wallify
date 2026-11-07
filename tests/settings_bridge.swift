@@ -145,22 +145,24 @@ struct SettingsBridgeCheck {
         _ = NSApplication.shared
         let status = StatusMenu()
         status.refresh()
-        precondition(status.menu.items[1].title == "Nothing Playing")
-        precondition(status.menu.items[2].title == "Choose music to get started")
+        precondition(status.menu.items[0].title == "Nothing Playing")
+        if #available(macOS 14.4, *) { precondition(status.menu.items[0].subtitle == "Choose music to get started") }
+        else { precondition(status.menu.items[1].title == "Choose music to get started") }
         current.playing = true
         status.refresh()
         precondition(status.play.title == "Pause")
-        precondition(status.menu.items.firstIndex { $0.title == "Settings…" }! < status.menu.items.firstIndex { $0.title == "Quick Controls" }!)
+        let quickMenu = status.menu.items.first { $0.title == "Quick Preferences" }!.submenu!
+        precondition(status.menu.items.firstIndex { $0.title == "Quick Preferences" }! < status.menu.items.firstIndex { $0.title == "Settings…" }!)
         precondition(!status.menu.items.contains { $0.title == "Track Transition" })
-        for (name, key) in [("Media Source", 13), ("Widget Size", 14), ("Companion", 15), ("Frame", 10)] {
-            let items = status.menu.items.first { $0.title == name }!.submenu!.items
+        for (name, key) in [("Media Source", 13), ("Widget Size", 14), ("Companion", 15), ("Frame Strength", 10)] {
+            let items = (status.menu.items + quickMenu.items).first { $0.title == name }!.submenu!.items
             for (value, item) in items.enumerated() {
                 status.choose(item)
                 precondition(lastInt?.0 == Int32(key) && lastInt?.1 == Int32(value))
                 precondition(items.filter { $0.state == .on }.count == 1 && item.state == .on)
             }
         }
-        let toggles = status.menu.items.first { $0.title == "Quick Controls" }!.submenu!.items +
+        let toggles = quickMenu.items.filter { $0.action == #selector(StatusMenu.toggle(_:)) } +
             [status.menu.items.first { $0.title == "Lock Position" }!]
         for item in toggles {
             let previous = item.state
@@ -408,12 +410,12 @@ struct SettingsBridgeCheck {
         snapshot.position_locked = true
         let target = WidgetContextMenu.shared
         let menu = target.build(snapshot)
-        precondition(menu.items[0].title == "Pause" && menu.items[3].title == "Open Spotifast")
+        precondition(menu.items[0].title == "Pause" && menu.items.contains { $0.title == "Open Spotifast" && $0.tag == 4 })
         func children(_ title: String, in parent: NSMenu) -> [NSMenuItem] {
             parent.items.first { $0.title == title }!.submenu!.items
         }
-        precondition(menu.items[5].title == "Settings…" && menu.items[6].title == "Lock Position")
-        let lock = menu.items[6]
+        precondition(menu.items.last!.title == "Quit Wallify")
+        let lock = menu.items.first { $0.title == "Lock Position" }!
         precondition(lock.state == .on)
         target.choose(lock)
         precondition(contextSelection == 9)
@@ -427,7 +429,7 @@ struct SettingsBridgeCheck {
             }
         }
         let preferences = menu.items.first { $0.title == "Quick Preferences" }!.submenu!
-        precondition(preferences.items[0].state == .on && preferences.items[1].state == .off)
+        precondition(preferences.items[0].title == "Native Glass" && preferences.items[1].state == .on && preferences.items[2].state == .off)
         precondition(children("Frame Strength", in: preferences).filter { $0.state == .on }.map(\.tag) == [12])
         precondition(!preferences.items.contains { ["Glow Intensity", "Animation Speed", "Restore Defaults"].contains($0.title) })
         let settings = menu.items.first { $0.tag == 90 }!
@@ -440,7 +442,7 @@ struct SettingsBridgeCheck {
         snapshot.position_locked = false
         let refreshed = target.build(snapshot)
         precondition(refreshed.items[0].title == "Play")
-        precondition(children("Media Source", in: refreshed).allSatisfy { $0.state == .off })
+        precondition(children("Media Source", in: refreshed).filter { $0.state == .on }.map(\.tag) == [53])
         precondition(children("Companion", in: refreshed).first { $0.tag == 80 }!.state == .on)
         precondition(refreshed.items.first { $0.title == "Lock Position" }!.state == .off)
     }

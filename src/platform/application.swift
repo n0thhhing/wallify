@@ -55,45 +55,39 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         13: \.media_source, 14: \.widget_mode, 15: \.idle_style,
         10: \.frame_strength
     ]
+    private var open: NSMenuItem!
 
+    // Keep this order and naming in step with WidgetContextMenu.
     override init() {
         super.init()
         menu.delegate = self
         menu.autoenablesItems = false
-        let header = add("Wallify")
-        header.isEnabled = false
-        track.isEnabled = false
+        track.target = self
+        track.action = #selector(spotify)  // the now-playing item opens the player
         artist.isEnabled = false
         menu.addItem(track)
-        menu.addItem(artist)
+        if #unavailable(macOS 14.4) { menu.addItem(artist) }
         menu.addItem(.separator())
         play = add("Play", #selector(playPause))
-        add("Previous Track", #selector(previous), symbol: "backward.end.fill")
-        add("Next Track", #selector(next), symbol: "forward.end.fill")
+        add("Previous Track", #selector(previous), symbol: "backward.fill")
+        add("Next Track", #selector(next), symbol: "forward.fill")
         menu.addItem(.separator())
-
-        add("Settings…", #selector(settings), shortcut: ",")
-        let lock = add("Lock Position", #selector(toggle(_:)))
-        lock.tag = 25
-        toggles[25] = lock
-        menu.addItem(.separator())
-        let quick = submenu("Quick Controls")
-        for (key, title) in [(1, "Aurora"), (0, "Artwork Glow"), (2, "Animations"),
-                             (5, "Native Glass"), (3, "Dim Paused Artwork")] {
-            let item = NSMenuItem(title: title, action: #selector(toggle(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = key
-            quick.addItem(item)
-            toggles[key] = item
+        addChoices("Widget Size", key: 14, titles: ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"], in: menu)
+        addChoices("Media Source", key: 13, titles: ["Now Playing", "Spotify", "Spotifast", "Auto"], in: menu)
+        addChoices("Companion", key: 15, titles: ["Pixel Cat", "Banana Cat", "Spotify Launcher", "Raccoon"], in: menu)
+        let quick = submenu("Quick Preferences", in: menu)
+        for (key, title) in [(5, "Native Glass"), (0, "Artwork Glow"), (1, "Aurora"), (2, "Animations"), (3, "Dim Artwork When Paused")] {
+            toggles[key] = add(title, #selector(toggle(_:)), in: quick)
+            toggles[key]?.tag = key
         }
-        addChoices("Media Source", key: 13, titles: ["Now Playing", "Spotify", "Spotifast", "Auto"])
-        addChoices("Widget Size", key: 14, titles: ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
-        addChoices("Companion", key: 15, titles: ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
-        addChoices("Frame", key: 10, titles: ["Off", "Subtle", "Strong"])
+        quick.addItem(.separator())
+        addChoices("Frame Strength", key: 10, titles: ["Off", "Subtle", "Strong"], in: quick)
+        toggles[25] = add("Lock Position", #selector(toggle(_:)))
+        toggles[25]?.tag = 25
         menu.addItem(.separator())
-        add("Open Inspector", #selector(inspector))
+        open = add("Open Spotify", #selector(spotify), symbol: "arrow.up.forward.app")
+        add("Settings…", #selector(settings), shortcut: ",", symbol: "gearshape")
         menu.addItem(.separator())
-        add("Open Spotify", #selector(spotify))
         let quit = add("Quit Wallify", #selector(NSApplication.terminate(_:)), shortcut: "q")
         quit.target = NSApplication.shared
     }
@@ -109,23 +103,24 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     @discardableResult
-    private func add(_ title: String, _ action: Selector? = nil, shortcut: String = "", symbol: String? = nil) -> NSMenuItem {
+    private func add(_ title: String, _ action: Selector? = nil, shortcut: String = "", symbol: String? = nil,
+                     in parent: NSMenu? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: shortcut)
         item.target = self
         if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) }
-        menu.addItem(item)
+        (parent ?? menu).addItem(item)
         return item
     }
 
-    private func submenu(_ title: String) -> NSMenu {
+    private func submenu(_ title: String, in parent: NSMenu) -> NSMenu {
         let child = NSMenu(title: title)
         child.autoenablesItems = false
-        add(title).submenu = child
+        add(title, in: parent).submenu = child
         return child
     }
 
-    private func addChoices(_ title: String, key: Int, titles: [String]) {
-        let child = submenu(title)
+    private func addChoices(_ title: String, key: Int, titles: [String], in parent: NSMenu) {
+        let child = submenu(title, in: parent)
         choices[key] = titles.enumerated().map { value, title in
             let item = NSMenuItem(title: title, action: #selector(choose(_:)), keyEquivalent: "")
             item.target = self
@@ -154,6 +149,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }
         if track.title.isEmpty { track.title = "Nothing Playing" }
         if artist.title.isEmpty { artist.title = "Choose music to get started" }
+        if #available(macOS 14.4, *) { track.subtitle = artist.title }
+        track.image = NSImage(systemSymbolName: snapshot.playing ? "waveform" : "music.note", accessibilityDescription: nil)
+        open.title = snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify"
         play.title = snapshot.playing ? "Pause" : "Play"
         play.image = NSImage(systemSymbolName: snapshot.playing ? "pause.fill" : "play.fill",
                              accessibilityDescription: play.title)
@@ -179,8 +177,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     @objc func previous() { wallify_menu_previous() }
     @objc func next() { wallify_menu_next() }
     @objc private func settings() { showSettingsWindow() }
-    @objc private func inspector() { wallify_open_inspector() }
-    @objc private func spotify() { NSWorkspace.shared.open(URL(string: "spotify:")!) }
+    @objc private func spotify() {
+        var snapshot = WallifySettingsSnapshot()
+        wallify_settings_get_snapshot(&snapshot)
+        if snapshot.media_source == 2 { openSpotifast() } else { openSpotify() }
+    }
     @objc private func timerRefresh(_ timer: Timer) { refresh() }
 
     func menuWillOpen(_ menu: NSMenu) {

@@ -29,26 +29,24 @@ import AppKit
             entry.submenu = submenu
             parent.addItem(entry)
         }
-        for (title, tag) in [(snapshot.playing ? "Pause" : "Play", 1), ("Previous Track", 2),
-                             ("Next Track", 3), (snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify", 4)] {
-            menu.addItem(item(title, tag))
+        // Keep this order and naming in step with StatusMenu.
+        for (title, tag, symbol) in [(snapshot.playing ? "Pause" : "Play", 1, snapshot.playing ? "pause.fill" : "play.fill"),
+                                     ("Previous Track", 2, "backward.fill"), ("Next Track", 3, "forward.fill")] {
+            let entry = item(title, tag)
+            entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+            menu.addItem(entry)
         }
         menu.addItem(.separator())
-        let settings = item("Settings…", 90)
-        settings.keyEquivalent = ","
-        menu.addItem(settings)
-        menu.addItem(item("Lock Position", 9, snapshot.position_locked))
-        menu.addItem(.separator())
-        group("Media Source", ["Now Playing", "Spotify", "Spotifast"], [50, 51, 52], snapshot.media_source, in: menu)
         group("Widget Size", ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"],
               [60, 61, 62, 63, 64], snapshot.widget_mode, in: menu)
+        group("Media Source", ["Now Playing", "Spotify", "Spotifast", "Auto"], [50, 51, 52, 53], snapshot.media_source, in: menu)
         group("Companion", ["Pixel Cat", "Banana Cat", "Raccoon", "Spotify Launcher"],
               [81, 82, 83, 80], snapshot.idle_style, [0, 1, 3, 2], in: menu)
-        menu.addItem(.separator())
         let preferences = NSMenu(title: "Quick Preferences")
         preferences.autoenablesItems = false
-        for (title, tag, enabled) in [("Artwork Glow", 5, snapshot.glow), ("Dynamic Aurora", 6, snapshot.aurora),
-                                      ("Animations", 7, snapshot.animations), ("Dim Artwork When Paused", 8, snapshot.dim_paused)] {
+        for (title, tag, enabled) in [("Native Glass", 13, snapshot.native_glass), ("Artwork Glow", 5, snapshot.glow),
+                                      ("Aurora", 6, snapshot.aurora), ("Animations", 7, snapshot.animations),
+                                      ("Dim Artwork When Paused", 8, snapshot.dim_paused)] {
             preferences.addItem(item(title, tag, enabled))
         }
         preferences.addItem(.separator())
@@ -56,8 +54,17 @@ import AppKit
         let quick = NSMenuItem(title: preferences.title, action: nil, keyEquivalent: "")
         quick.submenu = preferences
         menu.addItem(quick)
+        menu.addItem(item("Lock Position", 9, snapshot.position_locked))
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Wallify", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        let open = item(snapshot.media_source == 2 ? "Open Spotifast" : "Open Spotify", 4)
+        open.image = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: open.title)
+        menu.addItem(open)
+        let settings = item("Settings…", 90)
+        settings.keyEquivalent = ","
+        settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
+        menu.addItem(settings)
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit Wallify", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApplication.shared
         menu.addItem(quit)
         return menu
