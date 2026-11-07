@@ -3,51 +3,192 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Wallify brings album art, playback controls, and a little company to your Mac desktop.">
-<meta name="theme-color" content="#151518">
-<title>Wallify — Now playing on your Mac</title>
+<title>Wallify — Now playing on your Mac desktop</title>
+<meta name="description" content="Wallify puts what you're playing on your Mac desktop: album art, controls, synced lyrics, and a pixel cat when the music stops.">
+<meta name="theme-color" content="#0e0d12">
+<meta property="og:title" content="Wallify — Now playing on your Mac desktop">
+<meta property="og:description" content="Album art, playback controls and synced lyrics as a desktop widget for macOS.">
+<meta property="og:image" content="https://n0thhhing.github.io/wallify/playback.jpg">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c9b8ff'/%3E%3Crect x='9' y='12' width='3' height='8' rx='1.5' fill='%23151320'/%3E%3Crect x='14.5' y='8' width='3' height='16' rx='1.5' fill='%23151320'/%3E%3Crect x='20' y='12' width='3' height='8' rx='1.5' fill='%23151320'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="shell top">
-  <a class="brand" href="./"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span> Wallify</a>
-  <nav aria-label="Main navigation"><a href="#details">The widget</a><a href="https://github.com/n0thhhing/wallify">GitHub ↗</a></nav>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="shell top-inner">
+    <a class="brand" href="./" aria-label="Wallify home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>Wallify</a>
+    <nav aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/n0thhhing/wallify">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </div>
 </header>
-<main class="shell">
-  <section class="hero" aria-labelledby="title">
+
+<main id="main">
+  <section class="hero shell" aria-labelledby="title">
     <div class="intro">
-      <p class="index platform">NOW PLAYING FOR MAC</p>
-      <h1 id="title">Music on<br>your desktop.</h1>
-      <div class="pitch">
-        <p>See what’s playing, skip a track, or just enjoy the album art. Wallify gives your music a spot on your Mac.</p>
-        <a class="cta" href="#get">Get Wallify <span aria-hidden="true">↘</span></a>
+      <p class="eyebrow">A desktop widget for macOS</p>
+      <h1 id="title">Your music,<br>on your desktop.</h1>
+      <p class="lede">Album art, controls and synced lyrics, right next to your files. Wallify follows Spotify or anything in Now Playing, and keeps a pixel cat company when the music stops.</p>
+      <div class="actions">
+        <a class="button primary" data-download href="https://github.com/n0thhhing/wallify/releases/latest">
+          <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-download-label>Download for Mac</span>
+        </a>
+        <a class="button" href="https://github.com/n0thhhing/wallify">View source</a>
+      </div>
+      <p class="fine">Free and open source · macOS 12 or later · Apple silicon</p>
+    </div>
+
+    <div class="demo" aria-label="Interactive preview of the Wallify widget" role="group">
+      <div class="desk">
+        <div class="menubar" aria-hidden="true"><span></span><span class="clock">9:41</span></div>
+        <div class="widget" data-size="3x1" data-playing="true">
+          <div class="glow" aria-hidden="true"></div>
+          <div class="art" aria-hidden="true"><div class="upnext"><b>Up next</b><span data-next></span></div></div>
+          <div class="meta">
+            <div class="title-row"><p class="track" data-title></p><button class="like" type="button" aria-pressed="false" aria-label="Save to Liked Songs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.9c0 5.6-7.5 10-7.5 10Z"/></svg></button></div>
+            <p class="artist" data-artist></p>
+            <div class="bar" aria-hidden="true"><i data-progress></i></div>
+            <div class="lyrics" aria-live="off"><span class="line out" data-line-out></span><span class="line in" data-line-in></span></div>
+            <div class="controls">
+              <button type="button" data-prev aria-label="Previous track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 12 20 6v12zM3 12l8-6v12z"/></svg></button>
+              <button type="button" class="play" data-play aria-label="Pause"><svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14l12-7z"/></svg></button>
+              <button type="button" data-next-btn aria-label="Next track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 12-9 6V6zm8 0-8 6V6z"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sizes" role="radiogroup" aria-label="Widget size">
+        <button type="button" role="radio" aria-checked="false" data-size-btn="1x1">1 × 1</button>
+        <button type="button" role="radio" aria-checked="false" data-size-btn="2x1">2 × 1</button>
+        <button type="button" role="radio" aria-checked="true" data-size-btn="3x1">3 × 1</button>
+        <button type="button" role="radio" aria-checked="false" data-size-btn="2x2">2 × 2</button>
+      </div>
+      <p class="demo-note">A live preview with made-up songs. Try the buttons and sizes.</p>
+    </div>
+  </section>
+
+  <section class="captures shell" aria-labelledby="captures-title">
+    <div class="section-head">
+      <p class="eyebrow">Straight from the desktop</p>
+      <h2 id="captures-title">Looks right at home.</h2>
+    </div>
+    <div class="capture-grid">
+      <figure class="capture wide">
+        <img src="playback.jpg" width="1080" height="360" loading="lazy" alt="The Wallify widget playing a track, with album art, title, artist, progress bar and controls">
+        <figcaption>The 3 × 1 player, with colors taken from the cover art.</figcaption>
+      </figure>
+      <figure class="capture">
+        <img src="previews/companion.gif" width="800" height="286" loading="lazy" alt="Animated pixel cat sleeping in the idle widget">
+        <figcaption>Between tracks, a pixel cat naps in its place. Click to pet it.</figcaption>
+      </figure>
+      <figure class="capture">
+        <img src="pixel-cat.jpg" width="1080" height="360" loading="lazy" alt="The idle widget with the orange pixel cat">
+        <figcaption>Pick a pixel cat, a banana cat, a raccoon, or keep the last track up.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="features" class="features shell" aria-labelledby="features-title">
+    <div class="section-head">
+      <p class="eyebrow">Features</p>
+      <h2 id="features-title">Small widget.<br>Lots inside.</h2>
+    </div>
+    <ul class="cards">
+      <li class="card span-2">
+        <span class="icon" aria-hidden="true">♪</span>
+        <h3>Synced lyrics</h3>
+        <p>The line being sung slides in under the progress bar, right on the beat. Gaps show a quiet note instead of flickering back to the clock.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">♥</span>
+        <h3>Like and Up Next</h3>
+        <p>Connect Spotify to save tracks with one click and see what's coming up next.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">◐</span>
+        <h3>Colors from the cover</h3>
+        <p>An ambient glow and aurora follow the album art, on Apple's glass or Wallify's own material.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">⇕</span>
+        <h3>Scroll to adjust</h3>
+        <p>Scroll over the widget to change the volume or skip around in the song.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">▦</span>
+        <h3>Five sizes, snaps in place</h3>
+        <p>From a square of album art to a 2 × 2 player. It lines up with your other desktop widgets and remembers each display.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">∿</span>
+        <h3>Live waveform</h3>
+        <p>An optional waveform on the progress bar moves with whatever is playing.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">⌨</span>
+        <h3>Media keys and menus</h3>
+        <p>Point F7–F9 at Wallify, or reach everything from the menu bar and a right-click.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">◎</span>
+        <h3>Works with VoiceOver</h3>
+        <p>Track details, controls and a seekable progress slider are all readable and usable.</p>
+      </li>
+      <li class="card">
+        <span class="icon" aria-hidden="true">↻</span>
+        <h3>Stays current</h3>
+        <p>Wallify lets you know when a new release is out. Want the newest changes? Switch to the nightly channel.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section id="privacy" class="privacy shell" aria-labelledby="privacy-title">
+    <div class="section-head">
+      <p class="eyebrow">Privacy</p>
+      <h2 id="privacy-title">Your music stays yours.</h2>
+    </div>
+    <ul class="points">
+      <li><b>No tracking, no accounts.</b> Wallify has no analytics and no server of its own. The daily update check only asks GitHub for the latest release, and you can turn it off.</li>
+      <li><b>Audio is never saved.</b> The optional waveform reads levels live and keeps nothing.</li>
+      <li><b>Lyrics are opt-in.</b> Turning them on sends each song's title, artist and length to lrclib.net to find its lyrics.</li>
+      <li><b>Your Spotify login stays on your Mac.</b> It's kept in your Keychain, and you can disconnect at any time.</li>
+    </ul>
+  </section>
+
+  <section id="install" class="install shell" aria-labelledby="install-title">
+    <div class="install-card">
+      <div>
+        <p class="eyebrow">Install</p>
+        <h2 id="install-title">Ready in a minute.</h2>
+        <ol class="steps">
+          <li><span>1</span><div><b>Download Wallify</b> and open the disk image.</div></li>
+          <li><span>2</span><div><b>Drag Wallify to Applications.</b></div></li>
+          <li><span>3</span><div><b>The first time, right-click Wallify and choose Open.</b> It's open source and not notarized by Apple yet, so macOS asks you to confirm once.</div></li>
+          <li><span>4</span><div><b>Allow it to control Spotify</b> when asked. A short setup screen walks you through the rest.</div></li>
+        </ol>
+      </div>
+      <div class="install-actions">
+        <a class="button primary" data-download href="https://github.com/n0thhhing/wallify/releases/latest">
+          <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-download-label>Download for Mac</span>
+        </a>
+        <a class="text-link" href="https://github.com/n0thhhing/wallify/releases/tag/nightly">Try the nightly build <span aria-hidden="true">↗</span></a>
+        <a class="text-link" href="https://github.com/n0thhhing/wallify#run">Build it yourself <span aria-hidden="true">↗</span></a>
       </div>
     </div>
-    <figure class="playback">
-      <div class="stage">
-        <img class="playback-shot" src="playback.jpg" width="1080" height="360" alt="Wallify’s playback widget showing album art, the track title, progress, and playback controls">
-      </div>
-      <figcaption class="index"><span>Playback widget</span><span>Actual macOS capture</span></figcaption>
-    </figure>
-  </section>
-  <section id="details" class="details" aria-labelledby="details-title">
-    <h2 id="details-title">Fits your desktop.</h2>
-    <dl class="specs">
-      <div><dt>Pick a shape</dt><dd>Five sizes, from a square of album art to a wide player. Wallify remembers where you put it on each display.</dd></div>
-      <div><dt>Follow the music</dt><dd>Use macOS Now Playing, Spotify, or Spotifast. Colors follow the cover art, and an optional waveform moves with the audio.</dd></div>
-      <div><dt>Keep a little company</dt><dd>When the music stops, keep the last track visible, hide the widget, or give the space to a pixel cat, banana cat, or raccoon.</dd></div>
-    </dl>
-    <figure class="companion">
-      <img src="pixel-cat.jpg" width="1080" height="360" alt="Wallify’s orange Pixel Cat sleeping in the idle widget">
-      <figcaption class="index">Pixel Cat between tracks</figcaption>
-    </figure>
-  </section>
-  <section id="get" class="get" aria-labelledby="get-title">
-    <h2 id="get-title">Put it on your Mac.</h2>
-    <p>Build Wallify from source on a Metal-capable Mac with Xcode and the Metal toolchain.</p>
-    <a class="cta" href="https://github.com/n0thhhing/wallify#run">Build instructions <span aria-hidden="true">↗</span></a>
   </section>
 </main>
-<footer class="shell foot"><a class="brand" href="./"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span> Wallify</a><span class="index">MADE FOR macOS</span></footer>
+
+<footer class="foot shell">
+  <a class="brand" href="./" aria-label="Wallify home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>Wallify</a>
+  <p>Open source on <a href="https://github.com/n0thhhing/wallify">GitHub</a>. Not affiliated with Spotify or Apple.</p>
+</footer>
+
+<script src="site.js" defer></script>
 </body>
 </html>

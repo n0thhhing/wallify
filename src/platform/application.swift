@@ -79,8 +79,16 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func install() {
         guard statusItem == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Wallify")
-        item.button?.image?.isTemplate = true
+        // The app icon's three bars, drawn as a template so macOS tints it for light and dark menu bars.
+        let mark = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            for (x, height) in [(4.2, 7.0), (7.8, 13.0), (11.4, 7.0)] {
+                NSBezierPath(roundedRect: NSRect(x: x, y: (18 - height) / 2, width: 2.4, height: height), xRadius: 1.2, yRadius: 1.2).fill()
+            }
+            return true
+        }
+        mark.isTemplate = true
+        mark.accessibilityDescription = "Wallify"
+        item.button?.image = mark
         item.menu = menu
         statusItem = item
         refresh()
