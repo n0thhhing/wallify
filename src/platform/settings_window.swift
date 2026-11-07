@@ -100,15 +100,13 @@ private struct SettingsView: View {
         switch page ?? "General" {
         case "General":
             section("Widget") {
-                picker("Widget Size", "Choose the widget footprint.", 14, \.widget_mode,
-                       ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
-                picker("Media Source", "Choose where Wallify reads playback information.", 13, \.media_source,
+                picker("Widget Size", "", 14, \.widget_mode, ["1 × 1", "2 × 1", "3 × 1", "1 × 2", "2 × 2"])
+                picker("Media Source", "Where Wallify reads what's playing.", 13, \.media_source,
                        ["Now Playing", "Spotify", "Spotifast", "Auto"])
             }
-            section("Idle Behavior") {
-                picker("When Music Stops", "Paused tracks stay visible. Choose what happens when no track is available.", 26, \.stopped_behavior,
-                       ["Show Companion", "Keep Last Track", "Hide Widget"])
-                picker("Companion", model.snapshot.stopped_behavior == 0 ? "Shown when nothing is playing." : "Choose Show Companion above to enable this setting.", 15, \.idle_style,
+            section("Idle Behavior", footer: "Paused tracks always stay visible.") {
+                picker("When Music Stops", "", 26, \.stopped_behavior, ["Show Companion", "Keep Last Track", "Hide Widget"])
+                picker("Companion", model.snapshot.stopped_behavior == 0 ? "" : "Choose Show Companion above to use this.", 15, \.idle_style,
                        ["Pixel Cat", "Banana Cat", "Spotify", "Raccoon"])
                     .disabled(model.snapshot.stopped_behavior != 0)
             }
@@ -119,114 +117,103 @@ private struct SettingsView: View {
             section("Startup") {
                 if #available(macOS 13, *) {
                     Toggle(isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) })) {
-                        label("Launch at Login", "Start Wallify when you log in.")
+                        label("Launch at Login", model.loginError ?? "")
                     }.toggleStyle(.switch)
-                    Button("Open Login Items Settings…") { SMAppService.openSystemSettingsLoginItems() }
-                    if let error = model.loginError { Text(error).foregroundColor(.red) }
+                    buttonRow("Login Items", "", "Open…") { SMAppService.openSystemSettingsLoginItems() }
                 } else {
                     Text("Launch at Login requires macOS 13 or later.").foregroundColor(.secondary)
                 }
             }
         case "Appearance":
             section("Material") {
-                toggle("Native Glass", "Use the macOS glass material.", 5, \.native_glass)
-                toggle("Artwork Glow", "Use album artwork to create ambient color.", 0, \.glow)
-                picker("Glow Intensity", model.snapshot.glow ? "Control the strength of the ambient glow." : "Enable Artwork Glow to adjust its intensity.", 11, \.glow_intensity,
+                toggle("Native Glass", "", 5, \.native_glass)
+                toggle("Artwork Glow", "Ambient color from the album artwork.", 0, \.glow)
+                picker("Glow Intensity", model.snapshot.glow ? "" : "Turn on Artwork Glow to adjust this.", 11, \.glow_intensity,
                        ["Low", "Normal", "High"]).disabled(!model.snapshot.glow)
-                toggle("Aurora", model.snapshot.native_glass ? "Turn off Native Glass to use the animated background." : "Animated background gradient.", 1, \.aurora).disabled(model.snapshot.native_glass)
-                picker("Custom Border", model.snapshot.native_glass ? "Turn off Native Glass to adjust the custom border." : "Border strength for the custom material.", 10, \.frame_strength,
+                toggle("Aurora", model.snapshot.native_glass ? "Turn off Native Glass to use this." : "Animated background gradient.", 1, \.aurora)
+                    .disabled(model.snapshot.native_glass)
+                picker("Custom Border", model.snapshot.native_glass ? "Turn off Native Glass to use this." : "", 10, \.frame_strength,
                        ["Off", "Subtle", "Strong"]).disabled(model.snapshot.native_glass)
             }
             section("Artwork") {
-                toggle("Artwork Border", "Add a fine edge around album artwork.", 19, \.artwork_border)
-                toggle("Compact Contrast", "Add a subtle fade behind text in 1 × 1 mode.", 20, \.compact_gradient)
-                picker("Artwork Corners", "Choose the album artwork corner radius.", 21, \.artwork_radius,
-                       ["Soft", "Rounded", "Large"])
+                toggle("Artwork Border", "", 19, \.artwork_border)
+                toggle("Compact Contrast", "A subtle fade behind text in 1 × 1 mode.", 20, \.compact_gradient)
+                picker("Artwork Corners", "", 21, \.artwork_radius, ["Soft", "Rounded", "Large"])
             }
             section("Motion") {
-                toggle("Animations", "Animate resizing and state changes.", 2, \.animations)
-                picker("Track Transition", model.snapshot.animations ? "Effect used when artwork changes." : "Enable Animations to see transition effects.", 16, \.track_transition,
+                toggle("Animations", "", 2, \.animations)
+                picker("Track Transition", model.snapshot.animations ? "" : "Turn on Animations to use this.", 16, \.track_transition,
                        ["Default", "Cinematic", "Ripple", "Card Flip", "Vinyl", "Glitch"])
                     .disabled(!model.snapshot.animations)
-                picker("Animation Speed", model.snapshot.animations ? "Control the speed of transitions." : "Enable Animations to adjust their speed.", 12, \.animation_speed,
+                picker("Animation Speed", model.snapshot.animations ? "" : "Turn on Animations to use this.", 12, \.animation_speed,
                        ["Slow", "Normal", "Fast"]).disabled(!model.snapshot.animations)
-                toggle("Dim When Paused", "Lower artwork brightness while paused.", 3, \.dim_paused)
+                toggle("Dim When Paused", "", 3, \.dim_paused)
             }
         case "Playback":
             section("Visibility") {
-                toggle("Hide Track Text", "Hide the title and artist labels.", 6, \.hide_text)
-                toggle("Clickable Track and Artist Names", model.snapshot.hide_text ? "Turn off Hide Track Text to make names clickable." : "Open track links and artist searches when clicking their names.", 24, \.clickable_names)
+                toggle("Hide Track Text", "", 6, \.hide_text)
+                toggle("Clickable Names", model.snapshot.hide_text ? "Turn off Hide Track Text to use this." : "Open the track or search the artist when clicked.", 24, \.clickable_names)
                     .disabled(model.snapshot.hide_text)
-                toggle("Hide Progress Bar", "Hide the playback progress bar.", 7, \.hide_progress)
-                toggle("Playback Controls", "Show previous, play/pause and next.", 8, \.show_controls)
-                toggle("Time Labels", "Show elapsed and remaining time.", 9, \.show_timestamps)
+                toggle("Hide Progress Bar", "", 7, \.hide_progress)
+                toggle("Playback Controls", "", 8, \.show_controls)
+                toggle("Time Labels", "", 9, \.show_timestamps)
             }
             section("Progress") {
                 if #available(macOS 14.2, *) {
                     let blocked = model.snapshot.hide_progress || !model.snapshot.animations
-                    toggle("System Audio Waveform", blocked ? "Needs the progress bar shown and Animations on (Appearance)." :
-                           model.snapshot.waveform ? audioWaveform.status : "Show live audio along the progress bar. Audio is never saved.", 23, \.waveform)
+                    toggle("System Audio Waveform", blocked ? "Needs the progress bar shown and Animations on." :
+                           model.snapshot.waveform ? audioWaveform.status : "Live audio on the progress bar. Nothing is saved.", 23, \.waveform)
                         .disabled(blocked)
                     if model.snapshot.waveform && !blocked {
-                        Button("Open Capture Permissions…") {
+                        buttonRow("Audio Capture Permission", "", "Open…") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                         }
                     }
                 } else { Text("Audio waveform requires macOS 14.2 or later.").foregroundColor(.secondary) }
-                picker("Progress Thickness", "Choose the visual weight of the progress bar.", 22, \.progress_thickness,
-                       ["Thin", "Standard", "Thick"])
+                picker("Progress Thickness", "", 22, \.progress_thickness, ["Thin", "Standard", "Thick"])
             }
-            section("Typography") {
-                picker("Font Size", "Scale title, artist and playback labels.", 17, \.font_scale,
-                       ["Small", "Normal", "Large"])
+            section("Text") {
+                picker("Font Size", "", 17, \.font_scale, ["Small", "Normal", "Large"])
             }
         case "Desktop":
-            section("Position") {
-                toggle("Lock Position", "Prevent accidental dragging. Playback controls remain usable.", 25, \.position_locked)
+            section("Position", footer: "Drag the widget to move it. Placement is remembered for each display.") {
+                toggle("Lock Position", "Playback controls stay usable.", 25, \.position_locked)
                 if !terminalMode {
                     Picker(selection: Binding(get: { NSScreen.screens.firstIndex { $0 == WidgetPanel.current?.screen } ?? 0 }, set: {
                         if NSScreen.screens.indices.contains($0) { moveWidgetToDisplay(NSScreen.screens[$0]); model.refresh() }
                     })) {
                         ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in Text(screen.localizedName).tag(index) }
-                    } label: { label("Display", "The screen the widget is placed on.") }
+                    } label: { Text("Display") }
                 }
-                HStack {
-                    label("Reset Position", "Move the widget back to the top-left corner of its display.")
-                    Spacer(minLength: 12)
-                    Button("Reset") { wallify_settings_reset_position(); model.refresh() }
+                buttonRow("Reset Position", "Back to the top-left corner of its display.", "Reset") {
+                    wallify_settings_reset_position(); model.refresh()
                 }
-                Text("Drag the widget to move it. Placement is remembered separately for each display.")
-                    .font(.caption).foregroundColor(.secondary)
             }
         default:
-            section("Renderer") {
-                LabeledRow("Metal", model.renderer.ready != 0 ? deviceName : "Unavailable")
+            section("Renderer", footer: model.renderer.profiling != 0 ? nil : "Launch with WALLIFY_PROFILE=1 ./run -d -f to measure frame times.") {
+                valueRow("Metal", model.renderer.ready != 0 ? deviceName : "Unavailable")
                 if model.renderer.profiling != 0 {
-                    LabeledRow("Frame", String(format: "Scene %.3f ms • GPU %.3f ms • %.2f MiB textures",
-                                                model.renderer.scene_ms, model.renderer.gpu_ms, Double(model.renderer.texture_bytes) / 1048576))
-                    Button("Refresh") { model.refresh() }
-                } else {
-                    Text("Launch with WALLIFY_PROFILE=1 ./run -d -f to measure frame times.")
-                        .font(.caption).foregroundColor(.secondary).textSelection(.enabled)
+                    valueRow("Frame", String(format: "Scene %.3f ms • GPU %.3f ms • %.2f MiB textures",
+                                             model.renderer.scene_ms, model.renderer.gpu_ms, Double(model.renderer.texture_bytes) / 1048576))
+                    buttonRow("Measurements", "", "Refresh") { model.refresh() }
                 }
             }
             section("Diagnostics") {
-                toggle("Debug Console", "Show live Wallify runtime and diagnostics.", 4, \.debug_hud)
-                Button("Open Inspector") { wallify_open_inspector() }
-                LabeledRow("Build", WallifyBuildIdentity.label)
-                LabeledRow("Placement", "Margins \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
+                toggle("Debug Console", "Live runtime and diagnostics.", 4, \.debug_hud)
+                buttonRow("Inspector", "", "Open") { wallify_open_inspector() }
+                valueRow("Build", WallifyBuildIdentity.label)
+                valueRow("Placement", "Margins \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
             }
-            section("Configuration") {
-                Text(configURL.path).font(.caption).foregroundColor(.secondary).textSelection(.enabled)
-                HStack {
-                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
-                    Button("Open Config") { NSWorkspace.shared.open(configURL) }
+            section("Configuration", footer: configURL.path) {
+                if #available(macOS 13, *) {
+                    LabeledContent("Config File") {
+                        Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
+                        Button("Open") { NSWorkspace.shared.open(configURL) }
+                    }
+                } else {
+                    buttonRow("Config File", "", "Open") { NSWorkspace.shared.open(configURL) }
                 }
-                HStack {
-                    label("Restore Defaults", "Reset every Wallify preference.")
-                    Spacer(minLength: 12)
-                    Button("Restore…", role: .destructive) { confirmRestore = true }
-                }
+                buttonRow("Restore Defaults", "Reset every Wallify preference.", "Restore…", role: .destructive) { confirmRestore = true }
             }
         }
     }
@@ -239,8 +226,14 @@ private struct SettingsView: View {
         }
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        Section(header: Text(title).accessibilityAddTraits(.isHeader), content: content)
+    private func section<Content: View>(_ title: String, footer: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        Section {
+            content()
+        } header: {
+            Text(title).accessibilityAddTraits(.isHeader)
+        } footer: {
+            if let footer { Text(footer).textSelection(.enabled) }
+        }
     }
 
     private func toggle(_ title: String, _ detail: String, _ key: Int32,
@@ -257,10 +250,37 @@ private struct SettingsView: View {
         .accessibilityLabel(title)
     }
 
-    private func label(_ title: String, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    // A labeled row with its action button on the trailing edge, as in System Settings.
+    @ViewBuilder private func buttonRow(_ title: String, _ detail: String, _ button: String,
+                                        role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
+        if #available(macOS 13, *) {
+            LabeledContent { Button(button, role: role, action: action) } label: { label(title, detail) }
+        } else {
+            HStack { label(title, detail); Spacer(minLength: 12); Button(button, role: role, action: action) }
+        }
+    }
+
+    @ViewBuilder private func valueRow(_ title: String, _ value: String) -> some View {
+        if #available(macOS 13, *) {
+            LabeledContent(title) { Text(value).textSelection(.enabled) }
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title); Spacer(minLength: 12)
+                Text(value).foregroundColor(.secondary).multilineTextAlignment(.trailing).textSelection(.enabled)
+            }
+        }
+    }
+
+    // On macOS 13+ a grouped form styles a second Text as the row's subtitle.
+    @ViewBuilder private func label(_ title: String, _ detail: String) -> some View {
+        if #available(macOS 13, *) {
             Text(title)
-            Text(detail).font(.caption).foregroundColor(.secondary)
+            if !detail.isEmpty { Text(detail) }
+        } else {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                if !detail.isEmpty { Text(detail).font(.caption).foregroundColor(.secondary) }
+            }
         }
     }
 }
@@ -272,17 +292,6 @@ private struct NoSidebarToggle: ViewModifier {
     }
 }
 
-private struct LabeledRow: View {
-    let title: String, value: String
-    init(_ title: String, _ value: String) { self.title = title; self.value = value }
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-            Spacer(minLength: 12)
-            Text(value).foregroundColor(.secondary).multilineTextAlignment(.trailing).textSelection(.enabled)
-        }
-    }
-}
 
 @MainActor
 private final class SettingsWindow {
