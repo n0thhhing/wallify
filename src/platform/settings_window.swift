@@ -47,46 +47,31 @@ final class SettingsModel: ObservableObject {
 @MainActor
 private struct SettingsView: View {
     @ObservedObject var model: SettingsModel
-    @State private var page = "General"
+    @State private var page: String? = "General"
     @State private var confirmRestore = false
     private let pages = [
         ("General", "slider.horizontal.3"), ("Appearance", "paintbrush"),
-        ("Playback", "play.circle"), ("Performance", "gauge.with.dots.needle.67percent"),
-        ("Desktop", "rectangle.on.rectangle")
+        ("Playback", "play.circle"), ("Desktop", "rectangle.on.rectangle"),
+        ("Advanced", "wrench.and.screwdriver")
     ]
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(pages, id: \.0) { title, symbol in
-                    Button { page = title; model.refresh() } label: {
-                        Label(title, systemImage: symbol)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                            .background(page == title ? Color.accentColor.opacity(0.18) : Color.clear)
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(page == title ? .isSelected : [])
-                }
-                Spacer()
-                Button("Restore Defaults…") { confirmRestore = true }
+            List(selection: $page) {
+                ForEach(pages, id: \.0) { title, symbol in Label(title, systemImage: symbol).tag(title) }
             }
-            .padding(18)
-            .frame(width: 170)
-            .background(.regularMaterial)
+            .listStyle(.sidebar)
+            .safeAreaInset(edge: .bottom) {
+                Button("Restore Defaults…") { confirmRestore = true }.frame(maxWidth: .infinity).padding(12)
+            }
+            .frame(width: 190)
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(page).font(.title2.bold()).accessibilityAddTraits(.isHeader)
-                    pageContent
-                }
-                .padding(20)
-                .frame(maxWidth: 650, alignment: .leading)
-                .frame(maxWidth: .infinity)
-            }
+            Form { pageContent }
+                .modifier(GroupedForm())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 720, minHeight: 500)
+        .onChange(of: page) { _ in model.refresh() }
         .alert("Restore Default Settings?", isPresented: $confirmRestore) {
             Button("Restore Defaults", role: .destructive) {
                 wallify_settings_restore_defaults()
@@ -98,7 +83,7 @@ private struct SettingsView: View {
     }
 
     @ViewBuilder private var pageContent: some View {
-        switch page {
+        switch page ?? "General" {
         case "General":
             section("Widget") {
                 picker("Widget Size", "Choose the widget footprint.", 14, \.widget_mode,
@@ -119,8 +104,10 @@ private struct SettingsView: View {
             }
             section("Startup") {
                 if #available(macOS 13, *) {
-                    Toggle("Launch at Login", isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) }))
-                    Button("Open Login Items Settings") { SMAppService.openSystemSettingsLoginItems() }
+                    Toggle(isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) })) {
+                        label("Launch at Login", "Start Wallify when you log in.")
+                    }.toggleStyle(.switch)
+                    Button("Open Login Items Settings…") { SMAppService.openSystemSettingsLoginItems() }
                     if let error = model.loginError { Text(error).foregroundColor(.red) }
                 } else {
                     Text("Launch at Login requires macOS 13 or later.").foregroundColor(.secondary)
@@ -162,15 +149,12 @@ private struct SettingsView: View {
             }
             section("Progress") {
                 if #available(macOS 14.2, *) {
-                    toggle("System Audio Waveform", "Show live audio along the progress bar. Requires system audio capture permission; audio is never saved.", 23, \.waveform)
-                        .disabled(model.snapshot.hide_progress || !model.snapshot.animations)
-                    if model.snapshot.hide_progress || !model.snapshot.animations {
-                        Text("To use Waveform, show the progress bar in Playback and enable Animations in Appearance.")
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                    Text(model.snapshot.waveform ? audioWaveform.status : "Off").font(.caption).foregroundColor(.secondary)
-                    if model.snapshot.waveform {
-                        Button("Open Capture Permissions") {
+                    let blocked = model.snapshot.hide_progress || !model.snapshot.animations
+                    toggle("System Audio Waveform", blocked ? "Needs the progress bar shown and Animations on (Appearance)." :
+                           model.snapshot.waveform ? audioWaveform.status : "Show live audio along the progress bar. Audio is never saved.", 23, \.waveform)
+                        .disabled(blocked)
+                    if model.snapshot.waveform && !blocked {
+                        Button("Open Capture Permissions…") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                         }
                     }
@@ -182,54 +166,45 @@ private struct SettingsView: View {
                 picker("Font Size", "Scale title, artist and playback labels.", 17, \.font_scale,
                        ["Small", "Normal", "Large"])
             }
-        case "Performance":
-            section("Renderer") {
-                Text(model.renderer.ready != 0 ? "Metal ready • \(deviceName)" : "Metal renderer unavailable")
-                if model.renderer.profiling != 0 {
-                    Text(String(format: "Scene %.3f ms • GPU %.3f ms • %.2f MiB textures",
-                                model.renderer.scene_ms, model.renderer.gpu_ms,
-                                Double(model.renderer.texture_bytes) / 1048576))
-                } else {
-                    Text("Performance measurements are off.")
-                        .foregroundColor(.secondary)
-                }
-                Button("Refresh") { model.refresh() }
-            }
-            DisclosureGroup("Advanced") {
-                VStack(alignment: .leading, spacing: 20) {
-                    section("Diagnostics") {
-                        Text(WallifyBuildIdentity.label).font(.caption).textSelection(.enabled)
-                        toggle("Debug Console", "Show live Wallify runtime and diagnostics.", 4, \.debug_hud)
-                        Button("Open Inspector") { wallify_open_inspector() }
-                        Text("For CPU/GPU measurements, run from the project folder:")
-                            .font(.caption).foregroundColor(.secondary)
-                        Text("WALLIFY_PROFILE=1 ./run -d -f")
-                            .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                    }
-                    section("Configuration") {
-                        Text(configURL.path).font(.caption).textSelection(.enabled)
-                        HStack {
-                            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
-                            Button("Open Config") { NSWorkspace.shared.open(configURL) }
-                        }
-                    }
-                }
-                .padding(.top, 12)
-            }
-        default:
+        case "Desktop":
             section("Position") {
                 toggle("Lock Position", "Prevent accidental dragging. Playback controls remain usable.", 25, \.position_locked)
                 if !terminalMode {
-                    Text("Display: \(WidgetPanel.current?.screen?.localizedName ?? "Unavailable")")
+                    LabeledRow("Display", WidgetPanel.current?.screen?.localizedName ?? "Unavailable")
                     Menu("Move to Display") {
                         ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in
                             Button("\(index + 1) — \(screen.localizedName)") { moveWidgetToDisplay(screen); model.refresh() }
                         }
                     }
                 }
-                Text("Margins: \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid: \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
-                Text("Drag within this display, or use Move to Display. Placement is remembered separately for each monitor.").foregroundColor(.secondary)
                 Button("Reset Position") { wallify_settings_reset_position(); model.refresh() }
+                Text("Drag the widget to move it. Placement is remembered separately for each display.")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+        default:
+            section("Renderer") {
+                LabeledRow("Metal", model.renderer.ready != 0 ? deviceName : "Unavailable")
+                if model.renderer.profiling != 0 {
+                    LabeledRow("Frame", String(format: "Scene %.3f ms • GPU %.3f ms • %.2f MiB textures",
+                                                model.renderer.scene_ms, model.renderer.gpu_ms, Double(model.renderer.texture_bytes) / 1048576))
+                    Button("Refresh") { model.refresh() }
+                } else {
+                    Text("Launch with WALLIFY_PROFILE=1 ./run -d -f to measure frame times.")
+                        .font(.caption).foregroundColor(.secondary).textSelection(.enabled)
+                }
+            }
+            section("Diagnostics") {
+                toggle("Debug Console", "Show live Wallify runtime and diagnostics.", 4, \.debug_hud)
+                Button("Open Inspector") { wallify_open_inspector() }
+                LabeledRow("Build", WallifyBuildIdentity.label)
+                LabeledRow("Placement", "Margins \(model.snapshot.margin_left), \(model.snapshot.margin_top) • Grid \(model.snapshot.grid_x), \(model.snapshot.grid_y)")
+            }
+            section("Configuration") {
+                Text(configURL.path).font(.caption).foregroundColor(.secondary).textSelection(.enabled)
+                HStack {
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([configURL]) }
+                    Button("Open Config") { NSWorkspace.shared.open(configURL) }
+                }
             }
         }
     }
@@ -243,10 +218,7 @@ private struct SettingsView: View {
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 10, content: content)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(4)
-        } label: { Text(title).accessibilityAddTraits(.isHeader) }
+        Section(header: Text(title).accessibilityAddTraits(.isHeader), content: content)
     }
 
     private func toggle(_ title: String, _ detail: String, _ key: Int32,
@@ -257,20 +229,35 @@ private struct SettingsView: View {
 
     private func picker(_ title: String, _ detail: String, _ key: Int32,
                         _ field: KeyPath<WallifySettingsSnapshot, Int32>, _ options: [String]) -> some View {
-        HStack {
-            label(title, detail)
-            Spacer(minLength: 12)
-            Picker(title, selection: model.selection(key, field)) {
-                ForEach(options.indices, id: \.self) { Text(options[$0]).tag(Int32($0)) }
-            }
-            .labelsHidden().frame(width: 160).accessibilityLabel(title)
-        }
+        Picker(selection: model.selection(key, field)) {
+            ForEach(options.indices, id: \.self) { Text(options[$0]).tag(Int32($0)) }
+        } label: { label(title, detail) }
+        .accessibilityLabel(title)
     }
 
     private func label(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
             Text(detail).font(.caption).foregroundColor(.secondary)
+        }
+    }
+}
+
+// System Settings-style grouped rows on macOS 13+; a scrolling form on macOS 12.
+private struct GroupedForm: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 13, *) { content.formStyle(.grouped) } else { ScrollView { content.padding(20) } }
+    }
+}
+
+private struct LabeledRow: View {
+    let title: String, value: String
+    init(_ title: String, _ value: String) { self.title = title; self.value = value }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+            Spacer(minLength: 12)
+            Text(value).foregroundColor(.secondary).multilineTextAlignment(.trailing).textSelection(.enabled)
         }
     }
 }
