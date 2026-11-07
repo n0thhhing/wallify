@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Wallify brings album art, playback controls, and a little company to your Mac desktop.">
+<meta name="theme-color" content="#151518">
+<title>Wallify — Now playing on your Mac</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="shell top">
+  <a class="brand" href="./"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span> Wallify</a>
+  <nav aria-label="Main navigation"><a href="#details">The widget</a><a href="https://github.com/n0thhhing/wallify">GitHub ↗</a></nav>
+</header>
+<main class="shell">
+  <section class="hero" aria-labelledby="title">
+    <div class="intro">
+      <p class="index platform">NOW PLAYING FOR MAC</p>
+      <h1 id="title">Music on<br>your desktop.</h1>
+      <div class="pitch">
+        <p>See what’s playing, skip a track, or just enjoy the album art. Wallify gives your music a spot on your Mac.</p>
+        <a class="cta" href="#get">Get Wallify <span aria-hidden="true">↘</span></a>
+      </div>
+    </div>
+    <figure class="playback">
+      <div class="stage">
+        <img class="playback-shot" src="playback.jpg" width="1080" height="360" alt="Wallify’s playback widget showing album art, the track title, progress, and playback controls">
+      </div>
+      <figcaption class="index"><span>Playback widget</span><span>Actual macOS capture</span></figcaption>
+    </figure>
+  </section>
+  <section id="details" class="details" aria-labelledby="details-title">
+    <h2 id="details-title">Fits your desktop.</h2>
+    <dl class="specs">
+      <div><dt>Pick a shape</dt><dd>Five sizes, from a square of album art to a wide player. Wallify remembers where you put it on each display.</dd></div>
+      <div><dt>Follow the music</dt><dd>Use macOS Now Playing, Spotify, or Spotifast. Colors follow the cover art, and an optional waveform moves with the audio.</dd></div>
+      <div><dt>Keep a little company</dt><dd>When the music stops, keep the last track visible, hide the widget, or give the space to a pixel cat, banana cat, or raccoon.</dd></div>
+    </dl>
+    <figure class="companion">
+      <img src="pixel-cat.jpg" width="1080" height="360" alt="Wallify’s orange Pixel Cat sleeping in the idle widget">
+      <figcaption class="index">Pixel Cat between tracks</figcaption>
+    </figure>
+  </section>
+  <section id="get" class="get" aria-labelledby="get-title">
+    <h2 id="get-title">Put it on your Mac.</h2>
+    <p>Build Wallify from source on a Metal-capable Mac with Xcode and the Metal toolchain.</p>
+    <a class="cta" href="https://github.com/n0thhhing/wallify#run">Build instructions <span aria-hidden="true">↗</span></a>
+  </section>
+</main>
+<footer class="shell foot"><a class="brand" href="./"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span> Wallify</a><span class="index">MADE FOR macOS</span></footer>
+</body>
+</html>

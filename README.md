@@ -4,6 +4,8 @@
 
 A native macOS music widget written in Swift, with AppKit controls, SwiftUI Settings, and a Metal renderer. Displays live track metadata, album art, playback controls, an animated aurora background, and idle companion sprites. No terminal needed to run the built app.
 
+[Wallify website](https://n0thhhing.github.io/wallify/)
+
 ## Previews
 
 Native macOS screen captures from the app, cropped from the October 5 recording.
